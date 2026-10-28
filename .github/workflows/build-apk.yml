@@ -1,0 +1,100 @@
+name: Gerar APK do Nocry
+
+# Como usar:
+#  - Criar uma tag "v1.0.0" (ou rodar manualmente em Actions > Run workflow)
+#  - O APK sai em Releases como Nocry.apk e qualquer pessoa pode baixar.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      versao:
+        description: "Versão (ex.: 1.0.0). Se publicar, cria a release v<versão>"
+        required: true
+        default: "1.0.0"
+      publicar:
+        description: "Publicar em Releases?"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Descobrir versão
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            V="${{ github.event.inputs.versao }}"
+          else
+            V="${GITHUB_REF_NAME}"
+          fi
+          V="${V#v}"
+          IFS=. read -r MA MI PA <<< "$V"
+          MA=${MA:-1}; MI=${MI:-0}; PA=${PA:-0}
+          PA=${PA%%[^0-9]*}
+          CODE=$(( MA * 10000 + MI * 100 + PA ))
+          echo "name=$V" >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "Versão $V (code $CODE)"
+
+      - name: Preparar chave de assinatura
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/nocry.jks"
+            echo "NOCRY_KEYSTORE=$RUNNER_TEMP/nocry.jks" >> "$GITHUB_ENV"
+            echo "Chave fixa encontrada."
+          else
+            echo "::warning::Sem KEYSTORE_B64 nos Secrets: o APK vai sair assinado com chave de teste e NÃO atualiza por cima de outra versão."
+          fi
+
+      - name: Compilar APK
+        env:
+          NOCRY_VERSION: ${{ steps.v.outputs.name }}
+          NOCRY_VERSION_CODE: ${{ steps.v.outputs.code }}
+          NOCRY_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+          NOCRY_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          NOCRY_KEY_PASS: ${{ secrets.KEY_PASS }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon assembleRelease
+          mkdir -p dist
+          cp app/build/outputs/apk/release/*.apk dist/Nocry.apk
+          ls -la dist
+
+      - name: Guardar o APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nocry-apk
+          path: dist/Nocry.apk
+
+      - name: Publicar em Releases
+        if: github.event_name == 'push' || github.event.inputs.publicar == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.v.outputs.name }}
+        run: |
+          NOTAS="Baixe o **Nocry.apk**, instale e abra. No primeiro uso o app guia o pareamento do ADB (depuração sem fio)."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/Nocry.apk --clobber
+          else
+            gh release create "$TAG" dist/Nocry.apk --title "Nocry $TAG" --notes "$NOTAS" --target "${GITHUB_SHA}"
+          fi
