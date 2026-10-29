@@ -172,7 +172,7 @@ class NocryService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         primeiroPlano(Engine.resumo())
-        if (!Prefs.precisaServico()) {
+        if (!Prefs.precisaServico() || !License.valid()) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -261,6 +261,8 @@ class NocryService : Service() {
             var n = 0
             while (go) {
                 try {
+                    if (n % 20 == 0) Bg.io { License.tick(applicationContext) }
+                    if (!License.valid()) { stopSelf(); break }
                     cuidaAdb()
                     if (Prefs.otmAuto) OtmAuto.tick(this)
                 } catch (t: Throwable) {
@@ -327,7 +329,7 @@ class BootReceiver : BroadcastReceiver() {
             NLog.init(context)
             Notif.init(context)
             NLog.add("boot", "recebi " + intent.action)
-            if (Prefs.precisaServico()) NocryService.sync(context)
+            if (Prefs.precisaServico() && License.valid()) NocryService.sync(context)
         } catch (t: Throwable) {
             NLog.add("boot", "erro: $t")
         }

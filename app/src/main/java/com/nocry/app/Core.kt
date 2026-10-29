@@ -220,6 +220,69 @@ object Prefs {
         get() = gb("onboarding")
         set(v) = pb("onboarding", v)
 
+    // ---- visual (tela PERSONALIZAR) ----
+    /** "animado" (desenho do app) | "solido" | "imagem" | "video" */
+    var bgTipo: String
+        get() = gs("bg_tipo").let { if (it == "solido" || it == "imagem" || it == "video") it else "animado" }
+        set(v) = ps("bg_tipo", v)
+    /** "brasas" | "aurora" | "grade" | "noite" */
+    var bgPreset: String
+        get() = gs("bg_preset").let { if (it == "aurora" || it == "grade" || it == "noite") it else "brasas" }
+        set(v) = ps("bg_preset", v)
+    /** nome do arquivo copiado pra dentro do app (imagem ou video escolhidos da galeria) */
+    var bgArquivo: String?
+        get() = gs("bg_arquivo")
+        set(v) = ps("bg_arquivo", v)
+    var bgEscuro: Int
+        get() = gi("bg_escuro", 55, 0, 90)
+        set(v) = pi("bg_escuro", v.coerceIn(0, 90))
+    var bgBlur: Int
+        get() = gi("bg_blur", 0, 0, 25)
+        set(v) = pi("bg_blur", v.coerceIn(0, 25))
+    var accent: Int
+        get() = sp.getInt("accent", 0xFFFF2D55.toInt())
+        set(v) = pi("accent", v or 0xFF000000.toInt())
+    /** quanto o cartao de vidro e opaco (20 a 95 %) */
+    var vidro: Int
+        get() = gi("vidro", 62, 20, 95)
+        set(v) = pi("vidro", v.coerceIn(20, 95))
+    var raio: Int
+        get() = gi("raio", 18, 6, 30)
+        set(v) = pi("raio", v.coerceIn(6, 30))
+    /** "grotesk" | "mono" | "sistema" */
+    var fonte: String
+        get() = gs("fonte").let { if (it == "mono" || it == "sistema") it else "grotesk" }
+        set(v) = ps("fonte", v)
+    var escala: Int
+        get() = gi("escala", 100, 85, 130)
+        set(v) = pi("escala", v.coerceIn(85, 130))
+    var neon: Boolean
+        get() = sp.getBoolean("neon", true)
+        set(v) = pb("neon", v)
+    var anim: Boolean
+        get() = sp.getBoolean("anim", true)
+        set(v) = pb("anim", v)
+
+    // ---- Key (licenca) ----
+    var consentiu: Boolean
+        get() = gb("consent")
+        set(v) = pb("consent", v)
+    var licKey: String?
+        get() = gs("lic_key")
+        set(v) = ps("lic_key", v)
+    var licLabel: String
+        get() = gs("lic_label") ?: ""
+        set(v) = ps("lic_label", v)
+    var licVisto: Long
+        get() = sp.getLong("lic_visto", 0L)
+        set(v) { sp.edit().putLong("lic_visto", v).apply() }
+    var licP: String?
+        get() = gs("lic_p")
+        set(v) = ps("lic_p", v)
+    var licSig: String?
+        get() = gs("lic_sig")
+        set(v) = ps("lic_sig", v)
+
     /** precisa do servico em primeiro plano? */
     fun precisaServico(): Boolean = volAtivo || cargaAtivo || mcAtivo || otmAuto
 }

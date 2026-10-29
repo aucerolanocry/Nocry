@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
@@ -58,7 +59,7 @@ class RunScreen(a: MainActivity, override val titulo: String, private val work: 
 // OTIMIZACAO
 // =====================================================================================
 class OtmScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "OTIMIZAÇÃO"
+    override val titulo = "Otimização"
 
     override fun key(): String = listOf(Otm.status(), Prefs.otmAuto, Prefs.otmMsg, Prefs.otmPerf, Adb.connected).joinToString("|")
 
@@ -68,21 +69,21 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         val st = Otm.status()
         val card = Ui.card(c)
         card.addView(Ui.label(c, "status"))
-        card.addView(Ui.text(c, if (st.first) "ATIVA" else "DESATIVADA", 26f, if (st.first) Ui.OK else Ui.RED, true, mono = true), Ui.lp(top = 4, c = c))
+        card.addView(Ui.text(c, if (st.first) "ATIVA" else "DESATIVADA", 26f, if (st.first) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         if (st.first) card.addView(Ui.text(c, "${st.second} apps congelados", 13f, Ui.MUTED, mono = true))
         card.addView(Ui.status(c, "ADB", if (Adb.connected) "CONECTADO" else "DESCONECTADO", Adb.connected), Ui.lp(top = 8, c = c))
         card.addView(Ui.status(c, "AUTOMÁTICO AO ABRIR O FF", if (Prefs.otmAuto) "LIGADO" else "DESLIGADO", null))
         add(card, 0)
         add(Ui.text(c, "Mostra, fecha e congela os apps em segundo plano (menos os protegidos). DESATIVAR devolve tudo como estava.", 12f, Ui.MUTED), 10)
 
-        add(Ui.button(c, "✅  ativar otimização") { act.abre(RunScreen(act, "OTIMIZANDO") { log -> Otm.ativar(log) }) }, 14)
-        add(Ui.button(c, "❌  desativar (descongela tudo)", Ui.Kind.DANGER) { act.abre(RunScreen(act, "DESATIVANDO") { log -> Otm.desativar(log) }) }, 10)
+        add(Ui.button(c, "ativar otimização", Ui.Kind.PRIMARY, R.drawable.ic_check) { act.abre(RunScreen(act, "OTIMIZANDO") { log -> Otm.ativar(log) }) }, 14)
+        add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "DESATIVANDO") { log -> Otm.desativar(log) }) }, 10)
 
         add(Ui.label(c, "ferramentas"), 18)
-        add(Ui.row(c, "📊  Ver apps (NGC)", "o que vai fechar, o que fica protegido e por quê") { act.abre(OtmVerScreen(act)) }, 8)
-        add(Ui.row(c, "🛡️  Proteger app", "escolha o que nunca fecha") { act.abre(OtmProtegerScreen(act)) })
-        add(Ui.row(c, "🧩  Fechar mais apps (sistema)", "apps do sistema com ícone que você quer fechar junto") { act.abre(OtmMaisScreen(act)) })
-        add(Ui.row(c, "🎯  Preparar o FF", "compila o Free Fire e tira da economia de energia") {
+        add(Ui.row(c, "Ver apps (NGC)", "o que vai fechar, o que fica protegido e por quê", R.drawable.ic_eye) { act.abre(OtmVerScreen(act)) }, 8)
+        add(Ui.row(c, "Proteger app", "escolha o que nunca fecha", R.drawable.ic_shield) { act.abre(OtmProtegerScreen(act)) })
+        add(Ui.row(c, "Fechar mais apps (sistema)", "apps do sistema com ícone que você quer fechar junto", R.drawable.ic_xcircle) { act.abre(OtmMaisScreen(act)) })
+        add(Ui.row(c, "Preparar o FF", "compila o Free Fire e tira da economia de energia", R.drawable.ic_gamepad) {
             Ui.dialogEscolha(act, "PREPARAR O FF", listOf("FREE FIRE NORMAL", "FREE FIRE MAX")) { i ->
                 val pkg = if (i == 0) Const.FF_NORMAL else Const.FF_MAX
                 act.abre(RunScreen(act, "PREPARANDO O FF") { log -> Otm.prepararFf(pkg, log) })
@@ -120,7 +121,7 @@ private fun linhas(c: Context, titulo: String, itens: List<String>, vazio: Strin
 // VER APPS (so olhando)
 // =====================================================================================
 class OtmVerScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "VER APPS (NGC)"
+    override val titulo = "Ver apps (NGC)"
     private var plano: Otm.Plano? = null
     private var carregando = false
     private var falhou = false
@@ -154,7 +155,7 @@ class OtmVerScreen(a: MainActivity) : Screen(a) {
         }
         add(Ui.text(c, p.perfil(), 13f, Ui.TEXT, true, mono = true), 0)
         add(Ui.text(c, "RAM LIVRE: ${Otm.gb(p.memAvail)} GB · ${p.nivel()}", 12f, Ui.MUTED, mono = true), 4)
-        if (p.setFail) add(Ui.text(c, "⚠ O celular não deixou ler as configurações: ATIVAR não fecha nada até resolver — reinicie o celular.", 12f, Ui.WARN, true), 10)
+        if (p.setFail) add(Ui.text(c, "O celular não deixou ler as configurações: ATIVAR não fecha nada até resolver — reinicie o celular.", 12f, Ui.WARN, true), 10)
 
         val tot = p.c.sumOf { it.kb }
         add(linhas(c, "vai fechar e congelar (${p.c.size}) · ~${Otm.mb(tot)} MB",
@@ -187,7 +188,7 @@ class OtmVerScreen(a: MainActivity) : Screen(a) {
 // PROTEGER APP
 // =====================================================================================
 class OtmProtegerScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "PROTEGER APP"
+    override val titulo = "Proteger app"
     private var plano: Otm.Plano? = null
     private var carregando = false
     private var iniciou = false
@@ -229,13 +230,13 @@ class OtmProtegerScreen(a: MainActivity) : Screen(a) {
             add(Ui.row(c, a2.pk.removePrefix("com."), Otm.mb(a2.kb).toString() + " MB · toque para proteger") { alterna(a2.pk, "") }, 6)
         }
         add(Ui.label(c, "protegidos"), 14)
-        for (x in p.x) add(Ui.row(c, "🛡️  " + x.pk.removePrefix("com."), x.why) { alterna(x.pk, x.why) }, 6)
+        for (x in p.x) add(Ui.row(c, x.pk.removePrefix("com."), x.why, R.drawable.ic_shield) { alterna(x.pk, x.why) }, 6)
         val vistos = HashSet<String>()
         p.c.forEach { vistos.add(it.pk) }
         p.x.forEach { vistos.add(it.pk) }
         for (pk in Otm.protegidos()) {
             if (pk in vistos) continue
-            add(Ui.row(c, "🛡️  " + pk.removePrefix("com."), "SUA LISTA · não está rodando agora") { alterna(pk, "SUA LISTA") }, 6)
+            add(Ui.row(c, pk.removePrefix("com."), "SUA LISTA · não está rodando agora", R.drawable.ic_shield) { alterna(pk, "SUA LISTA") }, 6)
         }
         add(Ui.button(c, "adicionar pelo nome do app", Ui.Kind.GHOST) {
             Ui.dialogTexto(act, "PROTEGER APP", "ex.: com.whatsapp") { nome ->
@@ -249,7 +250,7 @@ class OtmProtegerScreen(a: MainActivity) : Screen(a) {
 // FECHAR MAIS APPS (apps do sistema com icone)
 // =====================================================================================
 class OtmMaisScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "FECHAR MAIS APPS"
+    override val titulo = "Fechar mais apps"
     private var plano: Otm.Plano? = null
     private var carregando = false
     private var iniciou = false
@@ -292,7 +293,7 @@ class OtmMaisScreen(a: MainActivity) : Screen(a) {
             if (!a2.escolhido) continue
             algum = true
             mostrados.add(a2.pk)
-            add(Ui.row(c, "✖  " + Otm.curto(a2.pk), Otm.mb(a2.kb).toString() + " MB · VAI FECHAR") { alterna(a2.pk) }, 6)
+            add(Ui.row(c, Otm.curto(a2.pk), Otm.mb(a2.kb).toString() + " MB · VAI FECHAR", R.drawable.ic_xcircle) { alterna(a2.pk) }, 6)
         }
         for (pk in Otm.extras()) {
             if (pk in mostrados) continue
@@ -312,7 +313,8 @@ class OtmMaisScreen(a: MainActivity) : Screen(a) {
 // LOGS
 // =====================================================================================
 class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
-    override val titulo = if (tag == null) "LOGS" else "LOG · " + tag.uppercase()
+    override val titulo = if (tag == null) "Logs" else "Log · " + tag
+    override val aba = if (tag == null) 3 else -1
 
     override fun key(): String = NLog.text(tag).hashCode().toString()
 
@@ -375,12 +377,13 @@ object Update {
 }
 
 class SobreScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "SOBRE"
+    override val titulo = "Sobre"
+    override val aba = 4
     private var msg = ""
     private var link: String? = null
     private var buscando = false
 
-    override fun key(): String = "$msg|$buscando"
+    override fun key(): String = "$msg|$buscando|${License.role()}"
 
     private fun versao(): String = try { act.packageManager.getPackageInfo(Const.PKG, 0).versionName ?: "?" } catch (_: Exception) { "?" }
 
@@ -395,7 +398,41 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         t.letterSpacing = 0.18f
         add(t, 0)
         add(Ui.text(c, "versão " + versao(), 13f, Ui.MUTED, mono = true), 2)
-        add(Ui.text(c, "Modo competitivo, toque via volume e carregador e otimização de segundo plano — direto no celular, sem abrir o Termux.", 13f), 12)
+        add(Ui.text(c, "Modo competitivo, toque via volume e carregador e otimização de segundo plano, direto no celular, sem abrir o Termux.", 13f), 12)
+
+        // ---------------- sua key ----------------
+        val kc = Ui.card(c, forte = true)
+        kc.addView(Ui.label(c, "sua key"))
+        val linhaKey = Ui.hbox(c)
+        val papel = License.roleNome()
+        if (papel.isNotEmpty()) linhaKey.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.MUTED, License.isAdmin()))
+        val nome = License.label()
+        if (nome.isNotEmpty()) {
+            val tn = Ui.text(c, nome, 15f, Ui.TEXT, true)
+            val tp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            tp.leftMargin = Ui.dp(c, 10)
+            linhaKey.addView(tn, tp)
+        }
+        kc.addView(linhaKey, Ui.lp(top = 8, c = c))
+        val fmt = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+        val e = License.expira()
+        kc.addView(Ui.status(c, "VALIDADE", if (e == 0L) "SEM VENCIMENTO" else "ATÉ " + fmt.format(java.util.Date(e)), true), Ui.lp(top = 8, c = c))
+        val resta = License.restaOffline()
+        val horas = (resta / 3600000L).coerceAtLeast(0)
+        kc.addView(Ui.status(c, "SEM INTERNET VALE MAIS", if (horas >= 48) "${horas / 24} DIAS" else "$horas H", if (horas >= 12) true else null))
+        kc.addView(Ui.text(c, "aparelho " + License.devId(c).take(8) + " · confirmada com o servidor a cada poucas horas, quando há internet.", 11.5f, Ui.MUTED, mono = true), Ui.lp(top = 6, c = c))
+        if (License.isAdmin() && BuildConfig.API_URL.isNotBlank()) {
+            kc.addView(Ui.button(c, "abrir painel de keys", Ui.Kind.PRIMARY, R.drawable.ic_globe) {
+                abre(BuildConfig.API_URL.trimEnd('/') + "/admin")
+            }, Ui.lp(top = 12, c = c))
+            kc.addView(Ui.text(c, "No painel, entre com a sua própria key.", 11.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        }
+        kc.addView(Ui.button(c, "sair da key", Ui.Kind.GHOST, R.drawable.ic_logout) {
+            Ui.dialogConfirma(act, "SAIR DA KEY", "O app volta para a tela da key e os monitores param (o toque e a tela voltam ao normal).", "SAIR") {
+                License.sair("você saiu")
+            }
+        }, Ui.lp(top = 10, c = c))
+        add(kc, 14)
 
         val card = Ui.card(c)
         card.addView(Ui.label(c, "atualização"))

@@ -4,6 +4,8 @@ App Android do **NOCRY SYSTEM**. Faz as mesmas funções do menu do Termux, mas 
 
 **O que tem:** Modo Competitivo, toque rápido por volume (VOL+ / VOL−), toque pelo carregador (tirou/colocou), Modo Carregador (densidade + abrir o FF), Otimização completa (ver, aplicar, desfazer, proteger apps), Ajustes do toque, Logs e Testar agora.
 
+**Novo na 1.1:** acesso por **Key** (dono, staff e usuário), visual "vidro fosco + neon" e a aba **Visual** para personalizar: fundo animado, imagem ou **vídeo da sua própria galeria**, escurecer e desfocar o fundo, cor de destaque, vidro, arredondamento, fonte e tamanho do texto.
+
 **O que NÃO tem:** nenhum bypass, nenhuma função de anti-cheat e nenhum token/chave do sistema. O app não carrega segredo nenhum.
 
 ---
@@ -13,7 +15,7 @@ App Android do **NOCRY SYSTEM**. Faz as mesmas funções do menu do Termux, mas 
 1. Abra a página **Releases** deste repositório e baixe o `Nocry.apk`.
    Link fixo: `https://github.com/aucerolanocry/Nocry/releases/latest/download/Nocry.apk`
 2. Instale (o Android pede para permitir "instalar apps desconhecidos" do navegador).
-3. Abra o **Nocry**, toque em **CONFIGURAR / CONECTAR** e siga os 6 passos (o app guia cada um):
+3. Abra o **Nocry**, digite a sua **Key** e toque em **Entrar** (a tela mostra o que é enviado ao servidor). Depois toque em **Configurar e conectar** e siga os 6 passos (o app guia cada um):
    - ligar **Depuração sem fio** nas Opções do desenvolvedor (precisa estar no Wi-Fi);
    - **Parear** com código (o app mostra uma notificação para digitar o código, sem sair da tela);
    - **Conectar**;
@@ -60,16 +62,31 @@ Leva uns 5 a 10 minutos. Quando terminar, o APK aparece em **Releases** e o link
 
 ### 4. Atualizar
 
-Mude o que quiser, suba, e rode o workflow com a versão seguinte (`1.0.1`, `1.1.0`...). No app, **Sobre e atualização** avisa quando existe versão mais nova.
+Mude o que quiser, suba, e rode o workflow com a versão seguinte (`1.1.1`, `1.2.0`...). No app, **Sobre** avisa quando existe versão mais nova.
 
 ---
 
-## Limitações da versão 1
+## Key e servidor (versão 1.1)
 
-- Não tem login nem chave de acesso: quem baixar usa tudo.
+O app confere a Key num servidor seu (Cloudflare Worker + D1, pasta `Nocry-servidor`, com passo a passo no `LEIA-ME.md`). O servidor responde com uma assinatura que o app confere com a chave **pública** embutida (`License.kt`); a chave privada fica só no Cloudflare.
+
+- **Dono** (a key `OWNER_KEY`): cria, desativa e apaga qualquer key, vê todos os registros.
+- **Staff**: cria e gerencia só keys de usuário.
+- **Usuário**: usa o app. Cada key vale para 1 celular (o dono pode liberar mais) e pode ter data de vencimento.
+- Registro por entrada: IP (visto pelo servidor), marca e modelo do celular, versão do Android e do app, e um código anônimo do aparelho (hash do ANDROID_ID). Não coleta telefone, localização, contatos nem lista de apps.
+- Sem internet o app continua valendo por 3 dias depois da última confirmação.
+- O endereço do servidor fica em `app/build.gradle.kts` (variável `apiUrl`). Para trocar sem mexer no código, defina a variável de ambiente `NOCRY_API` no workflow.
+
+**Importante:** como o código do app é público, quem quiser pode recompilar sem a Key. A Key protege quem usa o APK oficial. Para proteger mais, deixe o código-fonte num repositório privado e publique só os APKs num repositório público.
+
+## Limitações
+
 - Precisa de Android 8 (API 26) ou mais novo; o pareamento por código usa a depuração sem fio do Android 11+.
+- O desfoque do fundo precisa do Android 12 ou mais novo.
 - O app roda comandos de sistema via ADB do próprio aparelho; o efeito de cada ajuste varia por marca/versão do Android.
 
 ## Créditos
 
 ADB embutido: [libadb-android](https://github.com/MuntashirAkon/libadb-android) (Apache-2.0 / GPL-3.0).
+
+Fontes: Space Grotesk e JetBrains Mono (licença SIL OFL 1.1, textos em `app/src/main/assets/fonts/`).

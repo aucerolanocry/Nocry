@@ -42,6 +42,7 @@ object Engine {
 
     /** chamado a cada aperto de VOL+ (up=true) ou VOL- (up=false) */
     fun volKey(up: Boolean) {
+        if (!License.valid()) return
         val now = SystemClock.elapsedRealtime()
         post { synchronized(lock) { onVol(up, now) } }
     }
@@ -285,6 +286,7 @@ object Engine {
 
     // ======================= CICLO (1 vez por segundo, chamado pelo servico) =======================
     fun tick() {
+        if (!License.valid()) return
         synchronized(lock) {
             val now = Power.plugged(app)
             toqueCarga(now)

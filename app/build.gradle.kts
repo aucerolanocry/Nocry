@@ -4,8 +4,11 @@ plugins {
 }
 
 // versao do app: sobe junto com a tag do release (ex.: v1.0.0 -> 1.0.0)
-val appVersionName = (System.getenv("NOCRY_VERSION")?.trim()?.takeIf { it.isNotEmpty() } ?: "1.0.0").removePrefix("v")
-val appVersionCode = System.getenv("NOCRY_VERSION_CODE")?.trim()?.toIntOrNull() ?: 1
+val appVersionName = (System.getenv("NOCRY_VERSION")?.trim()?.takeIf { it.isNotEmpty() } ?: "1.1.0").removePrefix("v")
+val appVersionCode = System.getenv("NOCRY_VERSION_CODE")?.trim()?.toIntOrNull() ?: 10100
+
+// endereco do servidor das Keys (Cloudflare Worker). Nao e segredo: so diz onde o app confere a key.
+val apiUrl = (System.getenv("NOCRY_API")?.trim()?.takeIf { it.isNotEmpty() } ?: "https://nocry.osreaisnocry.workers.dev").trimEnd('/')
 
 android {
     namespace = "com.nocry.app"
@@ -19,7 +22,10 @@ android {
         versionName = appVersionName
 
         ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a")) }
+        buildConfigField("String", "API_URL", "\"" + apiUrl + "\"")
     }
+
+    buildFeatures { buildConfig = true }
 
     // chave fixa: quem baixa uma versao nova instala por cima da antiga.
     // Os dados vem de segredos do GitHub (nunca ficam no repositorio).

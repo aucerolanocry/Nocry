@@ -6,67 +6,140 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 
 // =====================================================================================
 // INICIO
 // =====================================================================================
 class HomeScreen(a: MainActivity) : Screen(a) {
     override val titulo = "NOCRY"
+    override val semBarra = true
+    override val aba = 0
+
+    private var ringView: RingView? = null
 
     override fun key(): String = listOf(
         Adb.connected, Sys.hasWriteSecure(), Sys.acessibilidadeLigada(), NocryService.rodando,
         Prefs.volAtivo, Prefs.cargaAtivo, Prefs.mcAtivo, Prefs.otmAuto, Prefs.cargaRep, Prefs.mcCycles,
-        Comp.ligado(), Otm.status().first, Prefs.densOrig
+        Comp.ligado(), Otm.status().first, Prefs.densOrig, ultimaLinha(), License.role()
     ).joinToString("|")
 
-    private fun txtComp(): String = if (Comp.ligado()) "ATIVO · long ${Sys.getSecure("long_press_timeout") ?: "?"} · multi ${Sys.getSecure("multi_press_timeout") ?: "?"}" else "desativado"
-    private fun txtVol(): String = if (Prefs.volAtivo) "LIGADO · VOL+ ${Prefs.clicksUp}x / VOL− ${Prefs.clicksDown}x" else "parado"
-    private fun txtCarga(): String = if (Prefs.cargaAtivo) "LIGADO · ${Prefs.cargaRep} repetição(ões) restante(s)" else "parado"
-    private fun txtMc(): String = when {
-        Prefs.mcAtivo -> "LIGADO · density ${Prefs.mcDens} · ${Prefs.mcCycles} vez(es)"
-        Prefs.densOrig != null -> "⚠ TELA COM DENSITY ALTERADA — toque para restaurar"
+    private fun ultimaLinha(): String = NLog.text(null).substringAfterLast('\n')
+
+    private fun estComp(): String = if (Comp.ligado()) "ATIVO" else "desativado"
+    private fun estVol(): String = if (Prefs.volAtivo) "VOL+ ${Prefs.clicksUp}x · VOL− ${Prefs.clicksDown}x" else "parado"
+    private fun estCarga(): String = if (Prefs.cargaAtivo) "LIGADO · ${Prefs.cargaRep} restante(s)" else "parado"
+    private fun estMc(): String = when {
+        Prefs.mcAtivo -> "LIGADO · density ${Prefs.mcDens}"
+        Prefs.densOrig != null -> "TELA ALTERADA"
         else -> "parado"
     }
-    private fun txtOtm(): String {
+    private fun estOtm(): String {
         val st = Otm.status()
-        return (if (st.first) "ATIVA · ${st.second} apps congelados" else "desativada") + (if (Prefs.otmAuto) " · AUTO" else "")
+        return if (st.first) "ATIVA · ${st.second} apps" + (if (Prefs.otmAuto) " · AUTO" else "") else if (Prefs.otmAuto) "AUTO LIGADO" else "desativada"
     }
 
     override fun render() {
         limpa()
         val c = act
-        val t = Ui.text(c, "NOCRY", 38f, Ui.RED, true, mono = true)
-        t.letterSpacing = 0.18f
-        add(t, 4)
-        add(Ui.text(c, "MODO COMPETITIVO · TOQUE · OTIMIZAÇÃO", 11f, Ui.MUTED, mono = true), 0)
 
-        // estado geral
-        val st = Ui.card(c)
-        st.addView(Ui.label(c, "STATUS"))
+        // cabecalho: nome + selo do cargo
+        val cab = Ui.hbox(c)
+        val col = Ui.vbox(c)
+        val t = Ui.text(c, "NOCRY", 30f, Ui.RED, true, mono = true)
+        t.letterSpacing = 0.2f
+        col.addView(t)
+        col.addView(Ui.text(c, "COMPETITIVO · TOQUE · OTIMIZAÇÃO", 10f, Ui.MUTED, mono = true))
+        cab.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val papel = License.roleNome()
+        if (papel.isNotEmpty()) cab.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.MUTED, License.isAdmin()))
+        add(cab, 0)
+
+        // estado geral: anel + 3 passos
         val adb = Adb.connected
-        st.addView(Ui.status(c, "ADB (depuração sem fio)", if (adb) "CONECTADO" else "DESCONECTADO", adb))
         val perm = Sys.hasWriteSecure()
-        st.addView(Ui.status(c, "PERMISSÃO DO APP", if (perm) "LIBERADA" else "FALTA", perm))
         val acc = Sys.acessibilidadeLigada()
-        st.addView(Ui.status(c, "ESCUTA DO VOLUME", if (acc) "ACESSIBILIDADE" else "DESLIGADA", if (acc) true else null))
+        val ok = (if (adb) 1 else 0) + (if (perm) 1 else 0) + (if (acc) 1 else 0)
+
+        val hero = Ui.card(c, forte = true)
+        val topo = Ui.hbox(c)
+        val ring = RingView(c)
+        ringView = ring
+        val rw = FrameLayout(c)
+        rw.addView(ring, FrameLayout.LayoutParams(Ui.dp(c, 92), Ui.dp(c, 92)))
+        val num = Ui.text(c, "$ok/3", 20f, Ui.TEXT, true, mono = true)
+        num.gravity = Gravity.CENTER
+        rw.addView(num, FrameLayout.LayoutParams(Ui.dp(c, 92), Ui.dp(c, 92)))
+        topo.addView(rw, LinearLayout.LayoutParams(Ui.dp(c, 92), Ui.dp(c, 92)))
+        ring.define(ok / 3f, if (ok == 3) Ui.OK else Ui.BAD)
+
+        val info = Ui.vbox(c)
+        info.addView(Ui.label(c, "status"))
+        val titulo2 = when (ok) { 3 -> "PRONTO"; 0 -> "CONECTE"; else -> "QUASE LÁ" }
+        info.addView(Ui.text(c, titulo2, 24f, if (ok == 3) Ui.OK else Ui.TEXT, true), Ui.lp(top = 2, c = c))
         val precisa = Prefs.precisaServico()
-        st.addView(Ui.status(c, "MONITORES", if (NocryService.rodando) "RODANDO" else if (precisa) "INICIANDO" else "NENHUM LIGADO", if (NocryService.rodando) true else null))
+        info.addView(Ui.text(c, if (NocryService.rodando) "monitores rodando" else if (precisa) "monitores iniciando" else "nenhum monitor ligado", 12f, Ui.MUTED, mono = true), Ui.lp(top = 2, c = c))
+        val ip = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        ip.leftMargin = Ui.dp(c, 16)
+        topo.addView(info, ip)
+        hero.addView(topo)
+
+        hero.addView(Ui.status(c, "ADB (depuração sem fio)", if (adb) "CONECTADO" else "DESCONECTADO", adb), Ui.lp(top = 12, c = c))
+        hero.addView(Ui.status(c, "PERMISSÃO DO APP", if (perm) "LIBERADA" else "FALTA", perm))
+        hero.addView(Ui.status(c, "ESCUTA DO VOLUME", if (acc) "ACESSIBILIDADE" else "DESLIGADA", if (acc) true else null))
         val falta = !adb || !perm
-        st.addView(Ui.button(c, if (falta) "CONFIGURAR / CONECTAR" else "CONEXÃO", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST) { act.abre(SetupScreen(act)) }, Ui.lp(top = 8, c = c))
-        add(st, 14)
+        hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 12, c = c))
+        add(hero, 16)
 
-        add(Ui.label(c, "FUNÇÕES"), 18)
-        add(Ui.row(c, "🎮  Modo competitivo", txtComp()) { act.abre(CompScreen(act)) }, 8)
-        add(Ui.row(c, "⚡  Toque via volume", txtVol()) { act.abre(VolScreen(act)) })
-        add(Ui.row(c, "⚡  Toque via carregador", txtCarga()) { act.abre(CargaScreen(act)) })
-        add(Ui.row(c, "🔌  Modo carregador", txtMc()) { act.abre(McScreen(act)) })
-        add(Ui.row(c, "🎯  Otimização", txtOtm()) { act.abre(OtmScreen(act)) })
-        add(Ui.row(c, "⚙️  Ajustes do toque", "long ${Prefs.longOn} · multi ${Prefs.multiOn} · normal ${Prefs.normal}") { act.abre(AjustesScreen(act)) })
+        // funcoes em quadrados
+        add(Ui.label(c, "funções"), 20)
+        val itens = listOf<View>(
+            Ui.tile(c, R.drawable.ic_gamepad, "Modo competitivo", estComp(), Comp.ligado()) { act.abre(CompScreen(act)) },
+            Ui.tile(c, R.drawable.ic_volume, "Toque via volume", estVol(), Prefs.volAtivo) { act.abre(VolScreen(act)) },
+            Ui.tile(c, R.drawable.ic_bolt, "Toque via carregador", estCarga(), Prefs.cargaAtivo) { act.abre(CargaScreen(act)) },
+            Ui.tile(c, R.drawable.ic_plug, "Modo carregador", estMc(), Prefs.mcAtivo) { act.abre(McScreen(act)) },
+            Ui.tile(c, R.drawable.ic_chip, "Otimização", estOtm(), Otm.status().first || Prefs.otmAuto) { act.abre(OtmScreen(act)) },
+            Ui.tile(c, R.drawable.ic_sliders, "Ajustes do toque", "long ${Prefs.longOn} · multi ${Prefs.multiOn}", null) { act.abre(AjustesScreen(act)) }
+        )
+        var i = 0
+        while (i < itens.size) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.TOP
+            val l1 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+            val l2 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+            l2.leftMargin = Ui.dp(c, 10)
+            linha.addView(itens[i], l1)
+            if (i + 1 < itens.size) linha.addView(itens[i + 1], l2)
+            add(linha, if (i == 0) 8 else 10)
+            i += 2
+        }
 
-        add(Ui.label(c, "APP"), 18)
-        add(Ui.row(c, "📜  Logs", "o que o NOCRY fez e por quê") { act.abre(LogScreen(act, null)) }, 8)
-        add(Ui.row(c, "ℹ️  Sobre e atualização", "versão, baixar de novo, compartilhar") { act.abre(SobreScreen(act)) })
+        // ultima coisa que o app fez
+        val ult = ultimaLinha()
+        val faixa = Ui.hbox(c)
+        faixa.background = Ui.glass(c)
+        val pp = Ui.dp(c, 14)
+        faixa.setPadding(pp, Ui.dp(c, 12), pp, Ui.dp(c, 12))
+        val ic = Ui.icone(c, R.drawable.ic_log, Ui.RED, 18)
+        val icp = LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18))
+        icp.rightMargin = Ui.dp(c, 12)
+        faixa.addView(ic, icp)
+        val tc = Ui.vbox(c)
+        tc.addView(Ui.label(c, "última ação"))
+        val txt = if (ult.isBlank() || ult.startsWith("(sem")) "nada ainda" else ult
+        val tl = Ui.text(c, txt, 11.5f, Ui.TEXT, mono = true)
+        tl.maxLines = 2
+        tl.ellipsize = android.text.TextUtils.TruncateAt.END
+        tc.addView(tl, Ui.lp(top = 3, c = c))
+        faixa.addView(tc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        faixa.isClickable = true
+        faixa.setOnClickListener { act.irAba(3) }
+        add(faixa, 14)
     }
 }
 
@@ -74,7 +147,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
 // CONEXAO (passo a passo)
 // =====================================================================================
 class SetupScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "CONEXÃO"
+    override val titulo = "Conexão"
+    override val aba = 1
     private var codigoTxt = ""
     private var portaTxt = ""
     private var campoCodigo: EditText? = null
@@ -234,7 +308,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
 // MODO COMPETITIVO (toque rapido simples)
 // =====================================================================================
 class CompScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "MODO COMPETITIVO"
+    override val titulo = "Modo competitivo"
     private var ocupado = false
 
     override fun key(): String = listOf(Comp.ligado(), Sys.getSecure("long_press_timeout"), Sys.getSecure("multi_press_timeout"), Toque.podeMexer(), ocupado).joinToString("|")
@@ -255,11 +329,11 @@ class CompScreen(a: MainActivity) : Screen(a) {
         val on = Comp.ligado()
         val card = Ui.card(c)
         card.addView(Ui.label(c, "status"))
-        card.addView(Ui.text(c, if (on) "ATIVO" else "DESATIVADO", 26f, if (on) Ui.OK else Ui.RED, true, mono = true), Ui.lp(top = 4, c = c))
+        card.addView(Ui.text(c, if (on) "ATIVO" else "DESATIVADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         card.addView(Ui.text(c, "long_press_timeout = ${Sys.getSecure("long_press_timeout") ?: "padrão"}\nmulti_press_timeout = ${Sys.getSecure("multi_press_timeout") ?: "padrão"}", 13f, Ui.MUTED, mono = true), Ui.lp(top = 8, c = c))
         add(card, 0)
         add(Ui.text(c, "ATIVO: toque rápido (long = 1 · multi = 0).\nINATIVO: volta ao que o aparelho tinha antes.", 13f, Ui.MUTED), 12)
-        if (!Toque.podeMexer()) add(Ui.text(c, "⚠ Sem permissão e sem ADB. Faça a CONEXÃO primeiro.", 13f, Ui.WARN, true), 10)
+        if (!Toque.podeMexer()) add(Ui.text(c, "Sem permissão e sem ADB. Faça a CONEXÃO primeiro.", 13f, Ui.WARN, true), 10)
         add(Ui.button(c, if (ocupado) "aguarde..." else "ativar modo competitivo") { if (!ocupado) roda({ Comp.ativar() }, "MODO COMPETITIVO ATIVO", "O aparelho não aceitou a mudança") }, 14)
         add(Ui.button(c, "desativar modo competitivo", Ui.Kind.DANGER) { if (!ocupado) roda({ Comp.desativar(true) }, "DESATIVADO — tudo voltou ao normal", "O aparelho não aceitou a mudança") }, 10)
         add(Ui.text(c, "DESATIVAR também devolve a tela, se o MODO CARREGADOR tiver deixado a density alterada.", 12f, Ui.MUTED), 10)
@@ -270,7 +344,7 @@ class CompScreen(a: MainActivity) : Screen(a) {
 // TOQUE VIA VOLUME
 // =====================================================================================
 class VolScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "TOQUE VIA VOLUME"
+    override val titulo = "Toque via volume"
     private var ocupado = false
 
     override fun key(): String = listOf(Prefs.volAtivo, Prefs.markVol, KeyService.ativo, Adb.connected, Prefs.clicksUp, Prefs.clicksDown, Prefs.longOn, Prefs.multiOn, Prefs.normal, ocupado).joinToString("|")
@@ -281,7 +355,7 @@ class VolScreen(a: MainActivity) : Screen(a) {
         val on = Prefs.volAtivo
         val card = Ui.card(c)
         card.addView(Ui.label(c, "monitor"))
-        card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.RED, true, mono = true), Ui.lp(top = 4, c = c))
+        card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         card.addView(Ui.text(c, "VOL+ ${Prefs.clicksUp}x rápido → LIGADO (long ${Prefs.longOn} · multi ${Prefs.multiOn})\nVOL− ${Prefs.clicksDown}x rápido → NORMAL (${Prefs.normal})", 13f, Ui.TEXT, mono = true), Ui.lp(top = 8, c = c))
         val escuta = if (KeyService.ativo) "acessibilidade" else if (Adb.connected) "ADB (getevent)" else "NENHUMA — faça a CONEXÃO"
         card.addView(Ui.status(c, "ESCUTA", escuta, KeyService.ativo || Adb.connected), Ui.lp(top = 8, c = c))
@@ -315,7 +389,7 @@ class VolScreen(a: MainActivity) : Screen(a) {
 // TOQUE VIA CARREGADOR
 // =====================================================================================
 class CargaScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "TOQUE VIA CARREGADOR"
+    override val titulo = "Toque via carregador"
     private var ocupado = false
     private var gatilho = Prefs.cargaGatilho
     private var rep = Prefs.cargaRepTotal
@@ -328,7 +402,7 @@ class CargaScreen(a: MainActivity) : Screen(a) {
         val on = Prefs.cargaAtivo
         val card = Ui.card(c)
         card.addView(Ui.label(c, "monitor"))
-        card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.RED, true, mono = true), Ui.lp(top = 4, c = c))
+        card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         val g = if (on) Prefs.cargaGatilho else gatilho
         val txt = if (g == "tirou") "TIROU o carregador → LIGADO (long ${Prefs.longOn} · multi ${Prefs.multiOn})\nCOLOCOU o carregador → NORMAL (${Prefs.normal})"
         else "COLOCOU o carregador → LIGADO (long ${Prefs.longOn} · multi ${Prefs.multiOn})\nTIROU o carregador → NORMAL (${Prefs.normal})"
@@ -372,7 +446,7 @@ class CargaScreen(a: MainActivity) : Screen(a) {
 // MODO CARREGADOR (density + abre o FF)
 // =====================================================================================
 class McScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "MODO CARREGADOR"
+    override val titulo = "Modo carregador"
     private var ocupado = false
     private var ff = Prefs.mcFf
     private var dens = Prefs.mcDens
@@ -386,7 +460,7 @@ class McScreen(a: MainActivity) : Screen(a) {
         val on = Prefs.mcAtivo
         val card = Ui.card(c)
         card.addView(Ui.label(c, "monitor"))
-        card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.RED, true, mono = true), Ui.lp(top = 4, c = c))
+        card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         val nome = if ((if (on) Prefs.mcFf else ff) == "normal") "FF NORMAL" else "FF MAX"
         card.addView(Ui.text(c, "LIGOU o carregador → density ${if (on) Prefs.mcDens else dens} + abre o $nome\nTIROU o carregador → a density volta ao que era", 13f, Ui.TEXT, mono = true), Ui.lp(top = 8, c = c))
         card.addView(Ui.status(c, "ADB", if (Adb.connected) "CONECTADO" else "DESCONECTADO", Adb.connected), Ui.lp(top = 8, c = c))
@@ -442,7 +516,7 @@ class McScreen(a: MainActivity) : Screen(a) {
 // AJUSTES DO TOQUE (valores 1-600 e quantos apertos)
 // =====================================================================================
 class AjustesScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "AJUSTES DO TOQUE"
+    override val titulo = "Ajustes do toque"
 
     override fun key(): String = listOf(Prefs.longOn, Prefs.multiOn, Prefs.normal, Prefs.clicksUp, Prefs.clicksDown).joinToString("|")
 
@@ -481,7 +555,7 @@ class AjustesScreen(a: MainActivity) : Screen(a) {
 // TESTAR AGORA
 // =====================================================================================
 class TestarScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "TESTAR AGORA"
+    override val titulo = "Testar agora"
     private var saida = "Toque em um botão para testar. O app mexe no toque de verdade e mostra o que o aparelho leu de volta."
     private var ocupado = false
 
