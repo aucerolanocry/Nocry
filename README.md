@@ -4,6 +4,8 @@ App Android do **NOCRY SYSTEM**. Faz as mesmas funções do menu do Termux, mas 
 
 **O que tem:** Modo Competitivo, toque rápido por volume (VOL+ / VOL−), toque pelo carregador (tirou/colocou), Modo Carregador (densidade + abrir o FF), Otimização completa (ver, aplicar, desfazer, proteger apps), Ajustes do toque, Logs e Testar agora.
 
+**Novo na 1.3.1:** ícone novo do app (logo laranja com barras), já no formato adaptativo do Android e com versão monocromática para os ícones temáticos do Android 13+.
+
 **Novo na 1.3 (intro de abertura):** ao abrir o app toca uma **intro HACKER** em tela cheia ("app desenvolvido por aucerola") com música original, em ~8 segundos. **Toque na tela pula.** No **Estúdio → intro de abertura** você escolhe quando toca (sempre, só na 1ª vez depois de instalar/atualizar, ou desligada), liga/desliga o som, **troca a música por uma do seu celular** (escolhe o arquivo, define em que segundo começa) e pode **assistir de novo** quando quiser.
 
 **Novo na 1.2 (visual profissional):** 8 **temas prontos** (Brasa, Cyber, Aurora, Synthwave, Ouro, Matrix, Sakura, Gelo), tudo em **MAIÚSCULO** com fontes novas, 9 fundos animados (Brasas, Grade, Aurora, Sol, Chuva, Neve, Pétalas, Ouro, Noite), degradê com duas cores e ângulo, cartões em 4 estilos (Vidro, Contorno, Sólido, HUD), barra de baixo flutuante, início com modos que você organiza e a aba **Estúdio** para mudar tudo (cores, brilho, borda, fonte, efeitos, vibração).
