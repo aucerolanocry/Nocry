@@ -1,0 +1,8 @@
+Fontes incluídas no Nocry (todas sob a SIL Open Font License 1.1, que permite uso e redistribuição):
+
+Big Shoulders, Bricolage Grotesque, Gloock, Instrument Sans, Outfit, Pixelify Sans,
+Red Hat Mono, Tektur, Work Sans, Space Grotesk, JetBrains Mono: o texto da licença de cada uma
+está nos arquivos OFL-*.txt desta pasta.
+
+Poppins: Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins),
+licenciada sob a SIL Open Font License 1.1 (https://openfontlicense.org).

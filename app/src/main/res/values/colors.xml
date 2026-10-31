@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="nocry_bg">#050505</color>
-    <color name="nocry_red">#E8283A</color>
+    <color name="nocry_bg">#0A0506</color>
+    <color name="nocry_red">#FF2D55</color>
 </resources>

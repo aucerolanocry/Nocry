@@ -3,6 +3,7 @@ package com.nocry.app
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 abstract class Screen(val act: MainActivity) {
     abstract val titulo: String
     lateinit var root: LinearLayout
+    private var rolagem: android.widget.ScrollView? = null
     private var ultimo = "\u0000"
 
     /** a tela inicial desenha o proprio cabecalho */
@@ -29,9 +31,11 @@ abstract class Screen(val act: MainActivity) {
     fun criar(): View {
         val sv = android.widget.ScrollView(act)
         sv.isVerticalScrollBarEnabled = false
+        sv.overScrollMode = View.OVER_SCROLL_NEVER
+        rolagem = sv
         root = Ui.vbox(act)
         val p = Ui.dp(act, 16)
-        root.setPadding(p, if (semBarra) Ui.dp(act, 14) else Ui.dp(act, 6), p, p * 2)
+        root.setPadding(p, if (semBarra) Ui.dp(act, 14) else Ui.dp(act, 6), p, Ui.dp(act, 28))
         sv.addView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         ultimo = key()
         render()
@@ -39,6 +43,22 @@ abstract class Screen(val act: MainActivity) {
     }
 
     abstract fun render()
+
+    /** onde a tela estava rolada (pra voltar no mesmo ponto quando o visual muda) */
+    fun rolagemY(): Int = rolagem?.scrollY ?: 0
+
+    fun restauraY(y: Int) {
+        val s = rolagem ?: return
+        if (y <= 0) return
+        s.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or2: Int, ob: Int) {
+                if (s.height > 0 && (s.getChildAt(0)?.height ?: 0) > 0) {
+                    s.removeOnLayoutChangeListener(this)
+                    s.scrollTo(0, y)
+                }
+            }
+        })
+    }
 
     /** assinatura do estado: se mudar, a tela e redesenhada */
     open fun key(): String = ""
@@ -63,7 +83,7 @@ class MainActivity : Activity() {
     private val abas = listOf(
         Aba("Início", R.drawable.ic_home),
         Aba("Conexão", R.drawable.ic_wifi),
-        Aba("Visual", R.drawable.ic_brush),
+        Aba("Estúdio", R.drawable.ic_brush),
         Aba("Logs", R.drawable.ic_log),
         Aba("Sobre", R.drawable.ic_info)
     )
@@ -76,11 +96,13 @@ class MainActivity : Activity() {
     private lateinit var topo: View
     private lateinit var barra: TextView
     private lateinit var voltar: View
+    private lateinit var marcaTopo: View
     private lateinit var conteudo: FrameLayout
     private lateinit var nav: LinearLayout
     private val h = Handler(Looper.getMainLooper())
     private val conectando = AtomicBoolean(false)
     private var gate = false
+    private var intro: IntroView? = null
 
     /** quem pediu uma tela do sistema (escolher video/imagem) recebe a resposta aqui */
     var aoResultado: ((Int, Int, Intent?) -> Unit)? = null
@@ -96,9 +118,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        mostraBarras()
 
         raiz = FrameLayout(this)
         raiz.setBackgroundColor(Theme.base)
@@ -113,6 +133,35 @@ class MainActivity : Activity() {
         License.saiu = { mostraGate() }
         montaChrome()
         if (License.valid()) abre(HomeScreen(this)) else mostraGate()
+
+        // intro de abertura (so quando o app abre do zero, nunca ao recriar a tela)
+        if (savedInstanceState == null && Intro.deveTocar(this)) tocaIntro()
+    }
+
+    // ------------------------------------------------------------------ intro
+    /** toca a intro por cima do app, em tela cheia (toque pula). Tambem usada pelo botao "assistir agora". */
+    fun tocaIntro() {
+        if (intro != null) return
+        val v = IntroView(this) {
+            intro = null
+            mostraBarras()
+        }
+        intro = v
+        escondeBarras()
+        raiz.addView(v, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    @Suppress("DEPRECATION")
+    private val uiBase = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+
+    @Suppress("DEPRECATION")
+    private fun mostraBarras() { window.decorView.systemUiVisibility = uiBase }
+
+    @Suppress("DEPRECATION")
+    private fun escondeBarras() {
+        window.decorView.systemUiVisibility = uiBase or View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
     }
 
     // ------------------------------------------------------------------ moldura (barra de cima e de baixo)
@@ -131,47 +180,68 @@ class MainActivity : Activity() {
         val t = LinearLayout(this)
         t.orientation = LinearLayout.HORIZONTAL
         t.gravity = Gravity.CENTER_VERTICAL
-        t.setPadding(Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 16), Ui.dp(this, 2))
+        t.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 16), Ui.dp(this, 4))
 
         val v = FrameLayout(this)
-        v.addView(Ui.icone(this, R.drawable.ic_back, Ui.RED, 24), FrameLayout.LayoutParams(Ui.dp(this, 24), Ui.dp(this, 24), Gravity.CENTER))
+        v.background = Ui.ripple(this, Botao(this, "ico"), Botao(this, "ico", mascara = true))
+        v.addView(Ui.icone(this, R.drawable.ic_back, Theme.mix(Ui.TEXT, Theme.accent, 0.35f), 20), FrameLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20), Gravity.CENTER))
         v.contentDescription = "Voltar"
-        v.setOnClickListener { onBackPressed() }
+        Ui.clique(v) { onBackPressed() }
         voltar = v
-        t.addView(v, LinearLayout.LayoutParams(Ui.dp(this, 48), Ui.dp(this, 48)))
+        val vp = LinearLayout.LayoutParams(Ui.dp(this, 40), Ui.dp(this, 40))
+        vp.rightMargin = Ui.dp(this, 12)
+        t.addView(v, vp)
+
+        // barrinha em degrade antes do titulo (aparece nas abas, onde nao tem botao de voltar)
+        val marca = View(this)
+        marca.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Theme.accent, Theme.accent2)).also { it.cornerRadius = Ui.dp(this, 2).toFloat() }
+        marcaTopo = marca
+        val mp = LinearLayout.LayoutParams(Ui.dp(this, 4), Ui.dp(this, 22))
+        mp.rightMargin = Ui.dp(this, 10)
+        mp.leftMargin = Ui.dp(this, 4)
+        t.addView(marca, mp)
 
         barra = Ui.text(this, "NOCRY", 22f, Ui.TEXT, true)
+        barra.maxLines = 1
+        barra.ellipsize = android.text.TextUtils.TruncateAt.END
         t.addView(barra, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         return t
     }
 
+    /** barra de baixo: pilula de vidro flutuante; a aba ativa vira um botao em degrade com o nome */
     private fun preencheNav() {
         nav.removeAllViews()
         if (gate) return
-        val linha = View(this)
-        linha.setBackgroundColor(Ui.LINE)
-        nav.addView(linha, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1))
+        val ativa = pilha.firstOrNull()?.aba ?: 0
+        val m = Ui.dp(this, 14)
         val r = LinearLayout(this)
         r.orientation = LinearLayout.HORIZONTAL
-        r.setBackgroundColor(Theme.alpha(0xFF08080C.toInt(), 0xE6))
-        r.setPadding(Ui.dp(this, 6), Ui.dp(this, 6), Ui.dp(this, 6), Ui.dp(this, 6))
-        val ativa = pilha.firstOrNull()?.aba ?: 0
+        r.gravity = Gravity.CENTER_VERTICAL
+        r.background = Painel(this, "vidro", true, false, 28)
+        r.elevation = Ui.dp(this, 10).toFloat()
+        r.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7))
         for ((i, a) in abas.withIndex()) {
             val on = i == ativa
             val item = LinearLayout(this)
-            item.orientation = LinearLayout.VERTICAL
+            item.orientation = LinearLayout.HORIZONTAL
             item.gravity = Gravity.CENTER
-            item.minimumHeight = Ui.dp(this, 54)
             item.contentDescription = a.nome
-            val pill = FrameLayout(this)
-            pill.background = if (on) Ui.shape(this, Theme.alpha(Ui.RED, 0x2A), 14) else null
-            pill.addView(Ui.icone(this, a.icone, if (on) Ui.RED else Ui.MUTED, 22), FrameLayout.LayoutParams(Ui.dp(this, 22), Ui.dp(this, 22), Gravity.CENTER))
-            item.addView(pill, LinearLayout.LayoutParams(Ui.dp(this, 52), Ui.dp(this, 30)))
-            item.addView(Ui.text(this, a.nome, 10.5f, if (on) Ui.RED else Ui.MUTED, on), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 2, c = this))
-            item.setOnClickListener { irAba(i) }
-            r.addView(item, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (on) item.background = Botao(this, "grad", 22)
+            val cor = if (on) Theme.sobreGrad() else Ui.MUTED
+            item.addView(Ui.icone(this, a.icone, cor, 21))
+            if (on) {
+                val tx = Ui.text(this, a.nome, 11.5f, cor, true, mono = true)
+                tx.maxLines = 1
+                val tp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                tp.leftMargin = Ui.dp(this, 6)
+                item.addView(tx, tp)
+            }
+            Ui.clique(item) { irAba(i) }
+            r.addView(item, LinearLayout.LayoutParams(0, Ui.dp(this, 46), if (on) 2.3f else 1f))
         }
-        nav.addView(r, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        lp.setMargins(m, Ui.dp(this, 4), m, Ui.dp(this, 10))
+        nav.addView(r, lp)
     }
 
     /** troca de aba: volta pra raiz da aba escolhida */
@@ -182,7 +252,7 @@ class MainActivity : Activity() {
         views.clear()
         abre(when (i) {
             1 -> SetupScreen(this)
-            2 -> PersonalizarScreen(this)
+            2 -> EstudioScreen(this)
             3 -> LogScreen(this, null)
             4 -> SobreScreen(this)
             else -> HomeScreen(this)
@@ -228,19 +298,19 @@ class MainActivity : Activity() {
         atual()?.aoMostrar()
     }
 
-    private fun mostra() {
+    private fun mostra(anima: Boolean = true) {
         conteudo.removeAllViews()
         val v = views.last()
         conteudo.addView(v, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        if (Prefs.anim) {
+        if (anima && Prefs.anim) {
             v.alpha = 0f
-            v.translationY = Ui.dp(this, 10).toFloat()
-            v.animate().alpha(1f).translationY(0f).setDuration(180).start()
+            v.translationY = Ui.dp(this, 12).toFloat()
+            v.animate().alpha(1f).translationY(0f).setDuration(220).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
         }
         val s = pilha.last()
         barra.text = s.titulo
-        barra.setPadding(if (pilha.size > 1) 0 else Ui.dp(this, 12), 0, 0, 0)
         voltar.visibility = if (pilha.size > 1) View.VISIBLE else View.GONE
+        marcaTopo.visibility = if (pilha.size > 1) View.GONE else View.VISIBLE
         topo.visibility = if (s.semBarra && pilha.size == 1) View.GONE else View.VISIBLE
         preencheNav()
     }
@@ -249,6 +319,7 @@ class MainActivity : Activity() {
     fun reaplica() {
         raiz.setBackgroundColor(Theme.base)
         bg.aplica()
+        val ys = pilha.map { it.rolagemY() }
         montaChrome()
         if (gate) {
             gate = false
@@ -256,7 +327,8 @@ class MainActivity : Activity() {
             return
         }
         for (i in pilha.indices) views[i] = pilha[i].criar()
-        if (pilha.isNotEmpty()) mostra()
+        if (pilha.isNotEmpty()) mostra(false)
+        for (i in pilha.indices) pilha[i].restauraY(ys.getOrElse(i) { 0 })
     }
 
     /** so o fundo mudou (escurecer/desfocar ao arrastar) */
@@ -268,6 +340,7 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
         when {
+            intro != null -> intro?.pula()
             gate -> super.onBackPressed()
             pilha.size > 1 -> fecha()
             (pilha.firstOrNull()?.aba ?: 0) != 0 -> irAba(0)
@@ -302,6 +375,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        intro?.acabaJa()
         h.removeCallbacks(ciclo)
         Engine.onChange = null
         bg.pausa()
@@ -309,6 +383,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        intro?.acabaJa()
         License.saiu = null
         bg.encerra()
         super.onDestroy()

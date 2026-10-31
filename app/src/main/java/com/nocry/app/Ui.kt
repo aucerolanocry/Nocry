@@ -3,14 +3,18 @@ package com.nocry.app
 import android.app.AlertDialog
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.PorterDuff
+import android.graphics.drawable.ClipDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.text.InputType
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -18,20 +22,18 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 
-/** Pecas visuais do NOCRY: vidro fosco + neon. As cores e o formato vem da tela PERSONALIZAR. */
+/** Pecas visuais do NOCRY. Cores, degrade, formato dos cartoes e fonte vem do ESTUDIO. */
 object Ui {
     val BG: Int get() = Theme.base
-    /** fundo de um cartao de vidro (so a cor de base; o desenho completo esta em glass()) */
-    val CARD: Int get() = Theme.alpha(0xFF181821.toInt(), Prefs.vidro * 255 / 100)
-    val CARD2: Int get() = Theme.alpha(0xFFFFFFFF.toInt(), 0x14)
-    val LINE: Int get() = Theme.alpha(0xFFFFFFFF.toInt(), 0x26)
-    /** cor de destaque escolhida pelo usuario */
+    val LINE: Int get() = Theme.alpha(Color.WHITE, 0x26)
+    /** cor 1 do degrade */
     val RED: Int get() = Theme.accent
-    /** vermelho fixo pra "desligado / problema" (nao muda com o destaque) */
+    /** cor 2 do degrade */
+    val ACC2: Int get() = Theme.accent2
+    /** vermelho fixo pra "desligado / problema" (nao muda com o tema) */
     val BAD = 0xFFFF5470.toInt()
     val RED_DARK: Int get() = Theme.alpha(0xFFFF5470.toInt(), 0x2E)
     val TEXT = 0xFFF4F4F7.toInt()
@@ -43,40 +45,61 @@ object Ui {
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density + 0.5f).toInt()
 
+    private val hud: Boolean get() = Prefs.cartao == "hud"
+
+    /** forma simples arredondada (no estilo HUD os cantos ficam quase retos) */
     fun shape(c: Context, fill: Int, radiusDp: Int, strokeColor: Int = 0, strokeDp: Int = 0): GradientDrawable {
         val g = GradientDrawable()
         g.setColor(fill)
-        g.cornerRadius = dp(c, radiusDp).toFloat()
+        g.cornerRadius = dp(c, if (hud) minOf(radiusDp, 3) else radiusDp).toFloat()
         if (strokeDp > 0) g.setStroke(dp(c, strokeDp), strokeColor)
         return g
     }
 
-    /** cartao de vidro: fundo translucido com brilho leve e borda fina (neon se ligado) */
-    fun glass(c: Context, raio: Int = Prefs.raio, forte: Boolean = false): GradientDrawable {
-        val a = Prefs.vidro * 255 / 100
-        val topo = if (forte) Theme.mix(0xFF1F1F2B.toInt(), Theme.accent, 0.24f) else 0xFF23232F.toInt()
-        val baixo = if (forte) Theme.mix(0xFF111118.toInt(), Theme.accent, 0.10f) else 0xFF13131A.toInt()
-        val g = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Theme.alpha(topo, a), Theme.alpha(baixo, a)))
-        g.cornerRadius = dp(c, raio).toFloat()
-        val borda = when {
-            forte -> Theme.alpha(Theme.accent, if (Prefs.neon) 0xB0 else 0x70)
-            Prefs.neon -> Theme.alpha(Theme.accent, 0x46)
-            else -> Theme.alpha(0xFFFFFFFF.toInt(), 0x26)
-        }
-        g.setStroke(dp(c, 1), borda)
-        return g
+    /** cartao do estilo escolhido (vidro, contorno, solido ou HUD) */
+    fun glass(c: Context, raio: Int = Prefs.raio, forte: Boolean = false, ligado: Boolean = false): Drawable =
+        Painel(c, Prefs.cartao, forte, ligado, raio)
+
+    fun ripple(c: Context, bg: Drawable, mask: Drawable? = null): Drawable =
+        RippleDrawable(ColorStateList.valueOf(Theme.alpha(Color.WHITE, 0x30)), bg, mask ?: Painel(c, mascara = true))
+
+    /** vibracao curta ao tocar (se o usuario ligou no ESTUDIO) */
+    fun toca(v: View) {
+        if (Prefs.vibrar) try { v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) } catch (_: Throwable) {}
     }
 
-    private fun ripple(bg: Drawable): Drawable = RippleDrawable(ColorStateList.valueOf(Theme.alpha(0xFFFFFFFF.toInt(), 0x33)), bg, null)
+    fun clique(v: View, acao: () -> Unit) {
+        v.isClickable = true
+        v.setOnClickListener { toca(v); acao() }
+    }
 
-    fun text(c: Context, s: String, sp: Float = 14f, color: Int = TEXT, bold: Boolean = false, mono: Boolean = false): TextView {
+    // ------------------------------------------------------------------ texto
+    /**
+     * bold ou mono = titulo/rotulo (fonte "display" do tema); o resto e texto corrido.
+     * code = fonte de largura fixa e sem maiusculas (usado nos logs).
+     */
+    fun text(c: Context, s: String, sp: Float = 14f, color: Int = TEXT, bold: Boolean = false, mono: Boolean = false, code: Boolean = false): TextView {
         val t = TextView(c)
         t.text = s
-        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp * Prefs.escala / 100f)
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp * Theme.escalaTexto() * (if (code) 0.95f else 1f))
         t.setTextColor(color)
-        t.setLineSpacing(0f, 1.15f)
-        t.typeface = Theme.fonte(c, mono, bold)
+        t.setLineSpacing(0f, 1.12f)
+        val display = bold || mono
+        t.typeface = if (code) Theme.codigo(c) else Theme.fonte(c, display, bold)
+        if (!code && Prefs.maiusc) {
+            t.setAllCaps(true)
+            if (display) t.letterSpacing = Theme.pack().esp
+        }
         if (Theme.temMidiaDeFundo()) t.setShadowLayer(dp(c, 3).toFloat(), 0f, dp(c, 1).toFloat(), 0x99000000.toInt())
+        return t
+    }
+
+    /** texto com degrade cor 1 -> cor 2 */
+    fun gradTexto(c: Context, s: String, sp: Float, bold: Boolean = true): TextView {
+        val t = text(c, s, sp, TEXT, bold, mono = true)
+        val str = if (Prefs.maiusc) s.uppercase() else s
+        val w = t.paint.measureText(str)
+        t.paint.shader = android.graphics.LinearGradient(0f, 0f, maxOf(w, 1f), 0f, Theme.accent, Theme.accent2, android.graphics.Shader.TileMode.CLAMP)
         return t
     }
 
@@ -99,19 +122,19 @@ object Ui {
         return l
     }
 
-    /** caixa de vidro onde ficam os itens */
-    fun card(c: Context, forte: Boolean = false): LinearLayout {
+    /** cartao do tema onde ficam os itens */
+    fun card(c: Context, forte: Boolean = false, ligado: Boolean = false): LinearLayout {
         val l = vbox(c)
-        l.background = glass(c, forte = forte)
+        l.background = glass(c, forte = forte, ligado = ligado)
         val p = dp(c, 16)
         l.setPadding(p, p, p, p)
         return l
     }
 
-    /** etiqueta pequena na cor de destaque em cima de cada bloco */
+    /** etiqueta pequena na cor 1 em cima de cada bloco */
     fun label(c: Context, s: String): TextView {
-        val t = text(c, s.uppercase(), 11f, RED, true, mono = true)
-        t.letterSpacing = 0.14f
+        val t = text(c, s, 11f, RED, true, mono = true)
+        t.letterSpacing = if (Prefs.maiusc) 0.2f else 0.06f
         return t
     }
 
@@ -131,23 +154,23 @@ object Ui {
         return i
     }
 
-    /** quadradinho arredondado com um icone dentro */
+    /** quadradinho com um icone dentro; aceso fica em degrade com brilho */
     fun caixaIcone(c: Context, res: Int, ativo: Boolean = false, tamDp: Int = 40): View {
         val f = FrameLayout(c)
-        val cor = if (ativo) RED else MUTED
-        f.background = shape(c, if (ativo) Theme.alpha(RED, 0x2A) else Theme.alpha(0xFFFFFFFF.toInt(), 0x14), minOf(Prefs.raio, 14))
-        val ic = icone(c, res, cor, (tamDp * 0.5f).toInt())
-        f.addView(ic, FrameLayout.LayoutParams(dp(c, (tamDp * 0.5f).toInt()), dp(c, (tamDp * 0.5f).toInt()), Gravity.CENTER))
+        f.background = Botao(c, if (ativo) "icoOn" else "ico")
+        val tam = (tamDp * 0.5f).toInt()
+        val ic = icone(c, res, if (ativo) Color.WHITE else 0xFFB9B9C8.toInt(), tam)
+        f.addView(ic, FrameLayout.LayoutParams(dp(c, tam), dp(c, tam), Gravity.CENTER))
         f.layoutParams = LinearLayout.LayoutParams(dp(c, tamDp), dp(c, tamDp))
         return f
     }
 
     /** selo pequeno (DONO, STAFF, AUTO...) */
     fun selo(c: Context, s: String, cor: Int = RED, cheio: Boolean = true): TextView {
-        val t = text(c, s.uppercase(), 10f, if (cheio) Theme.sobre(cor) else cor, true, mono = true)
-        t.letterSpacing = 0.1f
-        t.background = if (cheio) shape(c, cor, 7) else shape(c, Theme.alpha(cor, 0x22), 7, Theme.alpha(cor, 0x88), 1)
-        t.setPadding(dp(c, 8), dp(c, 4), dp(c, 8), dp(c, 4))
+        val t = text(c, s.uppercase(), 10f, if (cheio) cor else MUTED, true, mono = true)
+        t.letterSpacing = 0.12f
+        t.background = shape(c, Theme.alpha(cor, if (cheio) 0x22 else 0x14), 8, Theme.alpha(cor, if (cheio) 0x99 else 0x55), 1)
+        t.setPadding(dp(c, 10), dp(c, 6), dp(c, 10), dp(c, 6))
         return t
     }
 
@@ -168,56 +191,39 @@ object Ui {
     }
 
     fun button(c: Context, label: String, kind: Kind = Kind.PRIMARY, ico: Int = 0, onClick: () -> Unit): View {
-        val fill: Int
-        val stroke: Int
-        val corTxt: Int
-        when (kind) {
-            Kind.PRIMARY -> { fill = RED; stroke = RED; corTxt = Theme.sobre(RED) }
-            Kind.DANGER -> { fill = RED_DARK; stroke = Theme.alpha(BAD, 0x77); corTxt = 0xFFFF8E9E.toInt() }
-            Kind.GHOST -> { fill = Theme.alpha(0xFFFFFFFF.toInt(), 0x14); stroke = Theme.alpha(0xFFFFFFFF.toInt(), 0x2C); corTxt = TEXT }
+        val corTxt = when (kind) {
+            Kind.PRIMARY -> Theme.sobreGrad()
+            Kind.DANGER -> 0xFFFF8E9E.toInt()
+            Kind.GHOST -> TEXT
         }
-        val r = minOf(Prefs.raio, 18)
-        val bg: Drawable = if (kind == Kind.PRIMARY) {
-            val g = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(RED, Theme.mix(RED, 0xFF000000.toInt(), 0.22f)))
-            g.cornerRadius = dp(c, r).toFloat()
-            g
-        } else shape(c, fill, r, stroke, 1)
-
-        val v: View
+        val tipo = when (kind) { Kind.PRIMARY -> "grad"; Kind.DANGER -> "danger"; Kind.GHOST -> "ghost" }
+        val bg = Botao(c, tipo)
         val ph = dp(c, 16)
-        if (ico != 0) {
-            val l = hbox(c)
-            l.gravity = Gravity.CENTER
-            l.addView(icone(c, ico, corTxt, 18))
-            val t = text(c, label.uppercase(), 13f, corTxt, true)
-            t.letterSpacing = 0.07f
-            val tp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            tp.leftMargin = dp(c, 8)
-            l.addView(t, tp)
-            v = l
-        } else {
-            val t = text(c, label.uppercase(), 13f, corTxt, true)
-            t.gravity = Gravity.CENTER
-            t.letterSpacing = 0.07f
-            v = t
+        val l = hbox(c)
+        l.gravity = Gravity.CENTER
+        if (ico != 0) l.addView(icone(c, ico, corTxt, 18))
+        val t = text(c, label.uppercase(), 13f, corTxt, true, mono = true)
+        t.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
+        t.gravity = Gravity.CENTER
+        val tp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        if (ico != 0) tp.leftMargin = dp(c, 8)
+        l.addView(t, tp)
+        l.background = ripple(c, bg, Botao(c, tipo, mascara = true))
+        l.setPadding(ph, dp(c, 14), ph, dp(c, 14))
+        l.minimumHeight = dp(c, 52)
+        clique(l, onClick)
+        if (kind == Kind.PRIMARY && Prefs.brilho > 0 && Build.VERSION.SDK_INT >= 28) {
+            l.elevation = dp(c, 4 + Prefs.brilho / 12).toFloat()
+            l.outlineSpotShadowColor = RED
+            l.outlineAmbientShadowColor = RED
         }
-        v.background = ripple(bg)
-        v.setPadding(ph, dp(c, 15), ph, dp(c, 15))
-        v.isClickable = true
-        v.minimumHeight = dp(c, 52)
-        v.setOnClickListener { onClick() }
-        if (kind == Kind.PRIMARY && Prefs.neon && Build.VERSION.SDK_INT >= 28) {
-            v.elevation = dp(c, 6).toFloat()
-            v.outlineSpotShadowColor = RED
-            v.outlineAmbientShadowColor = RED
-        }
-        return v
+        return l
     }
 
     /** linha de menu: icone, titulo, descricao curta e setinha */
     fun row(c: Context, titulo: String, sub: String, ico: Int = 0, onClick: () -> Unit): View {
         val r = hbox(c)
-        r.background = ripple(glass(c))
+        r.background = ripple(c, glass(c), Painel(c, mascara = true))
         val p = dp(c, 14)
         r.setPadding(p, dp(c, 12), p, dp(c, 12))
         if (ico != 0) {
@@ -238,8 +244,7 @@ object Ui {
         val sp = LinearLayout.LayoutParams(dp(c, 20), dp(c, 20))
         sp.leftMargin = dp(c, 8)
         r.addView(seta, sp)
-        r.isClickable = true
-        r.setOnClickListener { onClick() }
+        clique(r, onClick)
         return r
     }
 
@@ -260,34 +265,23 @@ object Ui {
         return r
     }
 
-    /** interruptor sozinho (usa a cor de destaque) */
-    fun interruptor(c: Context, ligado: Boolean, onChange: (Boolean) -> Unit): Switch {
-        val sw = Switch(c)
-        val est = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
-        sw.thumbTintList = ColorStateList(est, intArrayOf(Theme.sobre(RED), 0xFFC9C9D4.toInt()))
-        sw.trackTintList = ColorStateList(est, intArrayOf(RED, Theme.alpha(0xFFFFFFFF.toInt(), 0x30)))
-        sw.isChecked = ligado
-        sw.setOnCheckedChangeListener { _, v -> onChange(v) }
-        return sw
-    }
+    /** interruptor sozinho em degrade */
+    fun interruptor(c: Context, ligado: Boolean, onChange: (Boolean) -> Unit): View = Chave(c, ligado, onChange)
 
-    /** par de botoes lado a lado (ex.: TIROU | COLOCOU) com o escolhido em destaque */
+    /** opcoes lado a lado (ex.: TIROU | COLOCOU) com a escolhida em degrade */
     fun segmento(c: Context, opcoes: List<String>, escolhido: Int, onPick: (Int) -> Unit): View {
         val r = hbox(c)
+        r.background = Botao(c, "ghost")
+        r.setPadding(dp(c, 4), dp(c, 4), dp(c, 4), dp(c, 4))
         for ((i, o) in opcoes.withIndex()) {
             val sel = i == escolhido
-            val t = text(c, o.uppercase(), 12f, if (sel) Theme.sobre(RED) else MUTED, true)
+            val t = text(c, o.uppercase(), 12f, if (sel) Theme.sobreGrad() else MUTED, true, mono = true)
             t.gravity = Gravity.CENTER
-            t.letterSpacing = 0.04f
-            t.background = ripple(
-                if (sel) shape(c, RED, minOf(Prefs.raio, 14), RED, 1)
-                else shape(c, Theme.alpha(0xFFFFFFFF.toInt(), 0x12), minOf(Prefs.raio, 14), Theme.alpha(0xFFFFFFFF.toInt(), 0x26), 1)
-            )
-            t.setPadding(dp(c, 6), dp(c, 13), dp(c, 6), dp(c, 13))
-            t.isClickable = true
-            t.setOnClickListener { onPick(i) }
+            t.letterSpacing = if (Prefs.maiusc) 0.06f else 0.01f
+            if (sel) t.background = Botao(c, "grad", minOf(Prefs.raio, 14))
+            t.setPadding(dp(c, 6), dp(c, 11), dp(c, 6), dp(c, 11))
+            clique(t) { onPick(i) }
             val p = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            if (i > 0) p.leftMargin = dp(c, 8)
             r.addView(t, p)
         }
         return r
@@ -298,30 +292,47 @@ object Ui {
         e.hint = hint
         e.setHintTextColor(MUTED)
         e.setTextColor(TEXT)
-        e.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        e.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * Theme.escalaTexto())
         e.typeface = Theme.fonte(c, true, false)
         e.inputType = if (numero) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT
-        e.background = shape(c, Theme.alpha(0xFF000000.toInt(), 0x66), minOf(Prefs.raio, 12), Theme.alpha(0xFFFFFFFF.toInt(), 0x30), 1)
+        e.background = Botao(c, "campo", minOf(Prefs.raio, 14))
         val p = dp(c, 14)
         e.setPadding(p, dp(c, 12), p, dp(c, 12))
         e.setSingleLine(true)
         return e
     }
 
-    /** barra de valor: titulo, valor na cor de destaque e o controle. onMove acontece enquanto arrasta; onFim ao soltar */
+    /** barra de valor: titulo, valor na cor 1 e o controle em degrade. onMove acontece enquanto arrasta; onFim ao soltar */
     fun slider(c: Context, titulo: String, valor: Int, min: Int, max: Int, sufixo: String, onMove: (Int) -> Unit = {}, onFim: (Int) -> Unit): View {
         val box = vbox(c)
         val topo = hbox(c)
-        topo.addView(text(c, titulo, 14f, TEXT, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val vt = text(c, "$valor$sufixo", 13f, RED, true, mono = true)
+        topo.addView(text(c, titulo, 13.5f, TEXT, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val vt = text(c, "$valor$sufixo", 12.5f, RED, true, mono = true)
         topo.addView(vt)
         box.addView(topo)
         val sb = SeekBar(c)
         sb.max = max - min
         sb.progress = (valor - min).coerceIn(0, max - min)
-        sb.progressTintList = ColorStateList.valueOf(RED)
-        sb.thumbTintList = ColorStateList.valueOf(RED)
-        sb.progressBackgroundTintList = ColorStateList.valueOf(Theme.alpha(0xFFFFFFFF.toInt(), 0x30))
+        val alt = dp(c, 6)
+        val trilho = GradientDrawable()
+        trilho.setColor(Theme.alpha(Color.WHITE, 0x1E))
+        trilho.cornerRadius = alt / 2f
+        trilho.setSize(1, alt)
+        val cheio = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(Theme.accent, Theme.accent2))
+        cheio.cornerRadius = alt / 2f
+        cheio.setSize(1, alt)
+        val camadas = LayerDrawable(arrayOf<Drawable>(trilho, ClipDrawable(cheio, Gravity.START, ClipDrawable.HORIZONTAL)))
+        camadas.setId(0, android.R.id.background)
+        camadas.setId(1, android.R.id.progress)
+        sb.progressDrawable = camadas
+        val bola = GradientDrawable()
+        bola.shape = GradientDrawable.OVAL
+        bola.setColor(Color.WHITE)
+        bola.setStroke(dp(c, 4), Theme.alpha(Theme.accent, 0x70))
+        bola.setSize(dp(c, 22), dp(c, 22))
+        sb.thumb = bola
+        sb.splitTrack = false
+        sb.setPadding(dp(c, 11), 0, dp(c, 11), 0)
         sb.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(s: SeekBar, p: Int, fromUser: Boolean) {
                 vt.text = "${p + min}$sufixo"
@@ -330,7 +341,7 @@ object Ui {
             override fun onStartTrackingTouch(s: SeekBar) {}
             override fun onStopTrackingTouch(s: SeekBar) { onFim(s.progress + min) }
         })
-        box.addView(sb, lp(top = 4, h = dp(c, 36), c = c))
+        box.addView(sb, lp(top = 6, h = dp(c, 34), c = c))
         return box
     }
 
@@ -346,28 +357,28 @@ object Ui {
             val g = GradientDrawable()
             g.shape = GradientDrawable.OVAL
             g.setColor(cor.valor)
-            g.setStroke(dp(c, if (sel) 3 else 1), if (sel) 0xFFFFFFFF.toInt() else Theme.alpha(0xFFFFFFFF.toInt(), 0x44))
+            g.setStroke(dp(c, if (sel) 3 else 1), if (sel) Color.WHITE else Theme.alpha(Color.WHITE, 0x44))
             v.background = g
             v.contentDescription = cor.nome
-            v.setOnClickListener { onPick(cor.valor) }
+            clique(v) { onPick(cor.valor) }
             itens.add(v)
         }
         val p = View(c)
         val gp = GradientDrawable()
         gp.shape = GradientDrawable.OVAL
-        gp.setColor(if (ehPalheta) Theme.alpha(0xFFFFFFFF.toInt(), 0x10) else atual)
-        gp.setStroke(dp(c, if (ehPalheta) 1 else 3), if (ehPalheta) Theme.alpha(0xFFFFFFFF.toInt(), 0x66) else 0xFFFFFFFF.toInt())
+        gp.setColor(if (ehPalheta) Theme.alpha(Color.WHITE, 0x10) else atual)
+        gp.setStroke(dp(c, if (ehPalheta) 1 else 3), if (ehPalheta) Theme.alpha(Color.WHITE, 0x66) else Color.WHITE)
         p.background = gp
         p.contentDescription = "Outra cor"
-        p.setOnClickListener { onPropria() }
+        clique(p) { onPropria() }
         itens.add(p)
 
-        val porLinha = 5
+        val porLinha = 6
         var i = 0
         while (i < itens.size) {
             val linha = hbox(c)
             for (k in i until minOf(i + porLinha, itens.size)) {
-                val lpv = LinearLayout.LayoutParams(dp(c, 40), dp(c, 40))
+                val lpv = LinearLayout.LayoutParams(dp(c, 36), dp(c, 36))
                 lpv.rightMargin = dp(c, 12)
                 linha.addView(itens[k], lpv)
             }
@@ -377,26 +388,34 @@ object Ui {
         return col
     }
 
-    /** quadrado da tela inicial: icone, nome e estado */
-    fun tile(c: Context, ico: Int, titulo: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
+    /** quadrado da tela inicial: icone, nome, descricao e estado */
+    fun tile(c: Context, ico: Int, titulo: String, desc: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
         val col = vbox(c)
-        col.background = ripple(glass(c, forte = ligado == true))
+        col.background = ripple(c, glass(c, ligado = ligado == true), Painel(c, mascara = true))
         val p = dp(c, 14)
-        col.setPadding(p, p, p, p)
-        col.minimumHeight = dp(c, 118)
-        val topo = hbox(c)
-        topo.addView(caixaIcone(c, ico, ligado == true))
-        topo.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
-        if (ligado != null) {
-            val dot = View(c)
-            dot.background = shape(c, if (ligado) OK else Theme.alpha(0xFFFFFFFF.toInt(), 0x40), 8)
-            topo.addView(dot, LinearLayout.LayoutParams(dp(c, 8), dp(c, 8)))
+        col.setPadding(p, p, p, dp(c, 12))
+        col.minimumHeight = dp(c, 140)
+        col.addView(caixaIcone(c, ico, ligado == true))
+        col.addView(text(c, titulo, 14f, TEXT, true), lp(top = 11, c = c))
+        if (desc.isNotEmpty()) {
+            val d = text(c, desc, 11f, MUTED)
+            d.maxLines = 2
+            col.addView(d, lp(top = 3, c = c))
         }
-        col.addView(topo)
-        col.addView(text(c, titulo, 15f, TEXT, true), lp(top = 12, c = c))
-        col.addView(text(c, estado, 11.5f, if (ligado == true) RED else MUTED, ligado == true, mono = true), lp(top = 3, c = c))
-        col.isClickable = true
-        col.setOnClickListener { onClick() }
+        col.addView(View(c), LinearLayout.LayoutParams(1, 0, 1f))
+        val st = hbox(c)
+        val dot = View(c)
+        dot.background = shape(c, if (ligado == true) RED else Theme.alpha(Color.WHITE, 0x40), 8)
+        st.addView(dot, LinearLayout.LayoutParams(dp(c, 7), dp(c, 7)))
+        val tx = text(c, estado, 10f, if (ligado == true) RED else MUTED, true, mono = true)
+        tx.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
+        tx.maxLines = 1
+        tx.ellipsize = android.text.TextUtils.TruncateAt.END
+        val tp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        tp.leftMargin = dp(c, 7)
+        st.addView(tx, tp)
+        col.addView(st, lp(top = 9, c = c))
+        clique(col, onClick)
         return col
     }
 

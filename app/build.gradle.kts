@@ -4,8 +4,8 @@ plugins {
 }
 
 // versao do app: sobe junto com a tag do release (ex.: v1.0.0 -> 1.0.0)
-val appVersionName = (System.getenv("NOCRY_VERSION")?.trim()?.takeIf { it.isNotEmpty() } ?: "1.1.0").removePrefix("v")
-val appVersionCode = System.getenv("NOCRY_VERSION_CODE")?.trim()?.toIntOrNull() ?: 10100
+val appVersionName = (System.getenv("NOCRY_VERSION")?.trim()?.takeIf { it.isNotEmpty() } ?: "1.3.0").removePrefix("v")
+val appVersionCode = System.getenv("NOCRY_VERSION_CODE")?.trim()?.toIntOrNull() ?: 10300
 
 // endereco do servidor das Keys (Cloudflare Worker). Nao e segredo: so diz onde o app confere a key.
 val apiUrl = (System.getenv("NOCRY_API")?.trim()?.takeIf { it.isNotEmpty() } ?: "https://nocry.osreaisnocry.workers.dev").trimEnd('/')

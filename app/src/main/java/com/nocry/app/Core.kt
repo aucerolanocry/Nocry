@@ -220,48 +220,123 @@ object Prefs {
         get() = gb("onboarding")
         set(v) = pb("onboarding", v)
 
+    // ---- intro de abertura ----
+    /** "sempre" (toda vez que o app abre do zero) | "novo" (so na 1a abertura depois de instalar/atualizar) | "off" */
+    var introModo: String
+        get() = gs("intro_modo").let { if (it == "novo" || it == "off") it else "sempre" }
+        set(v) = ps("intro_modo", if (v == "novo" || v == "off") v else "sempre")
+    var introSom: Boolean
+        get() = sp.getBoolean("intro_som", true)
+        set(v) = pb("intro_som", v)
+    /** nome do arquivo de musica copiado pra dentro do app (null = usa a musica original da intro) */
+    var introMusica: String?
+        get() = gs("intro_musica")
+        set(v) = ps("intro_musica", v)
+    /** nome bonito da musica escolhida (so pra mostrar) */
+    var introMusicaNome: String?
+        get() = gs("intro_musica_nome")
+        set(v) = ps("intro_musica_nome", v)
+    /** em que segundo da musica a intro comeca (0 a 600) */
+    var introInicio: Int
+        get() = gi("intro_inicio", 0, 0, 600)
+        set(v) = pi("intro_inicio", v.coerceIn(0, 600))
+    /** carimbo da instalacao/atualizacao em que a intro ja tocou (modo "novo") */
+    var introVisto: Long
+        get() = sp.getLong("intro_visto", 0L)
+        set(v) { sp.edit().putLong("intro_visto", v).apply() }
+
     // ---- visual (tela PERSONALIZAR) ----
     /** "animado" (desenho do app) | "solido" | "imagem" | "video" */
     var bgTipo: String
         get() = gs("bg_tipo").let { if (it == "solido" || it == "imagem" || it == "video") it else "animado" }
         set(v) = ps("bg_tipo", v)
-    /** "brasas" | "aurora" | "grade" | "noite" */
+    /** brasas | aurora | grade | noite | sol | chuva | petalas | neve | ouro */
     var bgPreset: String
-        get() = gs("bg_preset").let { if (it == "aurora" || it == "grade" || it == "noite") it else "brasas" }
+        get() = gs("bg_preset").let { if (it != null && it in Temas.FUNDOS) it else "brasas" }
         set(v) = ps("bg_preset", v)
     /** nome do arquivo copiado pra dentro do app (imagem ou video escolhidos da galeria) */
     var bgArquivo: String?
         get() = gs("bg_arquivo")
         set(v) = ps("bg_arquivo", v)
     var bgEscuro: Int
-        get() = gi("bg_escuro", 55, 0, 90)
+        get() = gi("bg_escuro", 25, 0, 90)
         set(v) = pi("bg_escuro", v.coerceIn(0, 90))
     var bgBlur: Int
         get() = gi("bg_blur", 0, 0, 25)
         set(v) = pi("bg_blur", v.coerceIn(0, 25))
+    /** cor 1 do degrade (a "cor de destaque" de antes) */
     var accent: Int
         get() = sp.getInt("accent", 0xFFFF2D55.toInt())
         set(v) = pi("accent", v or 0xFF000000.toInt())
+    /** cor 2 do degrade */
+    var accent2: Int
+        get() = sp.getInt("accent2", 0xFFFF8A1F.toInt())
+        set(v) = pi("accent2", v or 0xFF000000.toInt())
+    /** cor lisa de fundo do app */
+    var baseCor: Int
+        get() = sp.getInt("base_cor", 0xFF0A0506.toInt())
+        set(v) = pi("base_cor", v or 0xFF000000.toInt())
+    /** angulo do degrade em graus */
+    var angulo: Int
+        get() = gi("angulo", 135, 0, 360)
+        set(v) = pi("angulo", v.coerceIn(0, 360))
+    /** id do tema pronto escolhido por ultimo (so informativo; o visual vem dos valores abaixo) */
+    var tema: String
+        get() = gs("tema") ?: "brasa"
+        set(v) = ps("tema", v)
+    /** vidro | contorno | solido | hud */
+    var cartao: String
+        get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido") it else "hud" }
+        set(v) = ps("cartao", v)
     /** quanto o cartao de vidro e opaco (20 a 95 %) */
     var vidro: Int
         get() = gi("vidro", 62, 20, 95)
         set(v) = pi("vidro", v.coerceIn(20, 95))
     var raio: Int
-        get() = gi("raio", 18, 6, 30)
-        set(v) = pi("raio", v.coerceIn(6, 30))
-    /** "grotesk" | "mono" | "sistema" */
+        get() = gi("raio", 18, 2, 30)
+        set(v) = pi("raio", v.coerceIn(2, 30))
+    /** intensidade do brilho neon (0 = sem brilho) */
+    var brilho: Int
+        get() = gi("brilho", 55, 0, 100)
+        set(v) = pi("brilho", v.coerceIn(0, 100))
+    /** espessura da borda dos cartoes, em dp */
+    var borda: Int
+        get() = gi("borda", 2, 1, 4)
+        set(v) = pi("borda", v.coerceIn(1, 4))
+    /** id do pacote de fonte (ver Packs) */
     var fonte: String
-        get() = gs("fonte").let { if (it == "mono" || it == "sistema") it else "grotesk" }
+        get() = gs("fonte").let { if (it != null && Packs.existe(it)) it else "bigs" }
         set(v) = ps("fonte", v)
     var escala: Int
         get() = gi("escala", 100, 85, 130)
         set(v) = pi("escala", v.coerceIn(85, 130))
-    var neon: Boolean
-        get() = sp.getBoolean("neon", true)
-        set(v) = pb("neon", v)
+    /** todo o texto em maiusculo */
+    var maiusc: Boolean
+        get() = sp.getBoolean("maiusc", true)
+        set(v) = pb("maiusc", v)
+    val neon: Boolean get() = brilho > 0
     var anim: Boolean
         get() = sp.getBoolean("anim", true)
         set(v) = pb("anim", v)
+    var particulas: Boolean
+        get() = sp.getBoolean("particulas", true)
+        set(v) = pb("particulas", v)
+    var scanner: Boolean
+        get() = sp.getBoolean("scanner", false)
+        set(v) = pb("scanner", v)
+    var pulso: Boolean
+        get() = sp.getBoolean("pulso", true)
+        set(v) = pb("pulso", v)
+    var vibrar: Boolean
+        get() = sp.getBoolean("vibrar", false)
+        set(v) = pb("vibrar", v)
+    /** ordem dos atalhos do inicio (ids separados por virgula) e os escondidos */
+    var ordem: String
+        get() = gs("ordem") ?: ""
+        set(v) = ps("ordem", v)
+    var ocultos: String
+        get() = gs("ocultos") ?: ""
+        set(v) = ps("ocultos", v)
 
     // ---- Key (licenca) ----
     var consentiu: Boolean

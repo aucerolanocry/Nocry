@@ -4,7 +4,11 @@ App Android do **NOCRY SYSTEM**. Faz as mesmas funções do menu do Termux, mas 
 
 **O que tem:** Modo Competitivo, toque rápido por volume (VOL+ / VOL−), toque pelo carregador (tirou/colocou), Modo Carregador (densidade + abrir o FF), Otimização completa (ver, aplicar, desfazer, proteger apps), Ajustes do toque, Logs e Testar agora.
 
-**Novo na 1.1:** acesso por **Key** (dono, staff e usuário), visual "vidro fosco + neon" e a aba **Visual** para personalizar: fundo animado, imagem ou **vídeo da sua própria galeria**, escurecer e desfocar o fundo, cor de destaque, vidro, arredondamento, fonte e tamanho do texto.
+**Novo na 1.3 (intro de abertura):** ao abrir o app toca uma **intro HACKER** em tela cheia ("app desenvolvido por aucerola") com música original, em ~8 segundos. **Toque na tela pula.** No **Estúdio → intro de abertura** você escolhe quando toca (sempre, só na 1ª vez depois de instalar/atualizar, ou desligada), liga/desliga o som, **troca a música por uma do seu celular** (escolhe o arquivo, define em que segundo começa) e pode **assistir de novo** quando quiser.
+
+**Novo na 1.2 (visual profissional):** 8 **temas prontos** (Brasa, Cyber, Aurora, Synthwave, Ouro, Matrix, Sakura, Gelo), tudo em **MAIÚSCULO** com fontes novas, 9 fundos animados (Brasas, Grade, Aurora, Sol, Chuva, Neve, Pétalas, Ouro, Noite), degradê com duas cores e ângulo, cartões em 4 estilos (Vidro, Contorno, Sólido, HUD), barra de baixo flutuante, início com modos que você organiza e a aba **Estúdio** para mudar tudo (cores, brilho, borda, fonte, efeitos, vibração).
+
+**Na 1.1:** acesso por **Key** (dono, staff e usuário) e fundo com imagem ou **vídeo da sua própria galeria**, com escurecer e desfocar.
 
 **O que NÃO tem:** nenhum bypass, nenhuma função de anti-cheat e nenhum token/chave do sistema. O app não carrega segredo nenhum.
 
@@ -62,7 +66,7 @@ Leva uns 5 a 10 minutos. Quando terminar, o APK aparece em **Releases** e o link
 
 ### 4. Atualizar
 
-Mude o que quiser, suba, e rode o workflow com a versão seguinte (`1.1.1`, `1.2.0`...). No app, **Sobre** avisa quando existe versão mais nova.
+Mude o que quiser, suba, e rode o workflow com a versão seguinte (`1.1.1`, `1.3.0`...). No app, **Sobre** avisa quando existe versão mais nova.
 
 ---
 
@@ -90,3 +94,16 @@ O app confere a Key num servidor seu (Cloudflare Worker + D1, pasta `Nocry-servi
 ADB embutido: [libadb-android](https://github.com/MuntashirAkon/libadb-android) (Apache-2.0 / GPL-3.0).
 
 Fontes: Space Grotesk e JetBrains Mono (licença SIL OFL 1.1, textos em `app/src/main/assets/fonts/`).
+
+
+---
+
+## Fontes e licenças (1.2)
+
+As fontes ficam em `app/src/main/assets/fonts/`, junto com o texto da licença de cada uma (`OFL-*.txt` e `FONTES-LICENCAS.txt`). Todas usam a licença **SIL Open Font License 1.1**, que permite usar e distribuir dentro de um app: Big Shoulders, Tektur, Outfit, Bricolage Grotesque, Gloock, Work Sans, Instrument Sans, Pixelify Sans, Red Hat Mono, Space Grotesk, JetBrains Mono e Poppins.
+
+---
+
+## Intro (1.3)
+
+O vídeo da intro fica em `app/src/main/res/raw/intro_hacker4.mp4` (animação e trilha originais, feitas para o Nocry; a música é sintetizada, não usa nenhuma faixa de terceiros). Ele toca por cima do app (`Intro.kt`). A música que o usuário escolhe é copiada para a pasta privada do app e nunca sai do celular. Para trocar a intro, substitua esse arquivo por outro `.mp4` com o mesmo nome (de preferência 720x1280, até uns 10 s).

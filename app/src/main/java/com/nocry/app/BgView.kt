@@ -10,6 +10,7 @@ import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.RenderEffect
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.graphics.SurfaceTexture
 import android.media.ExifInterface
 import android.media.MediaPlayer
@@ -26,26 +27,37 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.sin
 
-/** Fundo animado desenhado pelo proprio app (nao usa video nem imagem de ninguem). Segue a cor de destaque. */
+/** Fundo animado desenhado pelo proprio app (nao usa video nem imagem de ninguem). Segue as cores 1 e 2 do tema. */
 class AnimBg(c: Context) : View(c) {
     var preset: String = "brasas"
     private var rodando = true
     private val d = resources.displayMetrics.density
     private val t0 = System.nanoTime()
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val tp = Paint(Paint.ANTI_ALIAS_FLAG)
 
     private class Pt(val x: Float, val y: Float, val r: Float, val v: Float, val fase: Float)
+    private class Col(val v: Float, val fase: Float, val len: Int)
     private val pts = ArrayList<Pt>()
-    private var fundo: Shader? = null
+    private val cols = ArrayList<Col>()
+    private var ceu: Shader? = null
+    private var luz1: Shader? = null
+    private var luz2: Shader? = null
+    private var sol: Shader? = null
     private var manchas: Array<Shader>? = null
-    private var brilho: Shader? = null
     private var raioMancha = 1f
+    private var linhas = FloatArray(0)
+    private var banda: Shader? = null
+    private var horizonte: Shader? = null
+    private var linhaSol: Shader? = null
     private var larg = 0
     private var alt = 0
+    private val chars = "01ABCDEF23456789<>/+=*#".map { it.toString() }
 
     init {
         val rnd = Random(11)
         for (i in 0 until 64) pts.add(Pt(rnd.nextFloat(), rnd.nextFloat(), 1f + rnd.nextFloat() * 2.6f, 0.025f + rnd.nextFloat() * 0.05f, rnd.nextFloat() * 6.28f))
+        tp.typeface = Typeface.MONOSPACE
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -55,22 +67,64 @@ class AnimBg(c: Context) : View(c) {
         monta()
     }
 
+    private fun radial(x: Float, y: Float, r: Float, cor: Int, a: Float): Shader =
+        RadialGradient(x, y, maxOf(r, 1f), Theme.alpha(cor, (a * 255).toInt()), Theme.alpha(cor, 0), Shader.TileMode.CLAMP)
+
     private fun monta() {
         if (larg <= 0 || alt <= 0) return
-        val ac = Theme.accent
+        val c1 = Theme.accent
+        val c2 = Theme.accent2
         val base = Theme.base
         val w = larg.toFloat()
         val h = alt.toFloat()
-        fundo = when (preset) {
-            "brasas" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(Theme.mix(base, 0xFF000000.toInt(), 0.5f), base, Theme.mix(base, ac, 0.38f)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
-            "grade" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(Theme.mix(base, 0xFF000000.toInt(), 0.4f), Theme.mix(base, ac, 0.20f)), null, Shader.TileMode.CLAMP)
-            "noite" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(Theme.mix(base, 0xFF000000.toInt(), 0.6f), base), null, Shader.TileMode.CLAMP)
+        val preto = 0xFF000000.toInt()
+        ceu = when (preset) {
+            "brasas" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(Theme.mix(base, preto, 0.4f), base, Theme.mix(base, c1, 0.30f)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+            "grade" -> LinearGradient(0f, 0f, 0f, h, Theme.mix(base, preto, 0.35f), Theme.mix(base, c1, 0.16f), Shader.TileMode.CLAMP)
+            "sol" -> LinearGradient(0f, 0f, 0f, h * 0.58f, intArrayOf(Theme.mix(base, preto, 0.2f), Theme.mix(base, c1, 0.22f), Theme.mix(base, c1, 0.72f)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+            "petalas" -> LinearGradient(0f, 0f, 0f, h, Theme.mix(base, c2, 0.14f), Theme.mix(base, c1, 0.22f), Shader.TileMode.CLAMP)
+            "neve" -> LinearGradient(0f, 0f, 0f, h, Theme.mix(base, c2, 0.10f), base, Shader.TileMode.CLAMP)
+            "noite" -> LinearGradient(0f, 0f, 0f, h, Theme.mix(base, preto, 0.5f), base, Shader.TileMode.CLAMP)
             else -> null
         }
         raioMancha = max(w, h) * 0.6f
-        val cores = intArrayOf(ac, Theme.girar(ac, 55f), Theme.girar(ac, -60f))
-        manchas = Array(3) { i -> RadialGradient(0f, 0f, raioMancha, Theme.alpha(cores[i], 0x70), Theme.alpha(cores[i], 0), Shader.TileMode.CLAMP) }
-        brilho = RadialGradient(w * 0.8f, h * 0.08f, max(w, h) * 0.7f, Theme.alpha(ac, 0x55), Theme.alpha(ac, 0), Shader.TileMode.CLAMP)
+        val cores = intArrayOf(c1, c2, Theme.mix(c1, c2, 0.5f))
+        manchas = Array(3) { i -> radial(0f, 0f, raioMancha, cores[i], 0.45f) }
+        luz1 = when (preset) {
+            "brasas" -> radial(w / 2f, h * 1.08f, h * 0.85f, c1, 0.55f)
+            "grade" -> radial(w / 2f, 0f, h * 0.6f, c1, 0.22f)
+            "sol" -> radial(w / 2f, h * 0.40f, w * 0.85f, c1, 0.35f)
+            "chuva" -> radial(w / 2f, h * 1.05f, h * 0.7f, c2, 0.30f)
+            "neve" -> radial(w / 2f, -h * 0.02f, h * 0.7f, c2, 0.34f)
+            "petalas" -> radial(w / 2f, h * 1.05f, h * 0.75f, c1, 0.40f)
+            "ouro" -> radial(w * 0.9f, 0f, h * 0.65f, c1, 0.26f)
+            else -> radial(w * 0.8f, h * 0.08f, max(w, h) * 0.7f, c1, 0.33f)
+        }
+        luz2 = when (preset) {
+            "brasas" -> radial(0f, 0f, w * 0.9f, c1, 0.20f)
+            "grade" -> radial(w, h * 0.6f, w * 0.9f, c2, 0.20f)
+            "neve" -> radial(0f, h * 0.8f, w * 0.7f, c1, 0.10f)
+            "petalas" -> radial(w * 0.9f, h * 0.05f, w * 0.9f, c2, 0.30f)
+            "ouro" -> radial(0f, h, w, c2, 0.20f)
+            else -> null
+        }
+        val rs = w * 0.30f
+        sol = LinearGradient(0f, h * 0.40f - rs, 0f, h * 0.40f + rs, c2, c1, Shader.TileMode.CLAMP)
+
+        val rnd = Random(5)
+        cols.clear()
+        val n = (w / (15f * d)).toInt().coerceAtLeast(4)
+        for (i in 0 until n) cols.add(Col(0.07f + rnd.nextFloat() * 0.14f, rnd.nextFloat(), 8 + rnd.nextInt(12)))
+
+        // linhas de varredura (scanner)
+        val passo = 3f * d
+        val k = (h / passo).toInt() + 1
+        linhas = FloatArray(k * 4)
+        for (i in 0 until k) { linhas[i * 4] = 0f; linhas[i * 4 + 1] = i * passo; linhas[i * 4 + 2] = w; linhas[i * 4 + 3] = i * passo }
+        horizonte = LinearGradient(0f, 0f, w, 0f, intArrayOf(Theme.alpha(c1, 0), c1, c2, Theme.alpha(c2, 0)), floatArrayOf(0f, 0.3f, 0.7f, 1f), Shader.TileMode.CLAMP)
+        val ys = h * 0.58f
+        linhaSol = LinearGradient(0f, ys - 2f * d, 0f, ys + 3f * d, Theme.alpha(c2, 0xC0), Theme.alpha(c1, 0), Shader.TileMode.CLAMP)
+        banda = LinearGradient(0f, 0f, 0f, 120f * d, intArrayOf(Theme.alpha(c1, 0), Theme.alpha(c1, 0x30), Theme.alpha(c1, 0)), null, Shader.TileMode.CLAMP)
     }
 
     fun recolore() { monta(); invalidate() }
@@ -83,39 +137,55 @@ class AnimBg(c: Context) : View(c) {
         if (w <= 0f || h <= 0f) return
         val animar = Prefs.anim
         val t = if (animar) (System.nanoTime() - t0) / 1_000_000_000f else 4f
-        val ac = Theme.accent
 
         p.shader = null
         p.color = Theme.base
         cv.drawRect(0f, 0f, w, h, p)
-        val f = fundo
-        if (f != null) { p.shader = f; cv.drawRect(0f, 0f, w, h, p); p.shader = null }
-
-        when (preset) {
-            "aurora" -> desenhaAurora(cv, w, h, t)
-            "grade" -> desenhaGrade(cv, w, h, t, ac)
-            "noite" -> desenhaNoite(cv, w, h, t, ac)
-            else -> desenhaBrasas(cv, w, h, t, ac)
+        val f = ceu
+        if (f != null) {
+            p.shader = f
+            cv.drawRect(0f, 0f, w, if (preset == "sol") h * 0.58f else h, p)
+            p.shader = null
         }
+        val l1 = luz1
+        if (l1 != null && preset != "aurora") { p.shader = l1; cv.drawRect(0f, 0f, w, h, p); p.shader = null }
+        val l2 = luz2
+        if (l2 != null) { p.shader = l2; cv.drawRect(0f, 0f, w, h, p); p.shader = null }
+
+        val c1 = Theme.accent
+        val c2 = Theme.accent2
+        when (preset) {
+            "aurora" -> desenhaAurora(cv, w, h, t, c1)
+            "grade" -> desenhaGrade(cv, w, h, t, c1, c2)
+            "sol" -> desenhaSol(cv, w, h, t, c1, c2)
+            "chuva" -> desenhaChuva(cv, w, h, t, c1)
+            "neve" -> desenhaNeve(cv, w, h, t)
+            "petalas" -> desenhaPetalas(cv, w, h, t, c1, c2)
+            "ouro" -> desenhaOuro(cv, w, h, t, c1)
+            "noite" -> desenhaEstrelas(cv, w, h, t, 0xFFFFFFFF.toInt(), 170)
+            else -> desenhaBrasas(cv, w, h, t, c1, c2)
+        }
+        if (Prefs.scanner) desenhaScanner(cv, w, h, t)
         if (animar && rodando) postInvalidateOnAnimation()
     }
 
-    private fun desenhaBrasas(cv: Canvas, w: Float, h: Float, t: Float, ac: Int) {
-        val quente = Theme.mix(ac, 0xFFFFFFFF.toInt(), 0.35f)
-        for (q in pts) {
+    private fun desenhaBrasas(cv: Canvas, w: Float, h: Float, t: Float, c1: Int, c2: Int) {
+        if (!Prefs.particulas) return
+        val quente = Theme.mix(c2, 0xFFFFFFFF.toInt(), 0.35f)
+        for (i in 0 until 48) {
+            val q = pts[i]
             val prog = (t * q.v + q.y) % 1f                    // 0 = embaixo, 1 = topo
             val y = h * (1f - prog)
             val x = q.x * w + sin(t * 0.7f + q.fase) * 16f * d
-            val vida = (1f - prog)
-            val a = (vida * 0.9f * (0.55f + 0.45f * abs(sin(t * 1.3f + q.fase))))
-            p.color = Theme.alpha(ac, (a * 46f).toInt())
+            val a = (1f - prog) * 0.9f * (0.55f + 0.45f * abs(sin(t * 1.3f + q.fase)))
+            p.color = Theme.alpha(c1, (a * 50f).toInt())
             cv.drawCircle(x, y, q.r * 3.4f * d, p)
-            p.color = Theme.alpha(quente, (a * 230f).toInt())
+            p.color = Theme.alpha(quente, (a * 235f).toInt())
             cv.drawCircle(x, y, q.r * d * 0.8f, p)
         }
     }
 
-    private fun desenhaAurora(cv: Canvas, w: Float, h: Float, t: Float) {
+    private fun desenhaAurora(cv: Canvas, w: Float, h: Float, t: Float, c1: Int) {
         val m = manchas ?: return
         for (i in 0 until 3) {
             val cx = w * (0.5f + 0.38f * sin(t * (0.11f + i * 0.037f) + i * 2.1f))
@@ -127,39 +197,164 @@ class AnimBg(c: Context) : View(c) {
             cv.restore()
         }
         p.shader = null
+        desenhaEstrelas(cv, w, h, t, 0xFFFFFFFF.toInt(), 120)
     }
 
-    private fun desenhaGrade(cv: Canvas, w: Float, h: Float, t: Float, ac: Int) {
-        val br = brilho
-        if (br != null) { p.shader = br; cv.drawRect(0f, 0f, w, h, p); p.shader = null }
-        val passo = 56f * d
-        p.strokeWidth = 1f * d
-        // verticais paradas
-        var x = (w / 2f) % passo
-        while (x < w) {
-            p.color = Theme.alpha(ac, 0x1C)
-            cv.drawLine(x, 0f, x, h, p)
-            x += passo
+    /** piso em perspectiva com linhas que correm na direcao de quem olha */
+    private fun piso(cv: Canvas, w: Float, h: Float, y0: Float, t: Float, cor: Int, forca: Float) {
+        val altp = h - y0
+        p.strokeWidth = 1.2f * d
+        val n = 9
+        for (i in -n..n) {
+            val a = 1f - abs(i) / (n + 1f)
+            p.color = Theme.alpha(cor, ((0.12f + 0.55f * a) * forca * 255f).toInt())
+            cv.drawLine(w / 2f + i * w * 0.035f, y0, w / 2f + i * w * 0.24f, h, p)
         }
-        // horizontais descendo devagar; ficam mais fortes perto de baixo
-        val desloc = (t * 14f * d) % passo
-        var y = desloc - passo
-        while (y < h) {
-            val k = (y / h).coerceIn(0f, 1f)
-            p.color = Theme.alpha(ac, (14 + 52 * k).toInt())
+        val k = 9
+        val sc = if (Prefs.anim) (t * 0.22f) % 1f else 0f
+        for (j in 0 until k) {
+            val f = (j + sc) / k
+            val y = y0 + altp * f * f
+            p.color = Theme.alpha(cor, ((0.10f + 0.6f * f) * forca * 255f).toInt())
             cv.drawLine(0f, y, w, y, p)
-            y += passo
         }
     }
 
-    private fun desenhaNoite(cv: Canvas, w: Float, h: Float, t: Float, ac: Int) {
-        val br = brilho
-        if (br != null) { p.shader = br; cv.drawRect(0f, 0f, w, h, p); p.shader = null }
+    private fun desenhaGrade(cv: Canvas, w: Float, h: Float, t: Float, c1: Int, c2: Int) {
+        val y0 = h * 0.5f
+        piso(cv, w, h, y0, t, c1, 1f)
+        // linha do horizonte com brilho
+        p.shader = horizonte
+        cv.drawRect(0f, y0 - 1f * d, w, y0 + 1f * d, p)
+        p.alpha = 70
+        cv.drawRect(0f, y0 - 5f * d, w, y0 + 5f * d, p)
+        p.shader = null
+        if (Prefs.particulas) desenhaEstrelas(cv, w, y0, t, c1, 110)
+    }
+
+    private fun desenhaSol(cv: Canvas, w: Float, h: Float, t: Float, c1: Int, c2: Int) {
+        val y0 = h * 0.58f
+        if (Prefs.particulas) desenhaEstrelas(cv, w, y0 * 0.8f, t, 0xFFFFFFFF.toInt(), 190)
+        val cx = w / 2f
+        val cy = h * 0.40f
+        val r = w * 0.30f
+        cv.save()
+        val circ = android.graphics.Path()
+        circ.addCircle(cx, cy, r, android.graphics.Path.Direction.CW)
+        cv.clipPath(circ)
+        p.shader = sol
+        cv.drawRect(cx - r, cy - r, cx + r, cy + r, p)
+        // listras que "apagam" a parte de baixo do sol, mostrando o ceu atras
+        p.shader = ceu
+        for (i in 0 until 7) {
+            val y = cy + r * 0.08f + i * r * 0.15f
+            cv.drawRect(cx - r, y, cx + r, y + (1.5f + i * 1.3f) * d, p)
+        }
+        p.shader = null
+        cv.restore()
+        // chao
+        p.color = Theme.base
+        cv.drawRect(0f, y0, w, h, p)
+        piso(cv, w, h, y0, t, c1, 1.2f)
+        p.shader = linhaSol
+        cv.drawRect(0f, y0 - 2f * d, w, y0 + 3f * d, p)
+        p.shader = null
+    }
+
+    private fun desenhaChuva(cv: Canvas, w: Float, h: Float, t: Float, c1: Int) {
+        if (!Prefs.particulas) return
+        tp.textSize = 13f * d
+        val celula = 15f * d
+        val cabeca = Theme.mix(c1, 0xFFFFFFFF.toInt(), 0.65f)
+        val sh = (t * 6f).toInt()
+        for ((i, col) in cols.withIndex()) {
+            val x = i * celula + 3f * d
+            val prog = (t * col.v + col.fase) % 1f
+            val yCab = prog * (h + col.len * celula)
+            for (j in 0 until col.len) {
+                val y = yCab - j * celula
+                if (y < -celula || y > h + celula) continue
+                val fade = 1f - j / col.len.toFloat()
+                val idx = Math.floorMod(i * 31 + (y / celula).toInt() * 17 + (if (j == 0) sh else 0), chars.size)
+                tp.color = if (j == 0) Theme.alpha(cabeca, 235) else Theme.alpha(c1, (fade * 0.8f * 255f).toInt())
+                cv.drawText(chars[idx], x, y, tp)
+            }
+        }
+    }
+
+    private fun desenhaNeve(cv: Canvas, w: Float, h: Float, t: Float) {
+        if (!Prefs.particulas) return
+        for (i in 0 until 56) {
+            val q = pts[i]
+            val prog = (t * (q.v * 1.6f) + q.y) % 1f
+            val y = h * prog
+            val x = q.x * w + sin(t * 0.6f + q.fase) * 14f * d
+            val a = 0.35f + 0.55f * (q.r / 3.6f)
+            p.color = Theme.alpha(0xFFFFFFFF.toInt(), (a * 235f).toInt())
+            cv.drawCircle(x, y, (q.r * 0.55f + 0.6f) * d, p)
+        }
+    }
+
+    private fun desenhaPetalas(cv: Canvas, w: Float, h: Float, t: Float, c1: Int, c2: Int) {
+        if (!Prefs.particulas) return
+        val cor = Theme.mix(c1, 0xFFFFFFFF.toInt(), 0.30f)
+        for (i in 0 until 22) {
+            val q = pts[i]
+            val prog = (t * (q.v * 0.9f) + q.y) % 1f
+            val y = h * prog
+            val x = q.x * w + sin(t * 0.5f + q.fase) * 26f * d + prog * 40f * d
+            val s = (4f + q.r * 2.2f) * d
+            cv.save()
+            cv.translate(x, y)
+            cv.rotate(t * 38f * q.v * 10f + q.fase * 57f)
+            p.color = Theme.alpha(if (i % 3 == 0) c2 else cor, 215)
+            cv.drawOval(-s, -s * 0.55f, s, s * 0.55f, p)
+            cv.restore()
+        }
+    }
+
+    private fun desenhaOuro(cv: Canvas, w: Float, h: Float, t: Float, c1: Int) {
+        // trama diagonal fina
+        val passo = 11f * d
+        p.strokeWidth = d
+        p.color = Theme.alpha(c1, 0x0C)
+        var x = -h
+        while (x < w) { cv.drawLine(x, h, x + h, 0f, p); x += passo }
+        if (!Prefs.particulas) return
+        for (i in 0 until 40) {
+            val q = pts[i]
+            val prog = (t * q.v * 0.5f + q.y) % 1f
+            val y = h * (1f - prog)
+            val x2 = q.x * w + sin(t * 0.4f + q.fase) * 10f * d
+            val a = (1f - prog) * (0.5f + 0.5f * abs(sin(t * 1.1f + q.fase)))
+            p.color = Theme.alpha(c1, (a * 60f).toInt())
+            cv.drawCircle(x2, y, q.r * 2.6f * d, p)
+            p.color = Theme.alpha(Theme.mix(c1, 0xFFFFFFFF.toInt(), 0.4f), (a * 235f).toInt())
+            cv.drawCircle(x2, y, q.r * 0.7f * d, p)
+        }
+    }
+
+    private fun desenhaEstrelas(cv: Canvas, w: Float, h: Float, t: Float, cor: Int, forca: Int) {
+        if (!Prefs.particulas) return
         for (q in pts) {
             val a = 0.25f + 0.75f * abs(sin(t * 0.5f + q.fase))
-            p.color = Theme.alpha(0xFFFFFFFF.toInt(), (a * 170f).toInt())
+            p.color = Theme.alpha(cor, (a * forca).toInt())
             cv.drawCircle(q.x * w, q.y * h, (q.r * 0.38f + 0.3f) * d, p)
         }
+    }
+
+    private fun desenhaScanner(cv: Canvas, w: Float, h: Float, t: Float) {
+        p.color = Theme.alpha(0xFF000000.toInt(), 0x30)
+        p.strokeWidth = d
+        cv.drawLines(linhas, p)
+        val b = banda ?: return
+        val y = if (Prefs.anim) ((t * 0.12f) % 1.3f - 0.15f) * h else h * 0.3f
+        cv.save()
+        cv.translate(0f, y)
+        p.shader = b
+        cv.drawRect(0f, 0f, w, 120f * d, p)
+        p.shader = null
+        cv.restore()
     }
 }
 

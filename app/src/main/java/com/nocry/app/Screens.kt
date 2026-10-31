@@ -14,6 +14,41 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 
 // =====================================================================================
+// ATALHOS DO INICIO (ordem e visibilidade escolhidas pelo usuario)
+// =====================================================================================
+object Atalhos {
+    class It(val id: String, val ico: Int, val nome: String, val desc: String)
+
+    val todos = listOf(
+        It("comp", R.drawable.ic_gamepad, "Modo competitivo", "Toque rápido para jogar"),
+        It("vol", R.drawable.ic_volume, "Toque via volume", "Aperte o volume para ligar"),
+        It("carga", R.drawable.ic_bolt, "Toque via carregador", "Plugou, o toque liga"),
+        It("mc", R.drawable.ic_plug, "Modo carregador", "Ajusta a tela ao carregar"),
+        It("otm", R.drawable.ic_chip, "Otimização", "Congela apps em 2º plano"),
+        It("ajustes", R.drawable.ic_sliders, "Ajustes do toque", "Tempos de long e multi")
+    )
+
+    private fun ids(s: String): List<String> = s.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+
+    /** todos os atalhos na ordem salva (os que faltam entram no fim) */
+    fun ordem(): List<It> {
+        val salvos = ids(Prefs.ordem).distinct().mapNotNull { id -> todos.firstOrNull { it.id == id } }
+        return salvos + todos.filter { t -> salvos.none { it.id == t.id } }
+    }
+
+    fun escondido(id: String): Boolean = ids(Prefs.ocultos).contains(id)
+
+    fun visiveis(): List<It> = ordem().filter { !escondido(it.id) }
+
+    fun salva(lista: List<It>, ocultos: Collection<String>) {
+        Prefs.ordem = lista.joinToString(",") { it.id }
+        Prefs.ocultos = ocultos.joinToString(",")
+    }
+
+    fun padrao() { Prefs.ordem = ""; Prefs.ocultos = "" }
+}
+
+// =====================================================================================
 // INICIO
 // =====================================================================================
 class HomeScreen(a: MainActivity) : Screen(a) {
@@ -21,12 +56,10 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     override val semBarra = true
     override val aba = 0
 
-    private var ringView: RingView? = null
-
     override fun key(): String = listOf(
         Adb.connected, Sys.hasWriteSecure(), Sys.acessibilidadeLigada(), NocryService.rodando,
         Prefs.volAtivo, Prefs.cargaAtivo, Prefs.mcAtivo, Prefs.otmAuto, Prefs.cargaRep, Prefs.mcCycles,
-        Comp.ligado(), Otm.status().first, Prefs.densOrig, ultimaLinha(), License.role()
+        Comp.ligado(), Otm.status().first, Prefs.densOrig, ultimaLinha(), License.role(), Prefs.ordem, Prefs.ocultos
     ).joinToString("|")
 
     private fun ultimaLinha(): String = NLog.text(null).substringAfterLast('\n')
@@ -44,85 +77,109 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         return if (st.first) "ATIVA · ${st.second} apps" + (if (Prefs.otmAuto) " · AUTO" else "") else if (Prefs.otmAuto) "AUTO LIGADO" else "desativada"
     }
 
+    private fun tile(c: android.content.Context, it: Atalhos.It): View = when (it.id) {
+        "comp" -> Ui.tile(c, it.ico, it.nome, it.desc, estComp(), Comp.ligado()) { act.abre(CompScreen(act)) }
+        "vol" -> Ui.tile(c, it.ico, it.nome, it.desc, estVol(), Prefs.volAtivo) { act.abre(VolScreen(act)) }
+        "carga" -> Ui.tile(c, it.ico, it.nome, it.desc, estCarga(), Prefs.cargaAtivo) { act.abre(CargaScreen(act)) }
+        "mc" -> Ui.tile(c, it.ico, it.nome, it.desc, estMc(), Prefs.mcAtivo) { act.abre(McScreen(act)) }
+        "otm" -> Ui.tile(c, it.ico, it.nome, it.desc, estOtm(), Otm.status().first || Prefs.otmAuto) { act.abre(OtmScreen(act)) }
+        else -> Ui.tile(c, it.ico, it.nome, it.desc, "long ${Prefs.longOn} · multi ${Prefs.multiOn}", null) { act.abre(AjustesScreen(act)) }
+    }
+
     override fun render() {
         limpa()
         val c = act
 
-        // cabecalho: nome + selo do cargo
+        // ---------------- cabecalho: logo, nome e cargo ----------------
         val cab = Ui.hbox(c)
+        val logo = FrameLayout(c)
+        logo.background = Botao(c, "icoOn", 14)
+        val n = Ui.text(c, "N", 24f, Theme.sobreGrad(), true, mono = true)
+        n.gravity = Gravity.CENTER
+        logo.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val lg = LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46))
+        lg.rightMargin = Ui.dp(c, 12)
+        cab.addView(logo, lg)
         val col = Ui.vbox(c)
-        val t = Ui.text(c, "NOCRY", 30f, Ui.RED, true, mono = true)
-        t.letterSpacing = 0.2f
-        col.addView(t)
-        col.addView(Ui.text(c, "COMPETITIVO · TOQUE · OTIMIZAÇÃO", 10f, Ui.MUTED, mono = true))
+        col.addView(Ui.gradTexto(c, "NOCRY", 24f))
+        col.addView(Ui.text(c, "Sistema de toque", 10.5f, Ui.MUTED, true, mono = true))
         cab.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val papel = License.roleNome()
         if (papel.isNotEmpty()) cab.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.MUTED, License.isAdmin()))
         add(cab, 0)
 
-        // estado geral: anel + 3 passos
+        // ---------------- titulo ----------------
+        val nome = License.label()
+        add(Ui.text(c, if (nome.isNotEmpty()) "Olá, $nome" else "Olá", 12.5f, Ui.MUTED, true, mono = true), 22)
+        add(Ui.text(c, "Painel de", 26f, Ui.TEXT, true), 2)
+        add(Ui.gradTexto(c, "controle", 36f), 0)
+
+        // ---------------- estado geral: anel + 3 passos ----------------
         val adb = Adb.connected
         val perm = Sys.hasWriteSecure()
         val acc = Sys.acessibilidadeLigada()
         val ok = (if (adb) 1 else 0) + (if (perm) 1 else 0) + (if (acc) 1 else 0)
 
-        val hero = Ui.card(c, forte = true)
+        val hero = Ui.card(c, forte = true, ligado = ok == 3)
         val topo = Ui.hbox(c)
         val ring = RingView(c)
-        ringView = ring
         val rw = FrameLayout(c)
-        rw.addView(ring, FrameLayout.LayoutParams(Ui.dp(c, 92), Ui.dp(c, 92)))
-        val num = Ui.text(c, "$ok/3", 20f, Ui.TEXT, true, mono = true)
+        rw.addView(ring, FrameLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 96)))
+        val num = Ui.text(c, "$ok/3", 22f, Ui.TEXT, true, mono = true)
         num.gravity = Gravity.CENTER
-        rw.addView(num, FrameLayout.LayoutParams(Ui.dp(c, 92), Ui.dp(c, 92)))
-        topo.addView(rw, LinearLayout.LayoutParams(Ui.dp(c, 92), Ui.dp(c, 92)))
-        ring.define(ok / 3f, if (ok == 3) Ui.OK else Ui.BAD)
+        rw.addView(num, FrameLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 96)))
+        topo.addView(rw, LinearLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 96)))
+        ring.define(ok / 3f)
 
         val info = Ui.vbox(c)
-        info.addView(Ui.label(c, "status"))
-        val titulo2 = when (ok) { 3 -> "PRONTO"; 0 -> "CONECTE"; else -> "QUASE LÁ" }
-        info.addView(Ui.text(c, titulo2, 24f, if (ok == 3) Ui.OK else Ui.TEXT, true), Ui.lp(top = 2, c = c))
+        info.addView(Ui.label(c, "status do sistema"))
+        val titulo2 = when (ok) { 3 -> "Pronto"; 0 -> "Conecte"; else -> "Quase lá" }
+        info.addView(if (ok == 3) Ui.gradTexto(c, titulo2, 28f) else Ui.text(c, titulo2, 28f, Ui.TEXT, true), Ui.lp(top = 2, c = c))
         val precisa = Prefs.precisaServico()
-        info.addView(Ui.text(c, if (NocryService.rodando) "monitores rodando" else if (precisa) "monitores iniciando" else "nenhum monitor ligado", 12f, Ui.MUTED, mono = true), Ui.lp(top = 2, c = c))
+        info.addView(Ui.text(c, if (NocryService.rodando) "monitores rodando" else if (precisa) "monitores iniciando" else "nenhum monitor ligado", 11.5f, Ui.MUTED, mono = true), Ui.lp(top = 2, c = c))
         val ip = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         ip.leftMargin = Ui.dp(c, 16)
         topo.addView(info, ip)
         hero.addView(topo)
 
-        hero.addView(Ui.status(c, "ADB (depuração sem fio)", if (adb) "CONECTADO" else "DESCONECTADO", adb), Ui.lp(top = 12, c = c))
+        hero.addView(Ui.status(c, "ADB (depuração sem fio)", if (adb) "CONECTADO" else "DESCONECTADO", adb), Ui.lp(top = 14, c = c))
         hero.addView(Ui.status(c, "PERMISSÃO DO APP", if (perm) "LIBERADA" else "FALTA", perm))
         hero.addView(Ui.status(c, "ESCUTA DO VOLUME", if (acc) "ACESSIBILIDADE" else "DESLIGADA", if (acc) true else null))
         val falta = !adb || !perm
-        hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 12, c = c))
-        add(hero, 16)
+        hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
+        add(hero, 18)
 
-        // funcoes em quadrados
-        add(Ui.label(c, "funções"), 20)
-        val itens = listOf<View>(
-            Ui.tile(c, R.drawable.ic_gamepad, "Modo competitivo", estComp(), Comp.ligado()) { act.abre(CompScreen(act)) },
-            Ui.tile(c, R.drawable.ic_volume, "Toque via volume", estVol(), Prefs.volAtivo) { act.abre(VolScreen(act)) },
-            Ui.tile(c, R.drawable.ic_bolt, "Toque via carregador", estCarga(), Prefs.cargaAtivo) { act.abre(CargaScreen(act)) },
-            Ui.tile(c, R.drawable.ic_plug, "Modo carregador", estMc(), Prefs.mcAtivo) { act.abre(McScreen(act)) },
-            Ui.tile(c, R.drawable.ic_chip, "Otimização", estOtm(), Otm.status().first || Prefs.otmAuto) { act.abre(OtmScreen(act)) },
-            Ui.tile(c, R.drawable.ic_sliders, "Ajustes do toque", "long ${Prefs.longOn} · multi ${Prefs.multiOn}", null) { act.abre(AjustesScreen(act)) }
-        )
+        // ---------------- modos em quadrados ----------------
+        val cabModos = Ui.hbox(c)
+        cabModos.addView(Ui.label(c, "modos"), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val editar = Ui.text(c, "Editar ›", 11f, Ui.MUTED, true, mono = true)
+        editar.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), 0, Ui.dp(c, 6))
+        Ui.clique(editar) { act.abre(OrganizarScreen(act)) }
+        cabModos.addView(editar)
+        add(cabModos, 22)
+
+        val lista = Atalhos.visiveis()
+        if (lista.isEmpty()) {
+            add(Ui.text(c, "Todos os modos estão escondidos. Toque em EDITAR para mostrar de novo.", 12.5f, Ui.MUTED), 8)
+        }
         var i = 0
-        while (i < itens.size) {
+        while (i < lista.size) {
             val linha = Ui.hbox(c)
             linha.gravity = Gravity.TOP
             val l1 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
             val l2 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
             l2.leftMargin = Ui.dp(c, 10)
-            linha.addView(itens[i], l1)
-            if (i + 1 < itens.size) linha.addView(itens[i + 1], l2)
+            linha.addView(tile(c, lista[i]), l1)
+            if (i + 1 < lista.size) linha.addView(tile(c, lista[i + 1]), l2)
+            else linha.addView(View(c), l2)
             add(linha, if (i == 0) 8 else 10)
             i += 2
         }
 
-        // ultima coisa que o app fez
+        // ---------------- ultima coisa que o app fez ----------------
         val ult = ultimaLinha()
         val faixa = Ui.hbox(c)
-        faixa.background = Ui.glass(c)
+        faixa.background = Ui.ripple(c, Ui.glass(c))
         val pp = Ui.dp(c, 14)
         faixa.setPadding(pp, Ui.dp(c, 12), pp, Ui.dp(c, 12))
         val ic = Ui.icone(c, R.drawable.ic_log, Ui.RED, 18)
@@ -132,14 +189,13 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val tc = Ui.vbox(c)
         tc.addView(Ui.label(c, "última ação"))
         val txt = if (ult.isBlank() || ult.startsWith("(sem")) "nada ainda" else ult
-        val tl = Ui.text(c, txt, 11.5f, Ui.TEXT, mono = true)
+        val tl = Ui.text(c, txt, 11.5f, Ui.TEXT, code = true)
         tl.maxLines = 2
         tl.ellipsize = android.text.TextUtils.TruncateAt.END
         tc.addView(tl, Ui.lp(top = 3, c = c))
         faixa.addView(tc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        faixa.isClickable = true
-        faixa.setOnClickListener { act.irAba(3) }
-        add(faixa, 14)
+        Ui.clique(faixa) { act.irAba(3) }
+        add(faixa, 16)
     }
 }
 

@@ -321,7 +321,7 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        val t = Ui.text(c, NLog.text(tag), 11.5f, Ui.TEXT, mono = true)
+        val t = Ui.text(c, NLog.text(tag), 11.5f, Ui.TEXT, code = true)
         t.setTextIsSelectable(true)
         add(t, 0)
         add(Ui.button(c, "copiar", Ui.Kind.GHOST) {
@@ -394,10 +394,8 @@ class SobreScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        val t = Ui.text(c, "NOCRY", 30f, Ui.RED, true, mono = true)
-        t.letterSpacing = 0.18f
-        add(t, 0)
-        add(Ui.text(c, "versão " + versao(), 13f, Ui.MUTED, mono = true), 2)
+        add(Ui.gradTexto(c, "NOCRY", 38f), 0)
+        add(Ui.text(c, "versão " + versao(), 13f, Ui.MUTED, true, mono = true), 0)
         add(Ui.text(c, "Modo competitivo, toque via volume e carregador e otimização de segundo plano, direto no celular, sem abrir o Termux.", 13f), 12)
 
         // ---------------- sua key ----------------
@@ -456,7 +454,7 @@ class SobreScreen(a: MainActivity) : Screen(a) {
 
         val card2 = Ui.card(c)
         card2.addView(Ui.label(c, "compartilhar"))
-        card2.addView(Ui.text(c, "Qualquer pessoa pode baixar o app por este link:\nhttps://github.com/" + Const.REPO + "/releases/latest", 12.5f, Ui.TEXT, mono = true), Ui.lp(top = 6, c = c))
+        card2.addView(Ui.text(c, "Qualquer pessoa pode baixar o app por este link:\nhttps://github.com/" + Const.REPO + "/releases/latest", 12.5f, Ui.TEXT, code = true), Ui.lp(top = 6, c = c))
         card2.addView(Ui.button(c, "compartilhar link", Ui.Kind.GHOST) {
             val i = Intent(Intent.ACTION_SEND)
             i.type = "text/plain"
@@ -467,5 +465,6 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         add(card2, 12)
 
         add(Ui.text(c, "ADB embutido: libadb-android (Muntashir Al-Islam), licença Apache-2.0.", 11f, Ui.MUTED), 14)
+        add(Ui.text(c, "Fontes: Big Shoulders, Tektur, Outfit, Bricolage Grotesque, Gloock, Work Sans, Instrument Sans, Pixelify Sans, Red Hat Mono, Space Grotesk, JetBrains Mono (licença SIL OFL) e Poppins (licença OFL).", 11f, Ui.MUTED), 6)
     }
 }
