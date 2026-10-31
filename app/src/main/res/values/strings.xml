@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Nocry</string>
+    <string name="app_name">App Usage</string>
     <string name="acc_desc">O Nocry só percebe o aperto das teclas de volume (VOL+ e VOL−) para ligar e desligar o toque rápido. Não lê a tela e não envia nada para a internet.</string>
 </resources>
