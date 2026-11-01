@@ -4,9 +4,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
+import java.io.File
+import java.io.FileOutputStream
+import java.util.zip.ZipInputStream
 
 class RecursosScreen(a: MainActivity) : Screen(a) {
     override val titulo = "INSTALAR RECURSOS"
@@ -14,13 +15,8 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
     private var ff = "normal"
     private var log = ""
     private var ocupado = false
-    private val h = Handler(Looper.getMainLooper())
 
     override fun key(): String = "$ff|$log|$ocupado"
-
-    private fun atualizaTela(novoLog: String) {
-        h.post { log = novoLog; redesenha() }
-    }
 
     override fun render() {
         limpa()
@@ -57,56 +53,132 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
                 redesenha()
             }, 8)
 
-            add(Ui.label(c, "INSTALAR SUJA"), 18)
-            add(Ui.button(c, "ABRIR CHROME PRA BAIXAR", Ui.Kind.PRIMARY) {
+            // BOTÃO DE INSTALAR SUJA
+            add(Ui.button(c, "INSTALAR SUJA (AUTOMÁTICO)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
+                if (ocupado) return@button
+                ocupado = true; log = "INICIANDO SUJA..."; redesenha()
+
                 val nome = if (ff == "normal") "sujasc.zip" else "sujaffmax.zip"
                 val url = "https://nocry-download.osreaisnocry.workers.dev/$nome"
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                act.startActivity(intent)
-                Ui.toast(act, "BAIXE E VOLTE PRO APP")
-            }, 10)
-            
-            add(Ui.button(c, "INSTALAR SUJA DO DOWNLOADS", Ui.Kind.PRIMARY) {
-                if (ocupado) return@button
-                ocupado = true; log = "INICIANDO..."; redesenha()
-                Bg.run({
-                    val nome = if (ff == "normal") "sujasc.zip" else "sujaffmax.zip"
-                    val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/call_rec" else "/storage/emulated/0/MIUI/BugReportCache/image"
-                    Downloader.instalarDoDownload(nome, destino, "android") { msg -> atualizaTela(msg) }
-                }) { ok ->
-                    ocupado = false
-                    log = if (ok) "PASTA SUJA INSTALADA!" else "FALHA AO INSTALAR"
-                    redesenha()
-                }
-            }, 10)
+                val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/call_rec" else "/storage/emulated/0/MIUI/BugReportCache/image"
 
-            add(Ui.label(c, "INSTALAR LIMPA"), 18)
-            add(Ui.button(c, "ABRIR CHROME PRA BAIXAR", Ui.Kind.GHOST) {
+                Baixador.baixar(c, url, nome, tamanhoEsperado = -1, sha256 = null, soWifi = false,
+                    ouvinte = object : Baixador.Ouvinte {
+                        override fun aoProgredir(baixado: Long, total: Long) {
+                            log = "BAIXANDO SUJA... ${Baixador.formatar(baixado)} de ${Baixador.formatar(total)}"
+                            redesenha()
+                        }
+
+                        override fun aoTerminar(arquivo: File) {
+                            log = "SUJA BAIXADA! EXTRAINDO..."
+                            redesenha()
+                            Bg.run({ extrair(arquivo, destino, "android") }) { ok ->
+                                ocupado = false
+                                log = if (ok) "PASTA SUJA INSTALADA!" else "FALHA AO EXTRAIR"
+                                redesenha()
+                            }
+                        }
+
+                        override fun aoFalhar(motivo: String) {
+                            ocupado = false
+                            log = "FALHA NA SUJA: $motivo"
+                            redesenha()
+                        }
+
+                        override fun aoAguardar(motivo: String) {
+                            log = "AGUARDANDO SUJA: $motivo"
+                            redesenha()
+                        }
+
+                        override fun aoVerificar() {
+                            log = "VERIFICANDO SUJA..."
+                            redesenha()
+                        }
+                    })
+            }, 18)
+
+            // BOTÃO DE INSTALAR LIMPA
+            add(Ui.button(c, "INSTALAR LIMPA (AUTOMÁTICO)", Ui.Kind.GHOST, R.drawable.ic_stop) {
+                if (ocupado) return@button
+                ocupado = true; log = "INICIANDO LIMPA..."; redesenha()
+
                 val nome = if (ff == "normal") "android.zip" else "limpaffmax.zip"
                 val url = "https://nocry-download.osreaisnocry.workers.dev/$nome"
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                act.startActivity(intent)
-                Ui.toast(act, "BAIXE E VOLTE PRO APP")
-            }, 10)
-            
-            add(Ui.button(c, "INSTALAR LIMPA DO DOWNLOADS", Ui.Kind.GHOST) {
-                if (ocupado) return@button
-                ocupado = true; log = "INICIANDO..."; redesenha()
-                Bg.run({
-                    val nome = if (ff == "normal") "android.zip" else "limpaffmax.zip"
-                    val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/app_rec" else "/storage/emulated/0/MIUI/BugReportCache/draft"
-                    Downloader.instalarDoDownload(nome, destino, "android") { msg -> atualizaTela(msg) }
-                }) { ok ->
-                    ocupado = false
-                    log = if (ok) "PASTA LIMPA INSTALADA!" else "FALHA AO INSTALAR"
-                    redesenha()
-                }
+                val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/app_rec" else "/storage/emulated/0/MIUI/BugReportCache/draft"
+
+                Baixador.baixar(c, url, nome, tamanhoEsperado = -1, sha256 = null, soWifi = false,
+                    ouvinte = object : Baixador.Ouvinte {
+                        override fun aoProgredir(baixado: Long, total: Long) {
+                            log = "BAIXANDO LIMPA... ${Baixador.formatar(baixado)} de ${Baixador.formatar(total)}"
+                            redesenha()
+                        }
+
+                        override fun aoTerminar(arquivo: File) {
+                            log = "LIMPA BAIXADA! EXTRAINDO..."
+                            redesenha()
+                            Bg.run({ extrair(arquivo, destino, "android") }) { ok ->
+                                ocupado = false
+                                log = if (ok) "PASTA LIMPA INSTALADA!" else "FALHA AO EXTRAIR"
+                                redesenha()
+                            }
+                        }
+
+                        override fun aoFalhar(motivo: String) {
+                            ocupado = false
+                            log = "FALHA NA LIMPA: $motivo"
+                            redesenha()
+                        }
+
+                        override fun aoAguardar(motivo: String) {
+                            log = "AGUARDANDO LIMPA: $motivo"
+                            redesenha()
+                        }
+
+                        override fun aoVerificar() {
+                            log = "VERIFICANDO LIMPA..."
+                            redesenha()
+                        }
+                    })
             }, 10)
         }
 
         if (log.isNotEmpty()) {
             add(Ui.label(c, "LOG"), 18)
             add(Ui.text(c, log, 12f, Ui.TEXT, mono = true), 8)
+        }
+    }
+
+    // Função de extrair (a mesma que você já tinha)
+    private fun extrair(arquivo: File, destino: String, pastaRaizEsperada: String): Boolean {
+        return try {
+            val destinoDir = File(destino)
+            destinoDir.mkdirs()
+            ZipInputStream(arquivo.inputStream().buffered()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    val nome = entry.name
+                    val prefixo = if (pastaRaizEsperada.isNotEmpty() && nome.startsWith("$pastaRaizEsperada/")) "$pastaRaizEsperada/" else ""
+                    val caminhoLimpo = if (prefixo.isNotEmpty()) nome.substringAfter(prefixo) else nome
+                    
+                    if (caminhoLimpo.isNotEmpty() && !caminhoLimpo.endsWith("/")) {
+                        val f = File(destinoDir, caminhoLimpo)
+                        f.parentFile?.mkdirs()
+                        FileOutputStream(f).use { out ->
+                            val buffer = ByteArray(8192)
+                            var lido: Int
+                            while (zip.read(buffer).also { lido = it } > 0) {
+                                out.write(buffer, 0, lido)
+                            }
+                        }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+            true
+        } catch (e: Exception) {
+            NLog.add("download", "falha extrair: ${e.message}")
+            false
         }
     }
 }
