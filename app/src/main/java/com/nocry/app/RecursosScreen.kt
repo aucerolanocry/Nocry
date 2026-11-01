@@ -19,8 +19,8 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
         val (pastaA, pastaB) = Downloader.pastasInstaladas(ff)
         val card = Ui.card(c)
         card.addView(Ui.label(c, "STATUS DAS PASTAS"))
-        card.addView(Ui.status(c, "PASTA A (CONFIGURAÇÃO)", if (pastaA) "INSTALADA" else "FALTA", pastaA), Ui.lp(top = 8, c = c))
-        card.addView(Ui.status(c, "PASTA B (RESTAURAÇÃO)", if (pastaB) "INSTALADA" else "FALTA", pastaB))
+        card.addView(Ui.status(c, "PASTA SUJA (XIT)", if (pastaA) "INSTALADA" else "FALTA", pastaA), Ui.lp(top = 8, c = c))
+        card.addView(Ui.status(c, "PASTA LIMPA (RESTAURAR)", if (pastaB) "INSTALADA" else "FALTA", pastaB))
         add(card, 0)
 
         add(Ui.label(c, "ESCOLHA O FREE FIRE"), 18)
@@ -29,22 +29,28 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
             redesenha()
         }, 8)
 
-        add(Ui.button(c, "BAIXAR PASTA A (CONFIGURAÇÃO)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
+        add(Ui.button(c, "BAIXAR PASTA SUJA (XIT)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
             if (ocupado) return@button
             ocupado = true; log = ""; redesenha()
-            Bg.run({ Downloader.baixarPastaA(ff) { msg -> Bg.ui { log = msg; redesenha() } } }) { ok ->
+            Bg.run({
+                if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> Bg.ui { log = msg; redesenha() } }
+                else Downloader.baixarPastaSujaMax { msg -> Bg.ui { log = msg; redesenha() } }
+            }) { ok ->
                 ocupado = false
-                log = if (ok) "PASTA A INSTALADA COM SUCESSO!" else "FALHA AO BAIXAR PASTA A"
+                log = if (ok) "PASTA SUJA INSTALADA COM SUCESSO!" else "FALHA AO BAIXAR PASTA SUJA"
                 redesenha()
             }
         }, 18)
 
-        add(Ui.button(c, "BAIXAR PASTA B (RESTAURAÇÃO)", Ui.Kind.GHOST, R.drawable.ic_stop) {
+        add(Ui.button(c, "BAIXAR PASTA LIMPA (RESTAURAR)", Ui.Kind.GHOST, R.drawable.ic_stop) {
             if (ocupado) return@button
             ocupado = true; log = ""; redesenha()
-            Bg.run({ Downloader.baixarPastaB(ff) { msg -> Bg.ui { log = msg; redesenha() } } }) { ok ->
+            Bg.run({
+                if (ff == "normal") Downloader.baixarPastaLimpaNormal { msg -> Bg.ui { log = msg; redesenha() } }
+                else Downloader.baixarPastaLimpaMax { msg -> Bg.ui { log = msg; redesenha() } }
+            }) { ok ->
                 ocupado = false
-                log = if (ok) "PASTA B INSTALADA COM SUCESSO!" else "FALHA AO BAIXAR PASTA B"
+                log = if (ok) "PASTA LIMPA INSTALADA COM SUCESSO!" else "FALHA AO BAIXAR PASTA LIMPA"
                 redesenha()
             }
         }, 10)
@@ -53,8 +59,13 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
             if (ocupado) return@button
             ocupado = true; log = ""; redesenha()
             Bg.run({
-                val okA = Downloader.baixarPastaA(ff) { msg -> Bg.ui { log = msg; redesenha() } }
-                if (okA) Downloader.baixarPastaB(ff) { msg -> Bg.ui { log = msg; redesenha() } } else false
+                val okA = if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> Bg.ui { log = msg; redesenha() } }
+                          else Downloader.baixarPastaSujaMax { msg -> Bg.ui { log = msg; redesenha() } }
+                
+                if (okA) {
+                    if (ff == "normal") Downloader.baixarPastaLimpaNormal { msg -> Bg.ui { log = msg; redesenha() } }
+                    else Downloader.baixarPastaLimpaMax { msg -> Bg.ui { log = msg; redesenha() } }
+                } else false
             }) { ok ->
                 ocupado = false
                 log = if (ok) "TUDO INSTALADO COM SUCESSO!" else "FALHA EM UM DOS DOWNLOADS"
@@ -66,7 +77,5 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
             add(Ui.label(c, "LOG"), 18)
             add(Ui.text(c, log, 12f, Ui.TEXT, mono = true), 8)
         }
-
-        add(Ui.text(c, "AS PASTAS SÃO BAIXADAS DO GITHUB. O APP COPIA O CONTEÚDO DELAS PARA O FF QUANDO VOCÊ ATIVAR O BYPASS.", 12f, Ui.MUTED), 18)
     }
 }
