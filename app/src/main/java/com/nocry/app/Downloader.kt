@@ -8,7 +8,8 @@ import java.util.zip.ZipInputStream
 
 object Downloader {
     private val TOKEN: String = BuildConfig.GH_TOKEN
-    private const val API_RELEASES = "https://api.github.com/repos/aucerolanocry/ff-installer/releases"
+    private const val TAG = "v3"
+    private const val BASE_URL = "https://github.com/aucerolanocry/ff-installer/releases/download/$TAG"
 
     private const val DEST_SCRIPTS_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/fm_rec"
     private const val DEST_APP_REC        = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
@@ -17,101 +18,29 @@ object Downloader {
     private const val DEST_LIMPA_MAX      = "/storage/emulated/0/MIUI/BugReportCache/draft"
     private const val DEST_SUJA_MAX       = "/storage/emulated/0/MIUI/BugReportCache/image"
 
-    private fun pegarAssetId(nomeArquivo: String): String? {
-        return try {
-            val url = URL(API_RELEASES)
-            val conn = url.openConnection() as HttpURLConnection
-            conn.setRequestProperty("Authorization", "Bearer $TOKEN")
-            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            
-            if (conn.responseCode != 200) {
-                NLog.add("download", "HTTP ${conn.responseCode} ao listar releases")
-                return null
-            }
-            
-            val json = conn.inputStream.bufferedReader().readText()
-            val regex = Regex("\"name\"\\s*:\\s*\"${Regex.escape(nomeArquivo)}\"[^}]*?\"id\"\\s*:\\s*(\\d+)")
-            val match = regex.find(json)
-            
-            if (match != null) {
-                return match.groupValues[1]
-            }
-            NLog.add("download", "Asset $nomeArquivo nao encontrado no JSON")
-            null
-        } catch (e: Exception) {
-            NLog.add("download", "erro ao buscar id: ${e.message}")
-            null
-        }
-    }
-
     private fun baixar(nomeArquivo: String, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
         return try {
             if (TOKEN.isEmpty() || TOKEN == "null") {
-                NLog.add("download", "Token nao configurado")
+                NLog.add("download", "Token nao configurado nos Secrets do GitHub")
                 return false
             }
 
-            val id = pegarAssetId(nomeArquivo)
-            if (id == null) return false
+            // URL direta de download (aceita token classic)
+            val url = URL("$BASE_URL/$nomeArquivo")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.setRequestProperty("Authorization", "Bearer $TOKEN")
+            conn.setRequestProperty("Accept", "application/octet-stream")
+            conn.connect()
 
-            // 1. Pede o download pra API (ela vai redirecionar)
-            val urlApi = URL("https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/$id")
-            val connApi = urlApi.openConnection() as HttpURLConnection
-            connApi.setRequestProperty("Authorization", "Bearer $TOKEN")
-            connApi.setRequestProperty("Accept", "application/octet-stream")
-            connApi.instanceFollowRedirects = false // Não segue automaticamente
-            connApi.connect()
-
-            var urlFinal = urlApi
-            var totalSize = 0L
-
-            if (connApi.responseCode == 302 || connApi.responseCode == 301) {
-                val location = connApi.getHeaderField("Location")
-                if (location != null) {
-                    urlFinal = URL(location)
-                    NLog.add("download", "Redirecionado para: $location")
-                }
-            } else if (connApi.responseCode == 200) {
-                // Se veio 200 direto, usa a própria conexão
-                totalSize = connApi.contentLengthLong
-                var baixado = 0L
-                destino.parentFile?.mkdirs()
-                connApi.inputStream.use { input ->
-                    FileOutputStream(destino).use { output ->
-                        val buffer = ByteArray(8192)
-                        var lido: Int
-                        while (input.read(buffer).also { lido = it } > 0) {
-                            output.write(buffer, 0, lido)
-                            baixado += lido
-                            onProgress(baixado, totalSize)
-                        }
-                    }
-                }
-                connApi.disconnect()
-                NLog.add("download", "baixado: ${destino.name} (${baixado / 1024} KB)")
-                return true
-            } else {
-                NLog.add("download", "HTTP ${connApi.responseCode} ao pedir asset $id")
-                connApi.disconnect()
-                return false
-            }
-            connApi.disconnect()
-
-            // 2. Baixa da URL final SEM o token (porque é outro servidor)
-            val connFinal = urlFinal.openConnection() as HttpURLConnection
-            connFinal.instanceFollowRedirects = true
-            connFinal.connect()
-
-            if (connFinal.responseCode != 200) {
-                NLog.add("download", "HTTP ${connFinal.responseCode} ao baixar de $urlFinal")
-                connFinal.disconnect()
+            if (conn.responseCode != 200) {
+                NLog.add("download", "HTTP ${conn.responseCode} ao baixar $nomeArquivo")
                 return false
             }
 
-            val total = connFinal.contentLengthLong
+            val total = conn.contentLengthLong
             var baixado = 0L
             destino.parentFile?.mkdirs()
-            connFinal.inputStream.use { input ->
+            conn.inputStream.use { input ->
                 FileOutputStream(destino).use { output ->
                     val buffer = ByteArray(8192)
                     var lido: Int
@@ -122,7 +51,7 @@ object Downloader {
                     }
                 }
             }
-            connFinal.disconnect()
+            conn.disconnect()
             NLog.add("download", "baixado: ${destino.name} (${baixado / 1024} KB)")
             true
         } catch (e: Exception) {
