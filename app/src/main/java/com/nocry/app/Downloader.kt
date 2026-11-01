@@ -7,7 +7,6 @@ import java.net.URL
 import java.util.zip.ZipInputStream
 
 object Downloader {
-    // URL do seu Cloudflare Worker
     private const val BASE_URL = "https://nocry-download.osreaisnocry.workers.dev"
 
     private const val DEST_SCRIPTS_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/fm_rec"
