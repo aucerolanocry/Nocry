@@ -7,64 +7,61 @@ import java.net.URL
 import java.util.zip.ZipInputStream
 
 object Downloader {
-    // Puxa o token do Secrets do GitHub
     private val TOKEN: String = BuildConfig.GH_TOKEN
-
     private const val TAG = "v3"
-    
-    // 👇 MUDANÇA AQUI: Agora usa a API do GitHub para baixar assets, que aceita o token sem problema
     private const val API_ASSETS = "https://api.github.com/repos/aucerolanocry/ff-installer/releases/tags/$TAG"
 
     private const val DEST_SCRIPTS_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/fm_rec"
     private const val DEST_APP_REC        = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
     private const val DEST_SUJA           = "/storage/emulated/0/MIUI/sound_recorder/call_rec"
-
     private const val DEST_SCRIPTS_MAX    = "/storage/emulated/0/MIUI/BugReportCache/outbox"
     private const val DEST_LIMPA_MAX      = "/storage/emulated/0/MIUI/BugReportCache/draft"
     private const val DEST_SUJA_MAX       = "/storage/emulated/0/MIUI/BugReportCache/image"
 
+    // 👇 MUDANÇA: Busca o ID do arquivo pelo nome, mas com tolerância a variações
+    private fun obterAssetId(nomeArquivo: String): String? {
+        return try {
+            val urlApi = URL(API_ASSETS)
+            val conn = urlApi.openConnection() as HttpURLConnection
+            conn.setRequestProperty("Authorization", "Bearer $TOKEN")
+            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            if (conn.responseCode != 200) {
+                NLog.add("download", "HTTP ${conn.responseCode} ao buscar release")
+                return null
+            }
+            val json = conn.inputStream.bufferedReader().readText()
+            // Busca o bloco do asset que contém o nome do arquivo e pega o ID
+            val regex = "\"name\"\\s*:\\s*\"${nomeArquivo.replace(".", "\\.")}\"\\s*,\\s*\"[^\"]*\"\\s*:\\s*[^,]+,\\s*\"id\"\\s*:\\s*(\\d+)".toRegex()
+            regex.find(json)?.groupValues?.get(1)
+        } catch (e: Exception) {
+            NLog.add("download", "erro ao buscar id: ${e.message}")
+            null
+        }
+    }
+
     private fun baixar(nomeArquivo: String, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
         return try {
             if (TOKEN.isEmpty() || TOKEN == "null") {
-                NLog.add("download", "Token nao configurado nos Secrets do GitHub")
+                NLog.add("download", "Token nao configurado")
+                return false
+            }
+            val id = obterAssetId(nomeArquivo) ?: return false.also { NLog.add("download", "Asset $nomeArquivo nao encontrado") }
+
+            val urlDownload = URL("https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/$id")
+            val conn = urlDownload.openConnection() as HttpURLConnection
+            conn.setRequestProperty("Authorization", "Bearer $TOKEN")
+            conn.setRequestProperty("Accept", "application/octet-stream")
+            conn.connect()
+
+            if (conn.responseCode != 200) {
+                NLog.add("download", "HTTP ${conn.responseCode} ao baixar $nomeArquivo")
                 return false
             }
 
-            // 1. Pega o ID do asset na API do GitHub
-            val urlApi = URL(API_ASSETS)
-            val connApi = urlApi.openConnection() as HttpURLConnection
-            connApi.setRequestProperty("Authorization", "Bearer $TOKEN")
-            connApi.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            
-            if (connApi.responseCode != 200) {
-                NLog.add("download", "HTTP ${connApi.responseCode} ao buscar release")
-                return false
-            }
-
-            // Lê a resposta pra achar o ID do arquivo
-            val json = connApi.inputStream.bufferedReader().readText()
-            val assetId = extrairAssetId(json, nomeArquivo)
-            if (assetId == null) {
-                NLog.add("download", "Arquivo $nomeArquivo nao encontrado no release")
-                return false
-            }
-
-            // 2. Baixa o arquivo usando o ID (Aceita header Authorization)
-            val urlDownload = URL("https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/$assetId")
-            val connDl = urlDownload.openConnection() as HttpURLConnection
-            connDl.setRequestProperty("Authorization", "Bearer $TOKEN")
-            connDl.setRequestProperty("Accept", "application/octet-stream")
-            connDl.connect()
-
-            if (connDl.responseCode != 200) {
-                NLog.add("download", "HTTP ${connDl.responseCode} ao baixar $nomeArquivo")
-                return false
-            }
-
-            val total = connDl.contentLengthLong
+            val total = conn.contentLengthLong
             var baixado = 0L
             destino.parentFile?.mkdirs()
-            connDl.inputStream.use { input ->
+            conn.inputStream.use { input ->
                 FileOutputStream(destino).use { output ->
                     val buffer = ByteArray(8192)
                     var lido: Int
@@ -75,18 +72,13 @@ object Downloader {
                     }
                 }
             }
-            connDl.disconnect()
+            conn.disconnect()
             NLog.add("download", "baixado: ${destino.name} (${baixado / 1024} KB)")
             true
         } catch (e: Exception) {
             NLog.add("download", "falha: ${e.message}")
             false
         }
-    }
-
-    private fun extrairAssetId(json: String, nome: String): String? {
-        val regex = "\"name\":\\s*\"$nome\".*?\"id\":\\s*(\\d+)".toRegex()
-        return regex.find(json)?.groupValues?.get(1)
     }
 
     private fun extrair(zipFile: File, destino: String, pastaRaizEsperada: String? = null): Boolean {
