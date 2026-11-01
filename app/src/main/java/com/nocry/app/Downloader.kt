@@ -7,9 +7,8 @@ import java.net.URL
 import java.util.zip.ZipInputStream
 
 object Downloader {
-    private val TOKEN: String = BuildConfig.GH_TOKEN
-    private const val TAG = "v3"
-    private const val BASE_URL = "https://github.com/aucerolanocry/ff-installer/releases/download/$TAG"
+    // URL do seu Cloudflare Worker
+    private const val BASE_URL = "https://nocry-download.osreaisnocry.workers.dev"
 
     private const val DEST_SCRIPTS_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/fm_rec"
     private const val DEST_APP_REC        = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
@@ -20,16 +19,9 @@ object Downloader {
 
     private fun baixar(nomeArquivo: String, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
         return try {
-            if (TOKEN.isEmpty() || TOKEN == "null") {
-                NLog.add("download", "Token nao configurado nos Secrets do GitHub")
-                return false
-            }
-
-            // URL direta de download (aceita token classic)
             val url = URL("$BASE_URL/$nomeArquivo")
             val conn = url.openConnection() as HttpURLConnection
-            conn.setRequestProperty("Authorization", "Bearer $TOKEN")
-            conn.setRequestProperty("Accept", "application/octet-stream")
+            conn.instanceFollowRedirects = true
             conn.connect()
 
             if (conn.responseCode != 200) {
