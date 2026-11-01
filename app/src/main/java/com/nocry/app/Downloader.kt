@@ -7,11 +7,13 @@ import java.net.URL
 import java.util.zip.ZipInputStream
 
 object Downloader {
-    // Puxa o token do Secrets do GitHub (configurado no build.gradle.kts)
+    // Puxa o token do Secrets do GitHub
     private val TOKEN: String = BuildConfig.GH_TOKEN
 
     private const val TAG = "v3"
-    private const val BASE = "https://github.com/aucerolanocry/ff-installer/releases/download/$TAG"
+    
+    // 👇 MUDANÇA AQUI: Agora usa a API do GitHub para baixar assets, que aceita o token sem problema
+    private const val API_ASSETS = "https://api.github.com/repos/aucerolanocry/ff-installer/releases/tags/$TAG"
 
     private const val DEST_SCRIPTS_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/fm_rec"
     private const val DEST_APP_REC        = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
@@ -21,30 +23,48 @@ object Downloader {
     private const val DEST_LIMPA_MAX      = "/storage/emulated/0/MIUI/BugReportCache/draft"
     private const val DEST_SUJA_MAX       = "/storage/emulated/0/MIUI/BugReportCache/image"
 
-    private fun baixar(url: String, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
+    private fun baixar(nomeArquivo: String, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
         return try {
             if (TOKEN.isEmpty() || TOKEN == "null") {
                 NLog.add("download", "Token nao configurado nos Secrets do GitHub")
                 return false
             }
 
-            val conexao = URL(url).openConnection() as HttpURLConnection
-            conexao.connectTimeout = 15000
-            conexao.readTimeout = 60000
-            conexao.instanceFollowRedirects = true
-            conexao.setRequestProperty("Authorization", "Bearer $TOKEN")
-            conexao.setRequestProperty("Accept", "application/octet-stream")
-            conexao.connect()
-
-            if (conexao.responseCode != 200) {
-                NLog.add("download", "HTTP ${conexao.responseCode} em $url")
+            // 1. Pega o ID do asset na API do GitHub
+            val urlApi = URL(API_ASSETS)
+            val connApi = urlApi.openConnection() as HttpURLConnection
+            connApi.setRequestProperty("Authorization", "Bearer $TOKEN")
+            connApi.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            
+            if (connApi.responseCode != 200) {
+                NLog.add("download", "HTTP ${connApi.responseCode} ao buscar release")
                 return false
             }
 
-            val total = conexao.contentLengthLong
+            // Lê a resposta pra achar o ID do arquivo
+            val json = connApi.inputStream.bufferedReader().readText()
+            val assetId = extrairAssetId(json, nomeArquivo)
+            if (assetId == null) {
+                NLog.add("download", "Arquivo $nomeArquivo nao encontrado no release")
+                return false
+            }
+
+            // 2. Baixa o arquivo usando o ID (Aceita header Authorization)
+            val urlDownload = URL("https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/$assetId")
+            val connDl = urlDownload.openConnection() as HttpURLConnection
+            connDl.setRequestProperty("Authorization", "Bearer $TOKEN")
+            connDl.setRequestProperty("Accept", "application/octet-stream")
+            connDl.connect()
+
+            if (connDl.responseCode != 200) {
+                NLog.add("download", "HTTP ${connDl.responseCode} ao baixar $nomeArquivo")
+                return false
+            }
+
+            val total = connDl.contentLengthLong
             var baixado = 0L
             destino.parentFile?.mkdirs()
-            conexao.inputStream.use { input ->
+            connDl.inputStream.use { input ->
                 FileOutputStream(destino).use { output ->
                     val buffer = ByteArray(8192)
                     var lido: Int
@@ -55,13 +75,18 @@ object Downloader {
                     }
                 }
             }
-            conexao.disconnect()
+            connDl.disconnect()
             NLog.add("download", "baixado: ${destino.name} (${baixado / 1024} KB)")
             true
         } catch (e: Exception) {
             NLog.add("download", "falha: ${e.message}")
             false
         }
+    }
+
+    private fun extrairAssetId(json: String, nome: String): String? {
+        val regex = "\"name\":\\s*\"$nome\".*?\"id\":\\s*(\\d+)".toRegex()
+        return regex.find(json)?.groupValues?.get(1)
     }
 
     private fun extrair(zipFile: File, destino: String, pastaRaizEsperada: String? = null): Boolean {
@@ -122,9 +147,9 @@ object Downloader {
     fun baixarScriptsNormal(onProgress: (String) -> Unit): Boolean {
         File(DEST_SCRIPTS_NORMAL).mkdirs()
         onProgress("BAIXANDO ffbem.sh...")
-        if (!baixar("$BASE/ffbem.sh", File(DEST_SCRIPTS_NORMAL, "ffbem.sh")) { _, _ -> }) return false
+        if (!baixar("ffbem.sh", File(DEST_SCRIPTS_NORMAL, "ffbem.sh")) { _, _ -> }) return false
         onProgress("BAIXANDO ffmal.sh...")
-        if (!baixar("$BASE/ffmal.sh", File(DEST_SCRIPTS_NORMAL, "ffmal.sh")) { _, _ -> }) return false
+        if (!baixar("ffmal.sh", File(DEST_SCRIPTS_NORMAL, "ffmal.sh")) { _, _ -> }) return false
         onProgress("SCRIPTS OK")
         return true
     }
@@ -132,7 +157,7 @@ object Downloader {
     fun baixarPastaLimpaNormal(onProgress: (String) -> Unit): Boolean {
         val zip = File(Sys.app.cacheDir, "android.zip")
         onProgress("BAIXANDO PASTA LIMPA...")
-        if (!baixar("$BASE/android.zip", zip) { b, t ->
+        if (!baixar("android.zip", zip) { b, t ->
                 val pct = if (t > 0) (b * 100 / t) else 0
                 onProgress("BAIXANDO PASTA LIMPA... $pct%")
             }) return false
@@ -146,7 +171,7 @@ object Downloader {
     fun baixarPastaSujaNormal(onProgress: (String) -> Unit): Boolean {
         val zip = File(Sys.app.cacheDir, "sujasc.zip")
         onProgress("BAIXANDO PASTA SUJA+...")
-        if (!baixar("$BASE/sujasc.zip", zip) { b, t ->
+        if (!baixar("sujasc.zip", zip) { b, t ->
                 val pct = if (t > 0) (b * 100 / t) else 0
                 onProgress("BAIXANDO PASTA SUJA+... $pct%")
             }) return false
@@ -160,9 +185,9 @@ object Downloader {
     fun baixarScriptsMax(onProgress: (String) -> Unit): Boolean {
         File(DEST_SCRIPTS_MAX).mkdirs()
         onProgress("BAIXANDO ffbem.sh (MAX)...")
-        if (!baixar("$BASE/ffbem.sh", File(DEST_SCRIPTS_MAX, "ffbem.sh")) { _, _ -> }) return false
+        if (!baixar("ffbem.sh", File(DEST_SCRIPTS_MAX, "ffbem.sh")) { _, _ -> }) return false
         onProgress("BAIXANDO ffmal.sh (MAX)...")
-        if (!baixar("$BASE/ffmal.sh", File(DEST_SCRIPTS_MAX, "ffmal.sh")) { _, _ -> }) return false
+        if (!baixar("ffmal.sh", File(DEST_SCRIPTS_MAX, "ffmal.sh")) { _, _ -> }) return false
         onProgress("SCRIPTS MAX OK")
         return true
     }
@@ -170,7 +195,7 @@ object Downloader {
     fun baixarPastaSujaMax(onProgress: (String) -> Unit): Boolean {
         val zip = File(Sys.app.cacheDir, "sujaffmax.zip")
         onProgress("BAIXANDO PASTA SUJA MAX...")
-        if (!baixar("$BASE/sujaffmax.zip", zip) { b, t ->
+        if (!baixar("sujaffmax.zip", zip) { b, t ->
                 val pct = if (t > 0) (b * 100 / t) else 0
                 onProgress("BAIXANDO PASTA SUJA MAX... $pct%")
             }) return false
@@ -184,7 +209,7 @@ object Downloader {
     fun baixarPastaLimpaMax(onProgress: (String) -> Unit): Boolean {
         val zip = File(Sys.app.cacheDir, "limpaffmax.zip")
         onProgress("BAIXANDO PASTA LIMPA MAX...")
-        if (!baixar("$BASE/limpaffmax.zip", zip) { b, t ->
+        if (!baixar("limpaffmax.zip", zip) { b, t ->
                 val pct = if (t > 0) (b * 100 / t) else 0
                 onProgress("BAIXANDO PASTA LIMPA MAX... $pct%")
             }) return false
