@@ -38,17 +38,31 @@ object Downloader {
                 onProgress("FALHA AO EXTRAIR: ${unzipResult.out}")
                 return false
             }
+
+            // 👇 AQUI: Verifica se o zip criou uma pasta raiz (ex: "sujasc" ou "android")
+            // Se criou, o conteúdo dela é o que a gente quer. Se não, é o que tá na raiz do extract.
+            val raizCheck = Adb.exec("ls $extractDir")
+            val pastas = raizCheck.out.split("\n").filter { it.isNotBlank() }
             
-            // 👇 AQUI: Cria a pasta 'android' e move tudo pra dentro dela
+            val pastaReal = if (pastas.size == 1 && pastas[0].lowercase() != "android") {
+                // Se só tem uma pasta e ela não é "android", o conteúdo tá dentro dela
+                "$extractDir/${pastas[0]}"
+            } else {
+                // Se tem vários arquivos ou já é a pasta "android", usa a raiz do extract
+                extractDir
+            }
+
             onProgress("ORGANIZANDO...")
             val pastaAndroid = "$destino/android"
             Adb.exec("rm -rf \"$pastaAndroid\"")
             Adb.exec("mkdir -p \"$pastaAndroid\"")
             
-            // Move o conteúdo (se tiver pasta raiz ou não)
-            Adb.exec("cp -rf $extractDir/* \"$pastaAndroid/\"")
+            // Copia o conteúdo REAL pra dentro da pasta "android"
+            Adb.exec("cp -rf \"$pastaReal\"/* \"$pastaAndroid/\"")
             
+            // Limpa a pasta temporária
             Adb.exec("rm -rf $tempDir")
+            
             onProgress("INSTALADO COM SUCESSO!")
             true
         } catch (e: Exception) {
