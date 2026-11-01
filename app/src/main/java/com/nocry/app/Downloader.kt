@@ -6,12 +6,13 @@ import android.net.Uri
 import android.os.Environment
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.zip.ZipInputStream
 
 object Downloader {
     private const val BASE_URL = "https://nocry-download.osreaisnocry.workers.dev"
 
-    // Pastas de destino
     private const val DEST_SUJA_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/call_rec"
     private const val DEST_LIMPA_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
     private const val DEST_SUJA_MAX = "/storage/emulated/0/MIUI/BugReportCache/image"
@@ -20,53 +21,57 @@ object Downloader {
     fun baixarComAndroid(nomeArquivo: String, destino: String, pastaRaizEsperada: String, onProgress: (String) -> Unit): Boolean {
         return try {
             val app = Sys.app
-            val dm = app.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val url = Uri.parse("$BASE_URL/$nomeArquivo")
-            val request = DownloadManager.Request(url)
-                .setTitle(nomeArquivo)
-                .setDescription("Baixando $nomeArquivo...")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, nomeArquivo)
-                .setAllowedOverMetered(true)
-                .setAllowedOverRoaming(true)
+            val url = URL("$BASE_URL/$nomeArquivo")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 30000
+            conn.readTimeout = 30000
+            conn.instanceFollowRedirects = true
+            conn.connect()
 
-            val id = dm.enqueue(request)
-            onProgress("BAIXANDO...")
-            
-            var baixando = true
-            while (baixando) {
-                val cursor = dm.query(DownloadManager.Query().setFilterById(id))
-                if (cursor != null) {
-                    if (cursor.moveToFirst()) {
-                        val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                            baixando = false
-                            val arquivo = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), nomeArquivo)
-                            if (arquivo.exists()) {
-                                onProgress("DOWNLOAD COMPLETO! EXTRAINDO...")
-                                val ok = extrair(arquivo, destino, pastaRaizEsperada)
-                                onProgress(if (ok) "INSTALADO COM SUCESSO!" else "FALHA AO EXTRAIR")
-                                return ok
-                            }
-                        } else if (status == DownloadManager.STATUS_FAILED) {
-                            baixando = false
-                            onProgress("FALHA NO DOWNLOAD")
-                            return false
-                        }
-                    }
-                    cursor.close()
-                }
-                Thread.sleep(1000)
+            if (conn.responseCode != 200) {
+                onProgress("HTTP ${conn.responseCode}")
+                return false
             }
-            true
+
+            val total = conn.contentLengthLong
+            var baixado = 0L
+            
+            val destinoDir = File(destino)
+            destinoDir.mkdirs()
+            
+            // Salva o zip na pasta de cache
+            val zipFile = File(app.cacheDir, nomeArquivo)
+            onProgress("BAIXANDO...")
+
+            conn.inputStream.use { input ->
+                FileOutputStream(zipFile).use { output ->
+                    val buffer = ByteArray(1024 * 1024) // 1 MB
+                    var lido: Int
+                    while (input.read(buffer).also { lido = it } > 0) {
+                        output.write(buffer, 0, lido)
+                        output.flush()
+                        baixado += lido
+                        val pct = if (total > 0) (baixado * 100 / total) else 0
+                        onProgress("BAIXANDO... $pct%")
+                    }
+                }
+            }
+            conn.disconnect()
+            onProgress("DOWNLOAD COMPLETO! EXTRAINDO...")
+
+            // Extrai direto (sem temp)
+            val ok = extrairDireto(zipFile, destino, pastaRaizEsperada)
+            zipFile.delete()
+            
+            onProgress(if (ok) "INSTALADO COM SUCESSO!" else "FALHA AO EXTRAIR")
+            ok
         } catch (e: Exception) {
             onProgress("FALHA: ${e.message}")
             false
         }
     }
 
-    // Essa função extrai e renomeia pra 'android' se precisar
-    private fun extrair(zipFile: File, destino: String, pastaRaizEsperada: String?): Boolean {
+    private fun extrairDireto(zipFile: File, destino: String, pastaRaizEsperada: String?): Boolean {
         return try {
             val destinoDir = File(destino)
             destinoDir.mkdirs()
@@ -75,12 +80,7 @@ object Downloader {
                 var entry = zip.nextEntry
                 while (entry != null) {
                     val nome = entry.name
-                    
-                    // 👇 A MÁGICA DE RENOMEAR AQUI
-                    // Se o arquivo tem uma pasta raiz (ex: "sujaffmax/") e essa pasta NÃO é "android"...
-                    val prefixo = if (nome.startsWith("$pastaRaizEsperada/")) "$pastaRaizEsperada/" else ""
-                    
-                    // Se o nome do zip começa com a pasta raiz que a gente espera, a gente tira ela
+                    val prefixo = if (pastaRaizEsperada != null && nome.startsWith("$pastaRaizEsperada/")) "$pastaRaizEsperada/" else ""
                     val caminhoLimpo = if (prefixo.isNotEmpty()) nome.substringAfter(prefixo) else nome
                     
                     if (caminhoLimpo.isNotEmpty() && !caminhoLimpo.endsWith("/")) {
