@@ -2,6 +2,7 @@ package com.nocry.app
 
 import android.app.DownloadManager
 import android.content.Context
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Environment
 import android.os.Handler
@@ -9,7 +10,12 @@ import android.os.Looper
 import android.os.StatFs
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 object Baixador {
 
@@ -40,7 +46,7 @@ object Baixador {
         soWifi: Boolean = false,
         ouvinte: Ouvinte
     ): Long {
-        NLog.add("download", "pedido: $nome (esperado ${formatar(tamanhoEsperado)}, soWifi=$soWifi)")
+        NLog.add("download", "pedido: $nome (esperado ${formatar(tamanhoEsperado)}, soWifi=$soWifi, host=${Uri.parse(url).host})")
         return iniciar(ctx, url, nome, tamanhoEsperado, sha256, soWifi, comLog(nome, ouvinte))
     }
 
@@ -109,6 +115,7 @@ object Baixador {
                 DownloadManager.STATUS_RUNNING,
                 DownloadManager.STATUS_PAUSED,
                 DownloadManager.STATUS_SUCCESSFUL -> {
+                    NLog.add("download", "$nome: reconectou no download que ja existia (id $idAntigo)")
                     acompanhar(app, dm, idAntigo, destino, tamanhoEsperado, sha256, ouvinte)
                     return idAntigo
                 }
@@ -125,6 +132,7 @@ object Baixador {
         }
 
         if (destino.exists()) {
+            NLog.add("download", "$nome: apagou sobra de download incompleto (${formatar(destino.length())})")
             destino.delete()
         }
 
@@ -152,10 +160,12 @@ object Baixador {
         val id = try {
             dm.enqueue(pedido)
         } catch (e: Exception) {
-            main.post { ouvinte.aoFalhar("Não consegui iniciar o download: ${e.message}") }
-            return -1L
+            NLog.add("download", "$nome: Gerenciador de downloads indisponivel (${e.message}); baixando direto pelo app")
+            baixarDireto(app, url, nome, tamanhoEsperado, sha256, soWifi, ouvinte)
+            return -2L
         }
         prefs.edit().putLong(nome, id).apply()
+        NLog.add("download", "$nome: entregue ao Android (id $id), destino ${destino.parent}")
         acompanhar(app, dm, id, destino, tamanhoEsperado, sha256, ouvinte)
         return id
     }
@@ -167,7 +177,9 @@ object Baixador {
         val id = prefs.getLong(nome, -1L)
         if (id != -1L) try { dm.remove(id) } catch (e: Exception) {}
         prefs.edit().remove(nome).apply()
+        if (ativos.containsKey(nome)) cancelados[nome] = true
         File(pasta(app), nome).delete()
+        File(pasta(app), "$nome.part").delete()
     }
 
     fun sha256(arq: File): String {
@@ -192,7 +204,8 @@ object Baixador {
     private class Foto(val status: Int, val baixado: Long, val total: Long, val motivo: Int)
 
     private fun foto(dm: DownloadManager, id: Long): Foto? {
-        val c = dm.query(DownloadManager.Query().setFilterById(id)) ?: return null
+        val c = try { dm.query(DownloadManager.Query().setFilterById(id)) } catch (e: Exception) { null }
+        if (c == null) return null
         return try {
             if (!c.moveToFirst()) null
             else Foto(
@@ -267,6 +280,130 @@ object Baixador {
             }
             main.post { o.aoTerminar(arq) }
         }.start()
+    }
+
+    private class Cancelado : RuntimeException("cancelado")
+    private class HttpErro(val codigo: Int) : IOException("HTTP $codigo")
+
+    private val ativos = ConcurrentHashMap<String, Boolean>()
+    private val cancelados = ConcurrentHashMap<String, Boolean>()
+
+    private fun baixarDireto(app: Context, url: String, nome: String, tamanho: Long, sha: String?, soWifi: Boolean, o: Ouvinte) {
+        if (ativos.putIfAbsent(nome, true) != null) {
+            NLog.add("download", "$nome: ja esta baixando, ignorei o pedido repetido")
+            return
+        }
+        cancelados.remove(nome)
+        val destino = File(pasta(app), nome)
+        val parcial = File(pasta(app), "$nome.part")
+        val cm = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        Thread {
+            var tentativa = 0
+            try {
+                while (true) {
+                    if (cancelados.containsKey(nome)) throw Cancelado()
+                    if (soWifi && cm.isActiveNetworkMetered) {
+                        main.post { o.aoAguardar("Esperando conectar no Wi-Fi.") }
+                        Thread.sleep(3000)
+                        continue
+                    }
+                    try {
+                        val total = transferir(url, parcial, nome, tamanho, o)
+                        if (total <= 0 || parcial.length() >= total) {
+                            val feito = parcial.length()
+                            main.post { o.aoProgredir(feito, feito) }
+                            if (destino.exists()) destino.delete()
+                            if (!parcial.renameTo(destino)) throw IOException("não consegui renomear o arquivo baixado")
+                            verificar(destino, tamanho, sha, o)
+                            return@Thread
+                        }
+                        throw IOException("a conexão fechou antes do fim")
+                    } catch (e: HttpErro) {
+                        val tentaDeNovo = e.codigo == 408 || e.codigo == 429 || e.codigo in 500..599
+                        tentativa++
+                        if (!tentaDeNovo || tentativa > 30) {
+                            main.post { o.aoFalhar(explicarErro(e.codigo)) }
+                            return@Thread
+                        }
+                        main.post { o.aoAguardar("${explicarErro(e.codigo)} Tentativa $tentativa de 30.") }
+                        Thread.sleep(minOf(2000L * tentativa, 15000L))
+                    } catch (e: IOException) {
+                        tentativa++
+                        if (tentativa > 30) {
+                            main.post { o.aoFalhar("A conexão não se manteve (${e.message}). Desisti depois de 30 tentativas; chame de novo pra continuar de onde parou.") }
+                            return@Thread
+                        }
+                        main.post { o.aoAguardar("Conexão caiu (${e.message}). Tentativa $tentativa de 30.") }
+                        Thread.sleep(minOf(2000L * tentativa, 15000L))
+                    }
+                }
+            } catch (e: Cancelado) {
+                parcial.delete()
+                main.post { o.aoFalhar("Download cancelado.") }
+            } catch (e: Exception) {
+                main.post { o.aoFalhar("Erro no download: ${e.message}") }
+            } finally {
+                ativos.remove(nome)
+                cancelados.remove(nome)
+            }
+        }.start()
+    }
+
+    private fun transferir(url: String, parcial: File, nome: String, tamanhoEsperado: Long, o: Ouvinte): Long {
+        val tem = if (parcial.isFile) parcial.length() else 0L
+        val c = URL(url).openConnection() as HttpURLConnection
+        try {
+            c.connectTimeout = 20000
+            c.readTimeout = 30000
+            c.setRequestProperty("Accept-Encoding", "identity")
+            c.setRequestProperty("User-Agent", "Nocry")
+            if (tem > 0) c.setRequestProperty("Range", "bytes=$tem-")
+
+            val code = c.responseCode
+            var inicio = 0L
+            val total: Long
+            when (code) {
+                206 -> {
+                    inicio = tem
+                    val doRange = c.getHeaderField("Content-Range")?.substringAfter('/', "")?.trim()?.toLongOrNull() ?: -1L
+                    total = if (doRange > 0) doRange else if (c.contentLengthLong > 0) tem + c.contentLengthLong else tamanhoEsperado
+                }
+                200 -> {
+                    total = if (c.contentLengthLong > 0) c.contentLengthLong else tamanhoEsperado
+                }
+                416 -> {
+                    val t = c.getHeaderField("Content-Range")?.substringAfter('/', "")?.trim()?.toLongOrNull() ?: -1L
+                    if (t > 0 && tem == t) return t
+                    parcial.delete()
+                    throw IOException("o servidor recusou a retomada (416); recomeço do zero")
+                }
+                else -> throw HttpErro(code)
+            }
+
+            FileOutputStream(parcial, inicio > 0).use { out ->
+                c.inputStream.use { ins ->
+                    val buf = ByteArray(256 * 1024)
+                    var feito = inicio
+                    var ultimo = 0L
+                    while (true) {
+                        if (cancelados.containsKey(nome)) throw Cancelado()
+                        val n = ins.read(buf)
+                        if (n <= 0) break
+                        out.write(buf, 0, n)
+                        feito += n
+                        val agora = System.currentTimeMillis()
+                        if (agora - ultimo >= 500) {
+                            ultimo = agora
+                            main.post { o.aoProgredir(feito, if (total > 0) total else -1) }
+                        }
+                    }
+                }
+            }
+            return total
+        } finally {
+            c.disconnect()
+        }
     }
 
     private fun explicarPausa(r: Int) = when (r) {
