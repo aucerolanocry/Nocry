@@ -240,6 +240,7 @@ class NocryService : Service() {
             while (go) {
                 try {
                     Engine.tick()
+                    EngineBypass.tick()
                     if (n % 5 == 0) {
                         val r = Engine.resumo()
                         if (r != ultimo) { ultimo = r; atualizaNotificacao(r) }
@@ -279,7 +280,7 @@ class NocryService : Service() {
     }
 
     private fun precisaAdb(): Boolean =
-        Prefs.mcAtivo || Prefs.otmAuto || (Engine.precisaTeclas() && !KeyService.ativo)
+        Prefs.mcAtivo || Prefs.otmAuto || Prefs.bypassAtivo || Prefs.bypassVolAtivo || (Engine.precisaTeclas() && !KeyService.ativo)
 
     private fun cuidaAdb() {
         if (precisaAdb()) {
