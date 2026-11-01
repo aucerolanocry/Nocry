@@ -10,6 +10,7 @@ object Downloader {
     private val TOKEN: String = BuildConfig.GH_TOKEN
     private const val TAG = "v3"
     private const val API_ASSETS = "https://api.github.com/repos/aucerolanocry/ff-installer/releases/tags/$TAG"
+    private const val BASE_URL = "https://github.com/aucerolanocry/ff-installer/releases/download/$TAG"
 
     private const val DEST_SCRIPTS_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/fm_rec"
     private const val DEST_APP_REC        = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
@@ -18,105 +19,67 @@ object Downloader {
     private const val DEST_LIMPA_MAX      = "/storage/emulated/0/MIUI/BugReportCache/draft"
     private const val DEST_SUJA_MAX       = "/storage/emulated/0/MIUI/BugReportCache/image"
 
-    // 👇 Função que pega o ID do arquivo na API
-    private fun obterAssetId(nomeArquivo: String): String? {
-        return try {
-            val urlApi = URL(API_ASSETS)
-            val conn = urlApi.openConnection() as HttpURLConnection
-            conn.setRequestProperty("Authorization", "Bearer $TOKEN")
-            conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
-            
-            if (conn.responseCode != 200) {
-                NLog.add("download", "HTTP ${conn.responseCode} ao buscar release")
-                return null
-            }
-            
-            val json = conn.inputStream.bufferedReader().readText()
-            val regex = Regex("\"name\"\\s*:\\s*\"${nomeArquivo.replace(".", "\\.")}\"[^}]*?\"id\"\\s*:\\s*(\\d+)")
-            regex.find(json)?.groupValues?.get(1)
-        } catch (e: Exception) {
-            NLog.add("download", "erro ao buscar id: ${e.message}")
-            null
-        }
-    }
-
-    // 👇 Função que baixa o arquivo pelo ID (SEGUINDO REDIRECIONAMENTO)
     private fun baixar(nomeArquivo: String, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
         return try {
             if (TOKEN.isEmpty() || TOKEN == "null") {
                 NLog.add("download", "Token nao configurado")
                 return false
             }
-            val id = obterAssetId(nomeArquivo) ?: return false.also { NLog.add("download", "Asset $nomeArquivo nao encontrado") }
 
-            // Passo 1: Pede pra API pra onde ela redireciona
-            val urlApi = URL("https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/$id")
+            // Primeiro: verifica se o arquivo existe no release
+            val urlApi = URL(API_ASSETS)
             val connApi = urlApi.openConnection() as HttpURLConnection
             connApi.setRequestProperty("Authorization", "Bearer $TOKEN")
-            connApi.setRequestProperty("Accept", "application/octet-stream")
-            connApi.instanceFollowRedirects = false // Não segue automaticamente
-            connApi.connect()
-
-            var urlFinal = urlApi
-
-            if (connApi.responseCode == 302 || connApi.responseCode == 301) {
-                // Se redirecionou, pega a nova URL
-                val location = connApi.getHeaderField("Location")
-                if (location != null) {
-                    urlFinal = URL(location)
-                }
-            } else if (connApi.responseCode == 200) {
-                // Se já veio o arquivo direto, usa essa conexão
-                return baixarDoStream(connApi.inputStream, connApi.contentLengthLong, destino, onProgress).also {
-                    connApi.disconnect()
-                }
-            } else {
-                NLog.add("download", "HTTP ${connApi.responseCode} ao pedir o arquivo $nomeArquivo")
-                connApi.disconnect()
+            connApi.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            
+            if (connApi.responseCode != 200) {
+                NLog.add("download", "HTTP ${connApi.responseCode} ao buscar release")
                 return false
             }
-            connApi.disconnect()
-
-            // Passo 2: Baixa da URL final (sem token, pois é outro servidor)
-            val connFinal = urlFinal.openConnection() as HttpURLConnection
-            connFinal.instanceFollowRedirects = true
-            connFinal.connect()
-
-            if (connFinal.responseCode != 200) {
-                NLog.add("download", "HTTP ${connFinal.responseCode} ao baixar do redirecionamento")
-                connFinal.disconnect()
+            
+            val json = connApi.inputStream.bufferedReader().readText()
+            // Loga os nomes dos arquivos disponíveis (só os nomes)
+            val nomesRegex = Regex("\"name\"\\s*:\\s*\"([^\"]+)\"")
+            val nomes = nomesRegex.findAll(json).map { it.groupValues[1] }.toList()
+            NLog.add("download", "Arquivos disponíveis: ${nomes.joinToString(", ")}")
+            
+            // Verifica se o nomeArquivo está na lista
+            if (!nomes.contains(nomeArquivo)) {
+                NLog.add("download", "ERRO: $nomeArquivo não está na lista! Nomes encontrados: ${nomes.joinToString(", ")}")
                 return false
             }
 
-            val ok = baixarDoStream(connFinal.inputStream, connFinal.contentLengthLong, destino, onProgress)
-            connFinal.disconnect()
-            ok
-        } catch (e: Exception) {
-            NLog.add("download", "falha: ${e.message}")
-            false
-        }
-    }
+            // Se está, baixa da URL direta
+            val url = URL("$BASE_URL/$nomeArquivo")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.setRequestProperty("Authorization", "Bearer $TOKEN")
+            conn.setRequestProperty("Accept", "application/octet-stream")
+            conn.connect()
 
-    // 👇 Função auxiliar pra salvar o arquivo
-    private fun baixarDoStream(input: java.io.InputStream, total: Long, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
-        return try {
+            if (conn.responseCode != 200) {
+                NLog.add("download", "HTTP ${conn.responseCode} ao baixar $nomeArquivo")
+                return false
+            }
+
+            val total = conn.contentLengthLong
             var baixado = 0L
             destino.parentFile?.mkdirs()
-            input.use { inp ->
+            conn.inputStream.use { input ->
                 FileOutputStream(destino).use { output ->
                     val buffer = ByteArray(8192)
                     var lido: Int
-                    while (inp.read(buffer).also { lido = it } > 0) {
+                    while (input.read(buffer).also { lido = it } > 0) {
                         output.write(buffer, 0, lido)
                         baixado += lido
                         onProgress(baixado, total)
                     }
                 }
             }
+            conn.disconnect()
             NLog.add("download", "baixado: ${destino.name} (${baixado / 1024} KB)")
             true
         } catch (e: Exception) {
-            NLog.add("download", "falha ao salvar: ${e.message}")
+            NLog.add("download", "falha: ${e.message}")
             false
         }
     }
