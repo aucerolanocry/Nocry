@@ -5,11 +5,6 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ThreadFactory
 
-/**
- * Cerebro dos monitores: toque via volume, toque via carregador e modo carregador.
- * Os eventos chegam do servico de acessibilidade (volume) e do receptor/ciclo do servico (carregador).
- * Tudo roda numa fila so, uma coisa de cada vez.
- */
 object Engine {
     private val lock = Any()
     private val ex: ExecutorService = Executors.newSingleThreadExecutor(ThreadFactory { r ->
@@ -23,7 +18,6 @@ object Engine {
         }
     }
 
-    /** a tela quer saber quando algo mudou */
     @Volatile var onChange: (() -> Unit)? = null
     private fun mudou() { val f = onChange; if (f != null) Bg.ui { f() } }
 
@@ -37,10 +31,8 @@ object Engine {
     private val gesto = ArrayList<Char>()
     private val gestoT = ArrayList<Long>()
 
-    /** precisa ouvir o volume? (toque via volume ligado, ou gesto de parar com a density alterada) */
-    fun precisaTeclas(): Boolean = Prefs.volAtivo || (Prefs.mcAtivo && Prefs.densOrig != null)
+    fun precisaTeclas(): Boolean = Prefs.volAtivo || Prefs.bypassVolAtivo || (Prefs.mcAtivo && Prefs.densOrig != null)
 
-    /** chamado a cada aperto de VOL+ (up=true) ou VOL- (up=false) */
     fun volKey(up: Boolean) {
         if (!License.valid()) return
         val now = SystemClock.elapsedRealtime()
@@ -48,11 +40,10 @@ object Engine {
     }
 
     private fun onVol(up: Boolean, now: Long) {
-        if (up == lastUp && now - lastAt < 60) return        // o mesmo aperto chegando por dois caminhos
+        if (up == lastUp && now - lastAt < 60) return
         lastUp = up
         lastAt = now
 
-        // gesto de parar o MODO CARREGADOR: VOL+ VOL- VOL+ VOL- em ate 3 s (so enquanto a density esta alterada)
         if (Prefs.mcAtivo && Prefs.densOrig != null) {
             gesto.add(if (up) 'U' else 'D')
             gestoT.add(now)
@@ -68,6 +59,9 @@ object Engine {
             gesto.clear()
             gestoT.clear()
         }
+
+        // BYPASS AQUI (antes do return do volume)
+        EngineBypass.onVolume(up, now)
 
         if (!Prefs.volAtivo) return
         val nu = Prefs.clicksUp
@@ -89,7 +83,6 @@ object Engine {
                 aplicaVol("normal", "VOL- ${nd}x")
             }
         }
-        EngineBypass.onVolume(up, now)
     }
 
     private fun aplicaVol(modo: String, quem: String) {
@@ -113,7 +106,6 @@ object Engine {
         mudou()
     }
 
-    /** para e devolve o toque ao normal se foi este monitor que deixou LIGADO. Devolve o codigo do aplica (2 = nada a fazer) */
     fun pararVol(): Int {
         var rc = 2
         synchronized(lock) {
@@ -165,12 +157,11 @@ object Engine {
 
     private fun toqueCarga(now: Boolean) {
         if (!Prefs.cargaAtivo) { prevCarga = null; return }
-        // qual lado e o LIGADO: "tirou" = carregador DESLIGADO · "colocou" = carregador LIGADO
         val want = if (Prefs.cargaGatilho == "colocou") (if (now) "rapido" else "normal") else (if (!now) "rapido" else "normal")
         val prev = prevCarga
         var faz = ""
         if (prev != null && now != prev) faz = "mudou"
-        else if (Prefs.markCarga && want == "normal") faz = "corrige"      // deixou LIGADO e o carregador ja esta do lado normal
+        else if (Prefs.markCarga && want == "normal") faz = "corrige"
         if (faz.isEmpty()) { prevCarga = now; return }
 
         val tinha = Prefs.markCarga
@@ -182,7 +173,7 @@ object Engine {
         if (rc != 1) {
             prevCarga = now
             tentCarga = 0
-            if (want == "normal" && tinha) {                         // fechou uma repeticao (ligou e voltou)
+            if (want == "normal" && tinha) {
                 var rep = Prefs.cargaRep
                 if (rep > 0) {
                     rep -= 1
@@ -200,7 +191,7 @@ object Engine {
         } else {
             tentCarga += 1
             NLog.add("toque-carga", "nao consegui por o toque $want (tentativa $tentCarga)")
-            if (tentCarga >= 3) {                                   // desiste desta vez (nao fica tentando pra sempre)
+            if (tentCarga >= 3) {
                 prevCarga = now
                 tentCarga = 0
                 if (faz == "corrige") Prefs.markCarga = false
@@ -208,7 +199,7 @@ object Engine {
         }
     }
 
-    // ======================= MODO CARREGADOR (density + FF) =======================
+    // ======================= MODO CARREGADOR =======================
     private var prevMc: Boolean? = null
     private var tentMc = 0
 
@@ -219,7 +210,7 @@ object Engine {
             Prefs.mcCycles = ciclos
             Prefs.mcCyclesTotal = ciclos
             Prefs.mcAtivo = true
-            prevMc = Power.plugged(app)          // ligado agora = espera tirar e ligar de novo
+            prevMc = Power.plugged(app)
             tentMc = 0
             gesto.clear()
             gestoT.clear()
@@ -229,13 +220,12 @@ object Engine {
         mudou()
     }
 
-    /** para o modo carregador e devolve a density. false = nao deu pra devolver (a tela fica marcada pra restaurar) */
     fun pararMc(): Boolean {
         var ok = true
         synchronized(lock) {
             if (Prefs.densOrig != null) {
                 ok = Adb.ensure(app) && MC.densOff()
-                if (ok) Notif.say(app, "MODO CARREGADOR PARADO") else NLog.add("carregador", "nao consegui devolver a density (restaure em MODO CARREGADOR)")
+                if (ok) Notif.say(app, "MODO CARREGADOR PARADO") else NLog.add("carregador", "nao consegui devolver a density")
             }
             Prefs.mcAtivo = false
             Prefs.mcCycles = 0
@@ -252,7 +242,7 @@ object Engine {
         if (Prefs.mcCycles <= 0) { pararMc(); return }
         val prev = prevMc
         if (prev == null) { prevMc = now; return }
-        if (now && !prev) {                                          // LIGOU o carregador
+        if (now && !prev) {
             val dens = Prefs.mcDens
             val ok = Adb.ensure(app) && MC.densOn(dens)
             if (ok) {
@@ -265,10 +255,10 @@ object Engine {
             } else {
                 tentMc += 1
                 NLog.add("carregador", "nao consegui aplicar a density $dens (tentativa $tentMc) ${Adb.lastError}")
-                if (tentMc >= 3) { prevMc = now; tentMc = 0 }        // desiste desta vez
+                if (tentMc >= 3) { prevMc = now; tentMc = 0 }
             }
             mudou()
-        } else if (!now && prev) {                                    // TIROU o carregador
+        } else if (!now && prev) {
             if (Prefs.densOrig != null) {
                 if (Adb.ensure(app) && MC.densOff()) {
                     gesto.clear()
@@ -280,12 +270,11 @@ object Engine {
                     prevMc = now
                     if (c <= 0) pararMc()
                     mudou()
-                }                                                     // se nao voltou, tenta de novo no proximo ciclo
+                }
             } else prevMc = now
         } else prevMc = now
     }
 
-    // ======================= CICLO (1 vez por segundo, chamado pelo servico) =======================
     fun tick() {
         if (!License.valid()) return
         synchronized(lock) {
@@ -295,17 +284,16 @@ object Engine {
         }
     }
 
-    /** evento do receptor de carregador (resposta imediata, sem esperar o proximo ciclo) */
     fun carregador() { post { tick() } }
 
-    /** texto curto do que esta rodando (notificacao fixa) */
     fun resumo(): String {
         val l = ArrayList<String>()
         if (Prefs.volAtivo) l.add("VOLUME")
         if (Prefs.cargaAtivo) l.add("TOQUE/CARREGADOR")
         if (Prefs.mcAtivo) l.add("MODO CARREGADOR")
         if (Prefs.otmAuto) l.add("OTIMIZACAO AUTO")
-        if (EngineBypass.resumo().isNotEmpty()) l.add(EngineBypass.resumo())
+        if (Prefs.bypassAtivo) l.add("BYPASS(${Prefs.bypassGatilho})")
+        if (Prefs.bypassVolAtivo) l.add("BYPASS-VOLUME")
         return if (l.isEmpty()) "nada ligado" else l.joinToString(" · ")
     }
 }
