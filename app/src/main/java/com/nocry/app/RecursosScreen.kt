@@ -43,7 +43,6 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
                 act.startActivity(intent)
             }, 8)
         } else {
-            // 👇 VERIFICA O ADB E MOSTRA O STATUS
             if (!Adb.connected) {
                 add(Ui.text(c, "⚠️ ADB DESCONECTADO! Vá em CONEXÃO e conecte antes de instalar.", 13f, Ui.WARN, true), 8)
                 add(Ui.button(c, "IR PARA CONEXÃO", Ui.Kind.PRIMARY) {
@@ -67,6 +66,8 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
             add(Ui.button(c, "INSTALAR SUJA (AUTOMÁTICO)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
                 if (ocupado) return@button
+                Ui.toast(act, "CLICOU! INICIANDO...") // TOAST DE TESTE
+                
                 if (!Adb.connected) {
                     Ui.toast(act, "ADB desconectado! Conecte na aba CONEXÃO.")
                     return@button
@@ -85,6 +86,8 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
             add(Ui.button(c, "INSTALAR LIMPA (AUTOMÁTICO)", Ui.Kind.GHOST, R.drawable.ic_stop) {
                 if (ocupado) return@button
+                Ui.toast(act, "CLICOU! INICIANDO...") // TOAST DE TESTE
+                
                 if (!Adb.connected) {
                     Ui.toast(act, "ADB desconectado! Conecte na aba CONEXÃO.")
                     return@button
