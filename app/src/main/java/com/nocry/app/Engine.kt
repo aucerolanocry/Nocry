@@ -89,6 +89,7 @@ object Engine {
                 aplicaVol("normal", "VOL- ${nd}x")
             }
         }
+        EngineBypass.onVolume(up, now)
     }
 
     private fun aplicaVol(modo: String, quem: String) {
@@ -304,6 +305,7 @@ object Engine {
         if (Prefs.cargaAtivo) l.add("TOQUE/CARREGADOR")
         if (Prefs.mcAtivo) l.add("MODO CARREGADOR")
         if (Prefs.otmAuto) l.add("OTIMIZACAO AUTO")
+        if (EngineBypass.resumo().isNotEmpty()) l.add(EngineBypass.resumo())
         return if (l.isEmpty()) "nada ligado" else l.joinToString(" · ")
     }
 }
