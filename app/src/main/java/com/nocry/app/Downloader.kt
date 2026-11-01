@@ -18,21 +18,39 @@ object Downloader {
     private const val DEST_LIMPA_MAX      = "/storage/emulated/0/MIUI/BugReportCache/draft"
     private const val DEST_SUJA_MAX       = "/storage/emulated/0/MIUI/BugReportCache/image"
 
-    // 👇 MUDANÇA: Busca o ID do arquivo pelo nome, mas com tolerância a variações
     private fun obterAssetId(nomeArquivo: String): String? {
         return try {
             val urlApi = URL(API_ASSETS)
             val conn = urlApi.openConnection() as HttpURLConnection
             conn.setRequestProperty("Authorization", "Bearer $TOKEN")
             conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            
             if (conn.responseCode != 200) {
                 NLog.add("download", "HTTP ${conn.responseCode} ao buscar release")
                 return null
             }
+            
             val json = conn.inputStream.bufferedReader().readText()
-            // Busca o bloco do asset que contém o nome do arquivo e pega o ID
-            val regex = "\"name\"\\s*:\\s*\"${nomeArquivo.replace(".", "\\.")}\"\\s*,\\s*\"[^\"]*\"\\s*:\\s*[^,]+,\\s*\"id\"\\s*:\\s*(\\d+)".toRegex()
-            regex.find(json)?.groupValues?.get(1)
+            
+            // 👇 A MÁGICA AQUI: Procura o bloco que contém o nome do arquivo e pega o ID
+            // A regex busca: "name": "sujasc.zip" ... "id": 123456
+            val regex = Regex("\"name\"\\s*:\\s*\"${nomeArquivo.replace(".", "\\.")}\"[^}]*?\"id\"\\s*:\\s*(\\d+)")
+            val match = regex.find(json)
+            
+            if (match != null) {
+                return match.groupValues[1]
+            }
+            
+            // Se não achou pelo nome exato, tenta achar por "contains"
+            val regex2 = Regex("\"name\"\\s*:\\s*\"([^\"]*${nomeArquivo.replace(".", "\\.")}[^\"]*)\"[^}]*?\"id\"\\s*:\\s*(\\d+)")
+            val match2 = regex2.find(json)
+            if (match2 != null) {
+                NLog.add("download", "Achou por similaridade: ${match2.groupValues[1]}")
+                return match2.groupValues[2]
+            }
+            
+            NLog.add("download", "Asset $nomeArquivo nao encontrado. JSON: ${json.take(500)}")
+            null
         } catch (e: Exception) {
             NLog.add("download", "erro ao buscar id: ${e.message}")
             null
@@ -45,7 +63,7 @@ object Downloader {
                 NLog.add("download", "Token nao configurado")
                 return false
             }
-            val id = obterAssetId(nomeArquivo) ?: return false.also { NLog.add("download", "Asset $nomeArquivo nao encontrado") }
+            val id = obterAssetId(nomeArquivo) ?: return false
 
             val urlDownload = URL("https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/$id")
             val conn = urlDownload.openConnection() as HttpURLConnection
