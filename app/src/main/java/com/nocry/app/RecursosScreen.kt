@@ -148,7 +148,6 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    // Função de extrair (com rename automático se necessário)
     private fun extrair(arquivo: File, destino: String, pastaRaizEsperada: String): Boolean {
         return try {
             val destinoDir = File(destino)
@@ -158,8 +157,6 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
                 var entry = zip.nextEntry
                 while (entry != null) {
                     val nome = entry.name
-                    
-                    // Remove a pasta raiz se existir (ex: sujaffmax/ ou android/)
                     val prefixo = if (pastaRaizEsperada.isNotEmpty() && nome.startsWith("$pastaRaizEsperada/")) "$pastaRaizEsperada/" else ""
                     val caminhoLimpo = if (prefixo.isNotEmpty()) nome.substringAfter(prefixo) else nome
                     
