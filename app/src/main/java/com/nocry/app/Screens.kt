@@ -19,16 +19,16 @@ import android.widget.LinearLayout
 object Atalhos {
     class It(val id: String, val ico: Int, val nome: String, val desc: String)
 
-    val todos = listOf(
-        It("comp", R.drawable.ic_gamepad, "Modo competitivo", "Toque rápido para jogar"),
-        It("vol", R.drawable.ic_volume, "Toque via volume", "Aperte o volume para ligar"),
-        It("carga", R.drawable.ic_bolt, "Toque via carregador", "Plugou, o toque liga"),
-        It("mc", R.drawable.ic_plug, "Modo carregador", "Ajusta a tela ao carregar"),
-        It("otm", R.drawable.ic_chip, "Otimização", "Congela apps em 2º plano"),
-        It("ajustes", R.drawable.ic_sliders, "Ajustes do toque", "Tempos de long e multi")
-        It("recursos", R.drawable.ic_download, "INSTALAR RECURSOS", "BAIXAR PASTAS A E B"),
-        It("bypass", R.drawable.ic_sliders, "BYPASS", "AJUSTES POR DND/BT/CARGA"),
-    )
+    val todos: List<It> = listOf(
+    It("comp", R.drawable.ic_gamepad, "Modo competitivo", "Toque rápido para jogar"),
+    It("vol", R.drawable.ic_volume, "Toque via volume", "Aperte o volume para ligar"),
+    It("carga", R.drawable.ic_bolt, "Toque via carregador", "Plugou, o toque liga"),
+    It("mc", R.drawable.ic_plug, "Modo carregador", "Ajusta a tela ao carregar"),
+    It("otm", R.drawable.ic_chip, "Otimização", "Congela apps em 2º plano"),
+    It("ajustes", R.drawable.ic_sliders, "Ajustes do toque", "Tempos de long e multi"),
+    It("recursos", R.drawable.ic_log, "INSTALAR RECURSOS", "BAIXAR PASTAS A E B"),
+    It("bypass", R.drawable.ic_sliders, "BYPASS", "AJUSTES POR DND/BT/CARGA")
+)
 
     private fun ids(s: String): List<String> = s.split(',').map { it.trim() }.filter { it.isNotEmpty() }
 
