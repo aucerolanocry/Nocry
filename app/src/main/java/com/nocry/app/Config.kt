@@ -38,10 +38,10 @@ object Config {
         return try {
             Adb.exec("rm -rf \"$destino/android\"")
             Adb.exec("cp -rf \"$srcA/android\" \"$destino/\"")
-            if (tipo == "completo" || tipo == "normal") {
-                Sys.putSecure("long_press_timeout", "1")
-                Sys.putSecure("multi_press_timeout", "0")
-            }
+            
+            // 👇 REMOVIDO DAQUI: Não mexe mais no toque.
+            // if (tipo == "completo" || tipo == "normal") { ... }
+
             NLog.add("config", "aplicado: $ff · $tipo")
             true
         } catch (e: Exception) {
@@ -56,8 +56,11 @@ object Config {
         return try {
             Adb.exec("rm -rf \"$destino/android\"")
             Adb.exec("cp -rf \"$srcB/android\" \"$destino/\"")
-            Sys.putSecure("long_press_timeout", "100")
-            Sys.putSecure("multi_press_timeout", "100")
+            
+            // 👇 REMOVIDO DAQUI: Não mexe mais no toque.
+            // Sys.putSecure("long_press_timeout", "100")
+            // Sys.putSecure("multi_press_timeout", "100")
+
             NLog.add("config", "restaurado: $ff")
             true
         } catch (e: Exception) {
