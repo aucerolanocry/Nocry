@@ -1,13 +1,24 @@
 package com.nocry.app
 
+import android.os.Handler
+import android.os.Looper
+
 class RecursosScreen(a: MainActivity) : Screen(a) {
     override val titulo = "INSTALAR RECURSOS"
 
     private var ff = "normal"
     private var log = ""
     private var ocupado = false
+    private val h = Handler(Looper.getMainLooper())
 
     override fun key(): String = "$ff|$log|$ocupado"
+
+    private fun atualizaTela(novoLog: String) {
+        h.post {
+            log = novoLog
+            redesenha()
+        }
+    }
 
     override fun render() {
         limpa()
@@ -25,16 +36,18 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
         add(Ui.label(c, "ESCOLHA O FREE FIRE"), 18)
         add(Ui.segmento(c, listOf("NORMAL", "MAX"), if (ff == "normal") 0 else 1) { i ->
+            if (ocupado) return@segmento
             ff = if (i == 0) "normal" else "max"
             redesenha()
         }, 8)
 
         add(Ui.button(c, "BAIXAR PASTA SUJA (XIT)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
             if (ocupado) return@button
-            ocupado = true; log = ""; redesenha()
+            ocupado = true; log = "INICIANDO..."; redesenha()
+            
             Bg.run({
-                if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> Bg.ui { log = msg; redesenha() } }
-                else Downloader.baixarPastaSujaMax { msg -> Bg.ui { log = msg; redesenha() } }
+                if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> atualizaTela(msg) }
+                else Downloader.baixarPastaSujaMax { msg -> atualizaTela(msg) }
             }) { ok ->
                 ocupado = false
                 log = if (ok) "PASTA SUJA INSTALADA COM SUCESSO!" else "FALHA AO BAIXAR PASTA SUJA"
@@ -44,10 +57,11 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
         add(Ui.button(c, "BAIXAR PASTA LIMPA (RESTAURAR)", Ui.Kind.GHOST, R.drawable.ic_stop) {
             if (ocupado) return@button
-            ocupado = true; log = ""; redesenha()
+            ocupado = true; log = "INICIANDO..."; redesenha()
+            
             Bg.run({
-                if (ff == "normal") Downloader.baixarPastaLimpaNormal { msg -> Bg.ui { log = msg; redesenha() } }
-                else Downloader.baixarPastaLimpaMax { msg -> Bg.ui { log = msg; redesenha() } }
+                if (ff == "normal") Downloader.baixarPastaLimpaNormal { msg -> atualizaTela(msg) }
+                else Downloader.baixarPastaLimpaMax { msg -> atualizaTela(msg) }
             }) { ok ->
                 ocupado = false
                 log = if (ok) "PASTA LIMPA INSTALADA COM SUCESSO!" else "FALHA AO BAIXAR PASTA LIMPA"
@@ -57,14 +71,15 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
         add(Ui.button(c, "BAIXAR TUDO DE UMA VEZ", Ui.Kind.PRIMARY, R.drawable.ic_download) {
             if (ocupado) return@button
-            ocupado = true; log = ""; redesenha()
+            ocupado = true; log = "INICIANDO..."; redesenha()
+            
             Bg.run({
-                val okA = if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> Bg.ui { log = msg; redesenha() } }
-                          else Downloader.baixarPastaSujaMax { msg -> Bg.ui { log = msg; redesenha() } }
+                val okA = if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> atualizaTela(msg) }
+                          else Downloader.baixarPastaSujaMax { msg -> atualizaTela(msg) }
                 
                 if (okA) {
-                    if (ff == "normal") Downloader.baixarPastaLimpaNormal { msg -> Bg.ui { log = msg; redesenha() } }
-                    else Downloader.baixarPastaLimpaMax { msg -> Bg.ui { log = msg; redesenha() } }
+                    if (ff == "normal") Downloader.baixarPastaLimpaNormal { msg -> atualizaTela(msg) }
+                    else Downloader.baixarPastaLimpaMax { msg -> atualizaTela(msg) }
                 } else false
             }) { ok ->
                 ocupado = false
