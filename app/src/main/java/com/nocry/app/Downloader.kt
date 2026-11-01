@@ -18,6 +18,7 @@ object Downloader {
     private const val DEST_LIMPA_MAX      = "/storage/emulated/0/MIUI/BugReportCache/draft"
     private const val DEST_SUJA_MAX       = "/storage/emulated/0/MIUI/BugReportCache/image"
 
+    // 👇 Função que pega o ID do arquivo na API
     private fun obterAssetId(nomeArquivo: String): String? {
         return try {
             val urlApi = URL(API_ASSETS)
@@ -31,70 +32,91 @@ object Downloader {
             }
             
             val json = conn.inputStream.bufferedReader().readText()
-            
-            // 👇 A MÁGICA AQUI: Procura o bloco que contém o nome do arquivo e pega o ID
-            // A regex busca: "name": "sujasc.zip" ... "id": 123456
             val regex = Regex("\"name\"\\s*:\\s*\"${nomeArquivo.replace(".", "\\.")}\"[^}]*?\"id\"\\s*:\\s*(\\d+)")
-            val match = regex.find(json)
-            
-            if (match != null) {
-                return match.groupValues[1]
-            }
-            
-            // Se não achou pelo nome exato, tenta achar por "contains"
-            val regex2 = Regex("\"name\"\\s*:\\s*\"([^\"]*${nomeArquivo.replace(".", "\\.")}[^\"]*)\"[^}]*?\"id\"\\s*:\\s*(\\d+)")
-            val match2 = regex2.find(json)
-            if (match2 != null) {
-                NLog.add("download", "Achou por similaridade: ${match2.groupValues[1]}")
-                return match2.groupValues[2]
-            }
-            
-            NLog.add("download", "Asset $nomeArquivo nao encontrado. JSON: ${json.take(500)}")
-            null
+            regex.find(json)?.groupValues?.get(1)
         } catch (e: Exception) {
             NLog.add("download", "erro ao buscar id: ${e.message}")
             null
         }
     }
 
+    // 👇 Função que baixa o arquivo pelo ID (SEGUINDO REDIRECIONAMENTO)
     private fun baixar(nomeArquivo: String, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
         return try {
             if (TOKEN.isEmpty() || TOKEN == "null") {
                 NLog.add("download", "Token nao configurado")
                 return false
             }
-            val id = obterAssetId(nomeArquivo) ?: return false
+            val id = obterAssetId(nomeArquivo) ?: return false.also { NLog.add("download", "Asset $nomeArquivo nao encontrado") }
 
-            val urlDownload = URL("https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/$id")
-            val conn = urlDownload.openConnection() as HttpURLConnection
-            conn.setRequestProperty("Authorization", "Bearer $TOKEN")
-            conn.setRequestProperty("Accept", "application/octet-stream")
-            conn.connect()
+            // Passo 1: Pede pra API pra onde ela redireciona
+            val urlApi = URL("https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/$id")
+            val connApi = urlApi.openConnection() as HttpURLConnection
+            connApi.setRequestProperty("Authorization", "Bearer $TOKEN")
+            connApi.setRequestProperty("Accept", "application/octet-stream")
+            connApi.instanceFollowRedirects = false // Não segue automaticamente
+            connApi.connect()
 
-            if (conn.responseCode != 200) {
-                NLog.add("download", "HTTP ${conn.responseCode} ao baixar $nomeArquivo")
+            var urlFinal = urlApi
+
+            if (connApi.responseCode == 302 || connApi.responseCode == 301) {
+                // Se redirecionou, pega a nova URL
+                val location = connApi.getHeaderField("Location")
+                if (location != null) {
+                    urlFinal = URL(location)
+                }
+            } else if (connApi.responseCode == 200) {
+                // Se já veio o arquivo direto, usa essa conexão
+                return baixarDoStream(connApi.inputStream, connApi.contentLengthLong, destino, onProgress).also {
+                    connApi.disconnect()
+                }
+            } else {
+                NLog.add("download", "HTTP ${connApi.responseCode} ao pedir o arquivo $nomeArquivo")
+                connApi.disconnect()
+                return false
+            }
+            connApi.disconnect()
+
+            // Passo 2: Baixa da URL final (sem token, pois é outro servidor)
+            val connFinal = urlFinal.openConnection() as HttpURLConnection
+            connFinal.instanceFollowRedirects = true
+            connFinal.connect()
+
+            if (connFinal.responseCode != 200) {
+                NLog.add("download", "HTTP ${connFinal.responseCode} ao baixar do redirecionamento")
+                connFinal.disconnect()
                 return false
             }
 
-            val total = conn.contentLengthLong
+            val ok = baixarDoStream(connFinal.inputStream, connFinal.contentLengthLong, destino, onProgress)
+            connFinal.disconnect()
+            ok
+        } catch (e: Exception) {
+            NLog.add("download", "falha: ${e.message}")
+            false
+        }
+    }
+
+    // 👇 Função auxiliar pra salvar o arquivo
+    private fun baixarDoStream(input: java.io.InputStream, total: Long, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
+        return try {
             var baixado = 0L
             destino.parentFile?.mkdirs()
-            conn.inputStream.use { input ->
+            input.use { inp ->
                 FileOutputStream(destino).use { output ->
                     val buffer = ByteArray(8192)
                     var lido: Int
-                    while (input.read(buffer).also { lido = it } > 0) {
+                    while (inp.read(buffer).also { lido = it } > 0) {
                         output.write(buffer, 0, lido)
                         baixado += lido
                         onProgress(baixado, total)
                     }
                 }
             }
-            conn.disconnect()
             NLog.add("download", "baixado: ${destino.name} (${baixado / 1024} KB)")
             true
         } catch (e: Exception) {
-            NLog.add("download", "falha: ${e.message}")
+            NLog.add("download", "falha ao salvar: ${e.message}")
             false
         }
     }
