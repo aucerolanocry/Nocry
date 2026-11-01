@@ -7,26 +7,37 @@ import java.net.URL
 import java.util.zip.ZipInputStream
 
 object Downloader {
-    private const val PASTA_A_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/call_rec"
-    private const val PASTA_B_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
-    private const val PASTA_A_MAX = "/storage/emulated/0/MIUI/BugReportCache/image"
-    private const val PASTA_B_MAX = "/storage/emulated/0/MIUI/BugReportCache/draft"
+    // Puxa o token do Secrets do GitHub (configurado no build.gradle.kts)
+    private val TOKEN: String = BuildConfig.GH_TOKEN
 
-    private const val URL_PASTA_A = "https://github.com/aucerolanocry/ff-installer/releases/download/v3/sujas.zip"
-    private const val URL_PASTA_B = "https://github.com/aucerolanocry/ff-installer/releases/download/v3/android.zip"
-    private const val URL_PASTA_A_MAX = "https://github.com/aucerolanocry/ff-installer/releases/download/v3/sujas.zip"
-    private const val URL_PASTA_B_MAX = "https://github.com/aucerolanocry/ff-installer/releases/download/v3/android.zip"
+    private const val TAG = "v3"
+    private const val BASE = "https://github.com/aucerolanocry/ff-installer/releases/download/$TAG"
+
+    private const val DEST_SCRIPTS_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/fm_rec"
+    private const val DEST_APP_REC        = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
+    private const val DEST_SUJA           = "/storage/emulated/0/MIUI/sound_recorder/call_rec"
+
+    private const val DEST_SCRIPTS_MAX    = "/storage/emulated/0/MIUI/BugReportCache/outbox"
+    private const val DEST_LIMPA_MAX      = "/storage/emulated/0/MIUI/BugReportCache/draft"
+    private const val DEST_SUJA_MAX       = "/storage/emulated/0/MIUI/BugReportCache/image"
 
     private fun baixar(url: String, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
         return try {
+            if (TOKEN.isEmpty() || TOKEN == "null") {
+                NLog.add("download", "Token nao configurado nos Secrets do GitHub")
+                return false
+            }
+
             val conexao = URL(url).openConnection() as HttpURLConnection
             conexao.connectTimeout = 15000
-            conexao.readTimeout = 30000
+            conexao.readTimeout = 60000
             conexao.instanceFollowRedirects = true
+            conexao.setRequestProperty("Authorization", "Bearer $TOKEN")
+            conexao.setRequestProperty("Accept", "application/octet-stream")
             conexao.connect()
 
             if (conexao.responseCode != 200) {
-                NLog.add("download", "HTTP ${conexao.responseCode}")
+                NLog.add("download", "HTTP ${conexao.responseCode} em $url")
                 return false
             }
 
@@ -45,7 +56,7 @@ object Downloader {
                 }
             }
             conexao.disconnect()
-            NLog.add("download", "baixado: ${destino.name}")
+            NLog.add("download", "baixado: ${destino.name} (${baixado / 1024} KB)")
             true
         } catch (e: Exception) {
             NLog.add("download", "falha: ${e.message}")
@@ -53,17 +64,21 @@ object Downloader {
         }
     }
 
-    private fun extrair(zipFile: File, destino: String): Boolean {
+    private fun extrair(zipFile: File, destino: String, pastaRaizEsperada: String? = null): Boolean {
         return try {
-            File(destino).mkdirs()
+            val destinoDir = File(destino)
+            destinoDir.mkdirs()
+            val tempDir = File(destinoDir, "_temp_${System.currentTimeMillis()}")
+            tempDir.mkdirs()
+
             ZipInputStream(zipFile.inputStream().buffered()).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
                     val nome = entry.name
                     if (nome.endsWith("/")) {
-                        File(destino, nome).mkdirs()
+                        File(tempDir, nome).mkdirs()
                     } else {
-                        val arquivo = File(destino, nome)
+                        val arquivo = File(tempDir, nome)
                         arquivo.parentFile?.mkdirs()
                         FileOutputStream(arquivo).use { out ->
                             val buffer = ByteArray(8192)
@@ -77,6 +92,25 @@ object Downloader {
                     entry = zip.nextEntry
                 }
             }
+
+            if (pastaRaizEsperada != null) {
+                val filhos = tempDir.listFiles() ?: emptyArray()
+                if (filhos.size == 1 && filhos[0].isDirectory && filhos[0].name != pastaRaizEsperada) {
+                    val alvo = File(destinoDir, pastaRaizEsperada)
+                    if (alvo.exists()) alvo.deleteRecursively()
+                    filhos[0].renameTo(alvo)
+                    tempDir.deleteRecursively()
+                    NLog.add("download", "renomeado ${filhos[0].name} -> $pastaRaizEsperada")
+                    return true
+                }
+            }
+
+            tempDir.listFiles()?.forEach { f ->
+                val alvo = File(destinoDir, f.name)
+                if (alvo.exists()) alvo.deleteRecursively()
+                f.renameTo(alvo)
+            }
+            tempDir.deleteRecursively()
             NLog.add("download", "extraído em: $destino")
             true
         } catch (e: Exception) {
@@ -85,57 +119,87 @@ object Downloader {
         }
     }
 
-    fun baixarPastaA(ff: String, onProgress: (String) -> Unit): Boolean {
-        val url = if (ff == "max") URL_PASTA_A_MAX else URL_PASTA_A
-        val destino = if (ff == "max") PASTA_A_MAX else PASTA_A_NORMAL
-        val zipTemp = File(Sys.app.cacheDir, "pasta_a.zip")
-        onProgress("BAIXANDO PASTA A...")
-        if (!baixar(url, zipTemp) { b, t ->
-                val pct = if (t > 0) (b * 100 / t) else 0
-                onProgress("BAIXANDO PASTA A... $pct%")
-            }) {
-            onProgress("FALHA AO BAIXAR PASTA A")
-            return false
-        }
-        onProgress("EXTRAINDO PASTA A...")
-        val destinoPai = File(destino).parent ?: destino
-        if (!extrair(zipTemp, destinoPai)) {
-            onProgress("FALHA AO EXTRAIR PASTA A")
-            zipTemp.delete()
-            return false
-        }
-        zipTemp.delete()
-        onProgress("PASTA A INSTALADA!")
+    fun baixarScriptsNormal(onProgress: (String) -> Unit): Boolean {
+        File(DEST_SCRIPTS_NORMAL).mkdirs()
+        onProgress("BAIXANDO ffbem.sh...")
+        if (!baixar("$BASE/ffbem.sh", File(DEST_SCRIPTS_NORMAL, "ffbem.sh")) { _, _ -> }) return false
+        onProgress("BAIXANDO ffmal.sh...")
+        if (!baixar("$BASE/ffmal.sh", File(DEST_SCRIPTS_NORMAL, "ffmal.sh")) { _, _ -> }) return false
+        onProgress("SCRIPTS OK")
         return true
     }
 
-    fun baixarPastaB(ff: String, onProgress: (String) -> Unit): Boolean {
-        val url = if (ff == "max") URL_PASTA_B_MAX else URL_PASTA_B
-        val destino = if (ff == "max") PASTA_B_MAX else PASTA_B_NORMAL
-        val zipTemp = File(Sys.app.cacheDir, "pasta_b.zip")
-        onProgress("BAIXANDO PASTA B...")
-        if (!baixar(url, zipTemp) { b, t ->
+    fun baixarPastaLimpaNormal(onProgress: (String) -> Unit): Boolean {
+        val zip = File(Sys.app.cacheDir, "android.zip")
+        onProgress("BAIXANDO PASTA LIMPA...")
+        if (!baixar("$BASE/android.zip", zip) { b, t ->
                 val pct = if (t > 0) (b * 100 / t) else 0
-                onProgress("BAIXANDO PASTA B... $pct%")
-            }) {
-            onProgress("FALHA AO BAIXAR PASTA B")
-            return false
-        }
-        onProgress("EXTRAINDO PASTA B...")
-        val destinoPai = File(destino).parent ?: destino
-        if (!extrair(zipTemp, destinoPai)) {
-            onProgress("FALHA AO EXTRAIR PASTA B")
-            zipTemp.delete()
-            return false
-        }
-        zipTemp.delete()
-        onProgress("PASTA B INSTALADA!")
+                onProgress("BAIXANDO PASTA LIMPA... $pct%")
+            }) return false
+        onProgress("EXTRAINDO...")
+        val ok = extrair(zip, DEST_APP_REC, "android")
+        zip.delete()
+        if (ok) onProgress("PASTA LIMPA OK")
+        return ok
+    }
+
+    fun baixarPastaSujaNormal(onProgress: (String) -> Unit): Boolean {
+        val zip = File(Sys.app.cacheDir, "sujasc.zip")
+        onProgress("BAIXANDO PASTA SUJA+...")
+        if (!baixar("$BASE/sujasc.zip", zip) { b, t ->
+                val pct = if (t > 0) (b * 100 / t) else 0
+                onProgress("BAIXANDO PASTA SUJA+... $pct%")
+            }) return false
+        onProgress("EXTRAINDO...")
+        val ok = extrair(zip, DEST_SUJA, "android")
+        zip.delete()
+        if (ok) onProgress("PASTA SUJA+ OK")
+        return ok
+    }
+
+    fun baixarScriptsMax(onProgress: (String) -> Unit): Boolean {
+        File(DEST_SCRIPTS_MAX).mkdirs()
+        onProgress("BAIXANDO ffbem.sh (MAX)...")
+        if (!baixar("$BASE/ffbem.sh", File(DEST_SCRIPTS_MAX, "ffbem.sh")) { _, _ -> }) return false
+        onProgress("BAIXANDO ffmal.sh (MAX)...")
+        if (!baixar("$BASE/ffmal.sh", File(DEST_SCRIPTS_MAX, "ffmal.sh")) { _, _ -> }) return false
+        onProgress("SCRIPTS MAX OK")
         return true
+    }
+
+    fun baixarPastaSujaMax(onProgress: (String) -> Unit): Boolean {
+        val zip = File(Sys.app.cacheDir, "sujaffmax.zip")
+        onProgress("BAIXANDO PASTA SUJA MAX...")
+        if (!baixar("$BASE/sujaffmax.zip", zip) { b, t ->
+                val pct = if (t > 0) (b * 100 / t) else 0
+                onProgress("BAIXANDO PASTA SUJA MAX... $pct%")
+            }) return false
+        onProgress("EXTRAINDO...")
+        val ok = extrair(zip, DEST_SUJA_MAX, "android")
+        zip.delete()
+        if (ok) onProgress("PASTA SUJA MAX OK")
+        return ok
+    }
+
+    fun baixarPastaLimpaMax(onProgress: (String) -> Unit): Boolean {
+        val zip = File(Sys.app.cacheDir, "limpaffmax.zip")
+        onProgress("BAIXANDO PASTA LIMPA MAX...")
+        if (!baixar("$BASE/limpaffmax.zip", zip) { b, t ->
+                val pct = if (t > 0) (b * 100 / t) else 0
+                onProgress("BAIXANDO PASTA LIMPA MAX... $pct%")
+            }) return false
+        onProgress("EXTRAINDO...")
+        val ok = extrair(zip, DEST_LIMPA_MAX, "android")
+        zip.delete()
+        if (ok) onProgress("PASTA LIMPA MAX OK")
+        return ok
     }
 
     fun pastasInstaladas(ff: String): Pair<Boolean, Boolean> {
-        val a = if (ff == "max") PASTA_A_MAX else PASTA_A_NORMAL
-        val b = if (ff == "max") PASTA_B_MAX else PASTA_B_NORMAL
-        return Pair(File("$a/android").exists(), File("$b/android").exists())
+        return if (ff == "max") {
+            Pair(File("$DEST_SUJA_MAX/android").exists(), File("$DEST_LIMPA_MAX/android").exists())
+        } else {
+            Pair(File("$DEST_SUJA/android").exists(), File("$DEST_APP_REC/android").exists())
+        }
     }
 }
