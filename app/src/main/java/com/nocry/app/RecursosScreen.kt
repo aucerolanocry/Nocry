@@ -13,12 +13,8 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
     override fun key(): String = "$ff|$log|$ocupado"
 
-    // Atualiza a tela de forma segura, sem travar
     private fun atualizaTela(novoLog: String) {
-        h.post {
-            log = novoLog
-            redesenha()
-        }
+        h.post { log = novoLog; redesenha() }
     }
 
     override fun render() {
@@ -44,50 +40,28 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
         add(Ui.button(c, "BAIXAR PASTA SUJA (XIT)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
             if (ocupado) return@button
-            ocupado = true
-            log = "INICIANDO DOWNLOAD..."; redesenha()
-            
+            ocupado = true; log = "INICIANDO..."; redesenha()
             Bg.run({
-                if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> atualizaTela(msg) }
-                else Downloader.baixarPastaSujaMax { msg -> atualizaTela(msg) }
+                val nome = if (ff == "normal") "sujasc.zip" else "sujaffmax.zip"
+                val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/call_rec" else "/storage/emulated/0/MIUI/BugReportCache/image"
+                Downloader.baixarComAndroid(nome, destino, "android") { msg -> atualizaTela(msg) }
             }) { ok ->
                 ocupado = false
-                log = if (ok) "PASTA SUJA INSTALADA COM SUCESSO!" else "FALHA AO BAIXAR PASTA SUJA"
+                log = if (ok) "PASTA SUJA INSTALADA!" else "FALHA AO INSTALAR"
                 redesenha()
             }
         }, 18)
 
         add(Ui.button(c, "BAIXAR PASTA LIMPA (RESTAURAR)", Ui.Kind.GHOST, R.drawable.ic_stop) {
             if (ocupado) return@button
-            ocupado = true
-            log = "INICIANDO DOWNLOAD..."; redesenha()
-            
+            ocupado = true; log = "INICIANDO..."; redesenha()
             Bg.run({
-                if (ff == "normal") Downloader.baixarPastaLimpaNormal { msg -> atualizaTela(msg) }
-                else Downloader.baixarPastaLimpaMax { msg -> atualizaTela(msg) }
+                val nome = if (ff == "normal") "android.zip" else "limpaffmax.zip"
+                val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/app_rec" else "/storage/emulated/0/MIUI/BugReportCache/draft"
+                Downloader.baixarComAndroid(nome, destino, "android") { msg -> atualizaTela(msg) }
             }) { ok ->
                 ocupado = false
-                log = if (ok) "PASTA LIMPA INSTALADA COM SUCESSO!" else "FALHA AO BAIXAR PASTA LIMPA"
-                redesenha()
-            }
-        }, 10)
-
-        add(Ui.button(c, "BAIXAR TUDO DE UMA VEZ", Ui.Kind.PRIMARY, R.drawable.ic_download) {
-            if (ocupado) return@button
-            ocupado = true
-            log = "INICIANDO DOWNLOAD..."; redesenha()
-            
-            Bg.run({
-                val okA = if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> atualizaTela(msg) }
-                          else Downloader.baixarPastaSujaMax { msg -> atualizaTela(msg) }
-                
-                if (okA) {
-                    if (ff == "normal") Downloader.baixarPastaLimpaNormal { msg -> atualizaTela(msg) }
-                    else Downloader.baixarPastaLimpaMax { msg -> atualizaTela(msg) }
-                } else false
-            }) { ok ->
-                ocupado = false
-                log = if (ok) "TUDO INSTALADO COM SUCESSO!" else "FALHA EM UM DOS DOWNLOADS"
+                log = if (ok) "PASTA LIMPA INSTALADA!" else "FALHA AO INSTALAR"
                 redesenha()
             }
         }, 10)
