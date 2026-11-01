@@ -152,16 +152,20 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
         return try {
             val destinoDir = File(destino)
             destinoDir.mkdirs()
+            
+            val tempDir = File(destinoDir, "_temp_${System.currentTimeMillis()}")
+            tempDir.mkdirs()
 
             ZipInputStream(arquivo.inputStream().buffered()).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
                     val nome = entry.name
+                    
                     val prefixo = if (pastaRaizEsperada.isNotEmpty() && nome.startsWith("$pastaRaizEsperada/")) "$pastaRaizEsperada/" else ""
                     val caminhoLimpo = if (prefixo.isNotEmpty()) nome.substringAfter(prefixo) else nome
                     
                     if (caminhoLimpo.isNotEmpty() && !caminhoLimpo.endsWith("/")) {
-                        val f = File(destinoDir, caminhoLimpo)
+                        val f = File(tempDir, caminhoLimpo)
                         f.parentFile?.mkdirs()
                         FileOutputStream(f).use { out ->
                             val buffer = ByteArray(8192)
@@ -175,7 +179,20 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
                     entry = zip.nextEntry
                 }
             }
-            NLog.add("download", "extraído em: $destino")
+
+            // Cria a pasta 'android' e move tudo pra dentro dela
+            val pastaAndroid = File(destinoDir, "android")
+            pastaAndroid.mkdirs()
+            
+            tempDir.listFiles()?.forEach { f ->
+                val alvo = File(pastaAndroid, f.name)
+                if (alvo.exists()) alvo.deleteRecursively()
+                f.renameTo(alvo)
+            }
+            
+            tempDir.deleteRecursively()
+            
+            NLog.add("download", "extraído em: $destino/android")
             true
         } catch (e: Exception) {
             NLog.add("download", "falha extrair: ${e.message}")
