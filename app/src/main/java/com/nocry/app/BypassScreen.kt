@@ -8,7 +8,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
 
     override fun key(): String = listOf(
         Prefs.bypassAtivo, Prefs.bypassGatilho, Prefs.bypassFf, Prefs.bypassTipo,
-        Prefs.bypassMark, Prefs.bypassVolAtivo, Adb.connected
+        Prefs.bypassMark, Prefs.bypassVolAtivo, Prefs.bypassCliques, Adb.connected
     ).joinToString("|")
 
     override fun render() {
@@ -35,7 +35,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         cardGatilho("📵 DND", "QUANDO LIGAR O NÃO PERTURBE", "dnd")
         cardGatilho("🔵 BLUETOOTH", "QUANDO LIGAR O BLUETOOTH", "bt")
         cardGatilho("🔌 CARREGADOR", "TIRAR = APLICA · COLOCAR = RESTAURA", "carga")
-        cardGatilho("🔊 VOLUME", "VOL+ 3X = APLICA · VOL- 3X = RESTAURA", "volume")
+        cardGatilho("🔊 VOLUME", "VOL+ Nx = APLICA · VOL- Nx = RESTAURA", "volume")
 
         add(Ui.label(c, "ESCOLHA O FREE FIRE"), 18)
         add(Ui.segmento(c, listOf("NORMAL", "MAX"), if (Prefs.bypassFf == "normal") 0 else 1) { i ->
@@ -47,6 +47,13 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         add(Ui.segmento(c, listOf("COMPLETO", "NORMAL", "SIMPLES"),
             when (Prefs.bypassTipo) { "completo" -> 0; "normal" -> 1; else -> 2 }) { i ->
             Prefs.bypassTipo = when (i) { 0 -> "completo"; 1 -> "normal"; else -> "simples" }
+            redesenha()
+        }, 8)
+
+        add(Ui.label(c, "CLIQUES DO VOLUME (2 a 10)"), 18)
+        add(Ui.segmento(c, listOf("2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x"),
+            Prefs.bypassCliques - 2) { i ->
+            Prefs.bypassCliques = i + 2
             redesenha()
         }, 8)
 
@@ -68,7 +75,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
                 }
                 if (Prefs.bypassGatilho == "volume") {
                     Bg.run({ EngineBypass.iniciarVolume(); 0 }) { _ ->
-                        Ui.toast(act, "BYPASS ATIVO — VOL+ 3X APLICA")
+                        Ui.toast(act, "BYPASS ATIVO — VOL+ ${Prefs.bypassCliques}X APLICA")
                         redesenha()
                     }
                 } else {
