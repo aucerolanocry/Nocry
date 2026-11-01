@@ -23,13 +23,21 @@ object Downloader {
             val conn = url.openConnection() as HttpURLConnection
             conn.setRequestProperty("Authorization", "Bearer $TOKEN")
             conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            
             if (conn.responseCode != 200) {
                 NLog.add("download", "HTTP ${conn.responseCode} ao listar releases")
                 return null
             }
+            
             val json = conn.inputStream.bufferedReader().readText()
             val regex = Regex("\"name\"\\s*:\\s*\"${Regex.escape(nomeArquivo)}\"[^}]*?\"id\"\\s*:\\s*(\\d+)")
-            regex.find(json)?.groupValues?.get(1)
+            val match = regex.find(json)
+            
+            if (match != null) {
+                return match.groupValues[1]
+            }
+            NLog.add("download", "Asset $nomeArquivo nao encontrado no JSON")
+            null
         } catch (e: Exception) {
             NLog.add("download", "erro ao buscar id: ${e.message}")
             null
@@ -43,36 +51,53 @@ object Downloader {
                 return false
             }
 
-            val id = pegarAssetId(nomeArquivo) ?: run {
-                NLog.add("download", "Asset $nomeArquivo nao encontrado")
-                return false
-            }
-            NLog.add("download", "ID de $nomeArquivo: $id")
+            val id = pegarAssetId(nomeArquivo)
+            if (id == null) return false
 
             // 1. Pede o download pra API (ela vai redirecionar)
             val urlApi = URL("https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/$id")
             val connApi = urlApi.openConnection() as HttpURLConnection
             connApi.setRequestProperty("Authorization", "Bearer $TOKEN")
             connApi.setRequestProperty("Accept", "application/octet-stream")
-            connApi.instanceFollowRedirects = false // Não segue o redirecionamento automaticamente
+            connApi.instanceFollowRedirects = false // Não segue automaticamente
             connApi.connect()
 
-            // 2. Se redirecionou, pega a URL de destino
             var urlFinal = urlApi
+            var totalSize = 0L
+
             if (connApi.responseCode == 302 || connApi.responseCode == 301) {
                 val location = connApi.getHeaderField("Location")
                 if (location != null) {
                     urlFinal = URL(location)
                     NLog.add("download", "Redirecionado para: $location")
                 }
-            } else if (connApi.responseCode != 200) {
+            } else if (connApi.responseCode == 200) {
+                // Se veio 200 direto, usa a própria conexão
+                totalSize = connApi.contentLengthLong
+                var baixado = 0L
+                destino.parentFile?.mkdirs()
+                connApi.inputStream.use { input ->
+                    FileOutputStream(destino).use { output ->
+                        val buffer = ByteArray(8192)
+                        var lido: Int
+                        while (input.read(buffer).also { lido = it } > 0) {
+                            output.write(buffer, 0, lido)
+                            baixado += lido
+                            onProgress(baixado, totalSize)
+                        }
+                    }
+                }
+                connApi.disconnect()
+                NLog.add("download", "baixado: ${destino.name} (${baixado / 1024} KB)")
+                return true
+            } else {
                 NLog.add("download", "HTTP ${connApi.responseCode} ao pedir asset $id")
                 connApi.disconnect()
                 return false
             }
             connApi.disconnect()
 
-            // 3. Baixa da URL final (SEM token, pois é outro servidor)
+            // 2. Baixa da URL final SEM o token (porque é outro servidor)
             val connFinal = urlFinal.openConnection() as HttpURLConnection
             connFinal.instanceFollowRedirects = true
             connFinal.connect()
