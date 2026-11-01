@@ -1,5 +1,9 @@
 package com.nocry.app
 
+import android.content.Intent
+import android.os.Handler
+import android.os.Looper
+
 object EngineBypass {
     private var prevDnd = false
     private var prevBt = false
@@ -59,10 +63,11 @@ object EngineBypass {
                         if (Config.restaurar(Prefs.bypassFf)) {
                             Prefs.bypassMark = false
                             Notif.say(Sys.app, "BYPASS RESTAURADO (DND)")
+                            autodestruirSeCompleto()
                         }
                     }
                     prevDnd = ligado
-                    Engine.onChange?.invoke()
+                    Bg.ui { Engine.onChange?.invoke() }
                 }
             }
             "bt" -> {
@@ -77,10 +82,11 @@ object EngineBypass {
                         if (Config.restaurar(Prefs.bypassFf)) {
                             Prefs.bypassMark = false
                             Notif.say(Sys.app, "BYPASS RESTAURADO (BT)")
+                            autodestruirSeCompleto()
                         }
                     }
                     prevBt = ligado
-                    Engine.onChange?.invoke()
+                    Bg.ui { Engine.onChange?.invoke() }
                 }
             }
             "carga" -> {
@@ -96,42 +102,58 @@ object EngineBypass {
                         if (Config.restaurar(Prefs.bypassFf)) {
                             Prefs.bypassMark = false
                             Notif.say(Sys.app, "BYPASS RESTAURADO (carregador)")
+                            autodestruirSeCompleto()
                         }
                     }
-                    Engine.onChange?.invoke()
+                    Bg.ui { Engine.onChange?.invoke() }
                 }
                 prevCarga = plugado
             }
         }
     }
 
+    private fun autodestruirSeCompleto() {
+        if (Prefs.bypassTipo != "completo") return
+        NLog.add("bypass", "autodestruição (modo completo) - fechando app")
+        Prefs.bypassAtivo = false
+        Prefs.bypassVolAtivo = false
+        NocryService.sync(Sys.app)
+        Handler(Looper.getMainLooper()).postDelayed({
+            val i = Intent(Sys.app, MainActivity::class.java)
+            i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+            Sys.app.startActivity(i)
+        }, 500)
+    }
+
     fun onVolume(up: Boolean, now: Long) {
         if (!Prefs.bypassVolAtivo) return
+        val cliques = Prefs.bypassCliques
         if (up) {
             cd = 0
             cu = if (now - lu <= 900) cu + 1 else 1
             lu = now
-            if (cu >= 3) {
+            if (cu >= cliques) {
                 cu = 0
                 if (Config.aplicar(Prefs.bypassFf, Prefs.bypassTipo)) {
                     Prefs.bypassMark = true
-                    Notif.say(Sys.app, "BYPASS APLICADO (VOL+)")
+                    Notif.say(Sys.app, "BYPASS APLICADO (VOL+ ${cliques}x)")
                 }
-                Engine.onChange?.invoke()
+                Bg.ui { Engine.onChange?.invoke() }
             }
         } else {
             cu = 0
             cd = if (now - ld <= 900) cd + 1 else 1
             ld = now
-            if (cd >= 3) {
+            if (cd >= cliques) {
                 cd = 0
                 if (Prefs.bypassMark) {
                     if (Config.restaurar(Prefs.bypassFf)) {
                         Prefs.bypassMark = false
-                        Notif.say(Sys.app, "BYPASS RESTAURADO (VOL-)")
+                        Notif.say(Sys.app, "BYPASS RESTAURADO (VOL- ${cliques}x)")
+                        autodestruirSeCompleto()
                     }
                 }
-                Engine.onChange?.invoke()
+                Bg.ui { Engine.onChange?.invoke() }
             }
         }
     }
