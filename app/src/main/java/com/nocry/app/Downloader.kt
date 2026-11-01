@@ -20,6 +20,8 @@ object Downloader {
         return try {
             val url = URL("$BASE_URL/$nomeArquivo")
             val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 30000
+            conn.readTimeout = 30000
             conn.instanceFollowRedirects = true
             conn.connect()
 
@@ -31,12 +33,15 @@ object Downloader {
             val total = conn.contentLengthLong
             var baixado = 0L
             destino.parentFile?.mkdirs()
+
+            // 👇 A MÁGICA: Buffer de 1 MB e flush a cada bloco
             conn.inputStream.use { input ->
                 FileOutputStream(destino).use { output ->
-                    val buffer = ByteArray(8192)
+                    val buffer = ByteArray(1024 * 1024) // 1 MB
                     var lido: Int
                     while (input.read(buffer).also { lido = it } > 0) {
                         output.write(buffer, 0, lido)
+                        output.flush() // Força a gravação no cartão
                         baixado += lido
                         onProgress(baixado, total)
                     }
