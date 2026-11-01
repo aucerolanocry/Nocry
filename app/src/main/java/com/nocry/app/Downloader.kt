@@ -19,7 +19,7 @@ object Downloader {
 
             onProgress("INICIANDO...")
             val tempDir = "/sdcard/Download/nocry_temp"
-            Adb.exec("rm -rf $tempDir") // limpa antes
+            Adb.exec("rm -rf $tempDir")
             Adb.exec("mkdir -p $tempDir")
             
             val zipPath = "$tempDir/arquivo.zip"
@@ -39,24 +39,14 @@ object Downloader {
                 return false
             }
             
-            // 👇 A MÁGICA: Cria a pasta 'android' e move tudo pra dentro dela
+            // 👇 AQUI: Cria a pasta 'android' e move tudo pra dentro dela
             onProgress("ORGANIZANDO...")
             val pastaAndroid = "$destino/android"
-            Adb.exec("rm -rf \"$pastaAndroid\"") // apaga a antiga se existir
+            Adb.exec("rm -rf \"$pastaAndroid\"")
             Adb.exec("mkdir -p \"$pastaAndroid\"")
             
-            // Verifica se o zip tinha uma pasta raiz (ex: sujaffmax, limpaffmax)
-            // Se tiver, move o conteúdo dela. Se não, move tudo da extractDir
-            val raiz = pastaRaizEsperada
-            val checkRaiz = Adb.exec("test -d \"$extractDir/$raiz\"")
-            
-            if (checkRaiz.ok) {
-                // Tem a pasta raiz, move o conteúdo dela pra dentro de android/
-                Adb.exec("mv \"$extractDir/$raiz\"/* \"$pastaAndroid/\"")
-            } else {
-                // Não tem pasta raiz, move tudo
-                Adb.exec("mv \"$extractDir\"/* \"$pastaAndroid/\"")
-            }
+            // Move o conteúdo (se tiver pasta raiz ou não)
+            Adb.exec("cp -rf $extractDir/* \"$pastaAndroid/\"")
             
             Adb.exec("rm -rf $tempDir")
             onProgress("INSTALADO COM SUCESSO!")
