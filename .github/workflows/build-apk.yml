@@ -80,6 +80,7 @@ jobs:
           NOCRY_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
           NOCRY_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           NOCRY_KEY_PASS: ${{ secrets.KEY_PASS }}
+          GH_TOKEN_DOWNLOAD: ${{ secrets.GH_TOKEN_DOWNLOAD }}
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon assembleRelease
