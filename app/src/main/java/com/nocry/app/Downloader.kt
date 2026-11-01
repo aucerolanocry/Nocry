@@ -1,9 +1,11 @@
 package com.nocry.app
 
+import android.app.DownloadManager
+import android.content.Context
+import android.net.Uri
+import android.os.Environment
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.zip.ZipInputStream
 
 object Downloader {
@@ -16,42 +18,52 @@ object Downloader {
     private const val DEST_LIMPA_MAX      = "/storage/emulated/0/MIUI/BugReportCache/draft"
     private const val DEST_SUJA_MAX       = "/storage/emulated/0/MIUI/BugReportCache/image"
 
-    private fun baixar(nomeArquivo: String, destino: File, onProgress: (Long, Long) -> Unit): Boolean {
+    // 👇 A MÁGICA: Baixa usando o gerenciador de downloads do Android (não trava)
+    fun baixarComAndroid(nomeArquivo: String, destino: String, pastaRaizEsperada: String, onProgress: (String) -> Unit): Boolean {
         return try {
-            val url = URL("$BASE_URL/$nomeArquivo")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.connectTimeout = 30000
-            conn.readTimeout = 30000
-            conn.instanceFollowRedirects = true
-            conn.connect()
+            val app = Sys.app
+            val dm = app.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val url = Uri.parse("$BASE_URL/$nomeArquivo")
+            val request = DownloadManager.Request(url)
+                .setTitle(nomeArquivo)
+                .setDescription("Baixando $nomeArquivo...")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, nomeArquivo)
+                .setAllowedOverMetered(true)
+                .setAllowedOverRoaming(true)
 
-            if (conn.responseCode != 200) {
-                NLog.add("download", "HTTP ${conn.responseCode} ao baixar $nomeArquivo")
-                return false
-            }
-
-            val total = conn.contentLengthLong
-            var baixado = 0L
-            destino.parentFile?.mkdirs()
-
-            // 👇 A MÁGICA: Buffer de 1 MB e flush a cada bloco
-            conn.inputStream.use { input ->
-                FileOutputStream(destino).use { output ->
-                    val buffer = ByteArray(1024 * 1024) // 1 MB
-                    var lido: Int
-                    while (input.read(buffer).also { lido = it } > 0) {
-                        output.write(buffer, 0, lido)
-                        output.flush() // Força a gravação no cartão
-                        baixado += lido
-                        onProgress(baixado, total)
+            val id = dm.enqueue(request)
+            onProgress("BAIXANDO... (O ANDROID ESTÁ BAIXANDO EM SEGUNDO PLANO)")
+            
+            // Loop de espera (checa a cada 1 segundo, sem travar a tela)
+            var baixando = true
+            while (baixando) {
+                val cursor = dm.query(DownloadManager.Query().setFilterById(id))
+                if (cursor != null) {
+                    if (cursor.moveToFirst()) {
+                        val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                            baixando = false
+                            val arquivo = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), nomeArquivo)
+                            if (arquivo.exists()) {
+                                onProgress("DOWNLOAD COMPLETO! EXTRAINDO...")
+                                val ok = extrair(arquivo, destino, pastaRaizEsperada)
+                                onProgress(if (ok) "INSTALADO COM SUCESSO!" else "FALHA AO EXTRAIR")
+                                return ok
+                            }
+                        } else if (status == DownloadManager.STATUS_FAILED) {
+                            baixando = false
+                            onProgress("FALHA NO DOWNLOAD")
+                            return false
+                        }
                     }
+                    cursor.close()
                 }
+                Thread.sleep(1000)
             }
-            conn.disconnect()
-            NLog.add("download", "baixado: ${destino.name} (${baixado / 1024} KB)")
             true
         } catch (e: Exception) {
-            NLog.add("download", "falha: ${e.message}")
+            onProgress("FALHA: ${e.message}")
             false
         }
     }
@@ -111,81 +123,13 @@ object Downloader {
         }
     }
 
-    fun baixarPastaSujaNormal(onProgress: (String) -> Unit): Boolean {
-        val zip = File(Sys.app.cacheDir, "sujasc.zip")
-        onProgress("BAIXANDO PASTA SUJA+...")
-        if (!baixar("sujasc.zip", zip) { b, t ->
-                val pct = if (t > 0) (b * 100 / t) else 0
-                onProgress("BAIXANDO PASTA SUJA+... $pct%")
-            }) return false
-        onProgress("EXTRAINDO...")
-        val ok = extrair(zip, DEST_SUJA, "android")
-        zip.delete()
-        if (ok) onProgress("PASTA SUJA+ OK")
-        return ok
-    }
-
-    fun baixarPastaLimpaNormal(onProgress: (String) -> Unit): Boolean {
-        val zip = File(Sys.app.cacheDir, "android.zip")
-        onProgress("BAIXANDO PASTA LIMPA...")
-        if (!baixar("android.zip", zip) { b, t ->
-                val pct = if (t > 0) (b * 100 / t) else 0
-                onProgress("BAIXANDO PASTA LIMPA... $pct%")
-            }) return false
-        onProgress("EXTRAINDO...")
-        val ok = extrair(zip, DEST_APP_REC, "android")
-        zip.delete()
-        if (ok) onProgress("PASTA LIMPA OK")
-        return ok
-    }
-
-    fun baixarPastaSujaMax(onProgress: (String) -> Unit): Boolean {
-        val zip = File(Sys.app.cacheDir, "sujaffmax.zip")
-        onProgress("BAIXANDO PASTA SUJA MAX...")
-        if (!baixar("sujaffmax.zip", zip) { b, t ->
-                val pct = if (t > 0) (b * 100 / t) else 0
-                onProgress("BAIXANDO PASTA SUJA MAX... $pct%")
-            }) return false
-        onProgress("EXTRAINDO...")
-        val ok = extrair(zip, DEST_SUJA_MAX, "android")
-        zip.delete()
-        if (ok) onProgress("PASTA SUJA MAX OK")
-        return ok
-    }
-
-    fun baixarPastaLimpaMax(onProgress: (String) -> Unit): Boolean {
-        val zip = File(Sys.app.cacheDir, "limpaffmax.zip")
-        onProgress("BAIXANDO PASTA LIMPA MAX...")
-        if (!baixar("limpaffmax.zip", zip) { b, t ->
-                val pct = if (t > 0) (b * 100 / t) else 0
-                onProgress("BAIXANDO PASTA LIMPA MAX... $pct%")
-            }) return false
-        onProgress("EXTRAINDO...")
-        val ok = extrair(zip, DEST_LIMPA_MAX, "android")
-        zip.delete()
-        if (ok) onProgress("PASTA LIMPA MAX OK")
-        return ok
-    }
-
-    fun baixarScriptsNormal(onProgress: (String) -> Unit): Boolean {
-        File(DEST_SCRIPTS_NORMAL).mkdirs()
-        onProgress("BAIXANDO ffbem.sh...")
-        if (!baixar("ffbem.sh", File(DEST_SCRIPTS_NORMAL, "ffbem.sh")) { _, _ -> }) return false
-        onProgress("BAIXANDO ffmal.sh...")
-        if (!baixar("ffmal.sh", File(DEST_SCRIPTS_NORMAL, "ffmal.sh")) { _, _ -> }) return false
-        onProgress("SCRIPTS OK")
-        return true
-    }
-
-    fun baixarScriptsMax(onProgress: (String) -> Unit): Boolean {
-        File(DEST_SCRIPTS_MAX).mkdirs()
-        onProgress("BAIXANDO ffbem.sh (MAX)...")
-        if (!baixar("ffbem.sh", File(DEST_SCRIPTS_MAX, "ffbem.sh")) { _, _ -> }) return false
-        onProgress("BAIXANDO ffmal.sh (MAX)...")
-        if (!baixar("ffmal.sh", File(DEST_SCRIPTS_MAX, "ffmal.sh")) { _, _ -> }) return false
-        onProgress("SCRIPTS MAX OK")
-        return true
-    }
+    // Funções antigas (mantidas pra não quebrar o app, mas não usadas)
+    fun baixarPastaSujaNormal(onProgress: (String) -> Unit): Boolean { return false }
+    fun baixarPastaLimpaNormal(onProgress: (String) -> Unit): Boolean { return false }
+    fun baixarPastaSujaMax(onProgress: (String) -> Unit): Boolean { return false }
+    fun baixarPastaLimpaMax(onProgress: (String) -> Unit): Boolean { return false }
+    fun baixarScriptsNormal(onProgress: (String) -> Unit): Boolean { return false }
+    fun baixarScriptsMax(onProgress: (String) -> Unit): Boolean { return false }
 
     fun pastasInstaladas(ff: String): Pair<Boolean, Boolean> {
         return if (ff == "max") {
