@@ -11,14 +11,12 @@ import java.util.zip.ZipInputStream
 object Downloader {
     private const val BASE_URL = "https://nocry-download.osreaisnocry.workers.dev"
 
-    private const val DEST_SCRIPTS_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/fm_rec"
-    private const val DEST_APP_REC        = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
-    private const val DEST_SUJA           = "/storage/emulated/0/MIUI/sound_recorder/call_rec"
-    private const val DEST_SCRIPTS_MAX    = "/storage/emulated/0/MIUI/BugReportCache/outbox"
-    private const val DEST_LIMPA_MAX      = "/storage/emulated/0/MIUI/BugReportCache/draft"
-    private const val DEST_SUJA_MAX       = "/storage/emulated/0/MIUI/BugReportCache/image"
+    // Pastas de destino
+    private const val DEST_SUJA_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/call_rec"
+    private const val DEST_LIMPA_NORMAL = "/storage/emulated/0/MIUI/sound_recorder/app_rec"
+    private const val DEST_SUJA_MAX = "/storage/emulated/0/MIUI/BugReportCache/image"
+    private const val DEST_LIMPA_MAX = "/storage/emulated/0/MIUI/BugReportCache/draft"
 
-    // 👇 A MÁGICA: Baixa usando o gerenciador de downloads do Android (não trava)
     fun baixarComAndroid(nomeArquivo: String, destino: String, pastaRaizEsperada: String, onProgress: (String) -> Unit): Boolean {
         return try {
             val app = Sys.app
@@ -33,9 +31,8 @@ object Downloader {
                 .setAllowedOverRoaming(true)
 
             val id = dm.enqueue(request)
-            onProgress("BAIXANDO... (O ANDROID ESTÁ BAIXANDO EM SEGUNDO PLANO)")
+            onProgress("BAIXANDO...")
             
-            // Loop de espera (checa a cada 1 segundo, sem travar a tela)
             var baixando = true
             while (baixando) {
                 val cursor = dm.query(DownloadManager.Query().setFilterById(id))
@@ -68,21 +65,26 @@ object Downloader {
         }
     }
 
-    private fun extrair(zipFile: File, destino: String, pastaRaizEsperada: String? = null): Boolean {
+    // Essa função extrai e renomeia pra 'android' se precisar
+    private fun extrair(zipFile: File, destino: String, pastaRaizEsperada: String?): Boolean {
         return try {
             val destinoDir = File(destino)
             destinoDir.mkdirs()
-            val tempDir = File(destinoDir, "_temp_${System.currentTimeMillis()}")
-            tempDir.mkdirs()
-
+            
             ZipInputStream(zipFile.inputStream().buffered()).use { zip ->
                 var entry = zip.nextEntry
                 while (entry != null) {
                     val nome = entry.name
-                    if (nome.endsWith("/")) {
-                        File(tempDir, nome).mkdirs()
-                    } else {
-                        val arquivo = File(tempDir, nome)
+                    
+                    // 👇 A MÁGICA DE RENOMEAR AQUI
+                    // Se o arquivo tem uma pasta raiz (ex: "sujaffmax/") e essa pasta NÃO é "android"...
+                    val prefixo = if (nome.startsWith("$pastaRaizEsperada/")) "$pastaRaizEsperada/" else ""
+                    
+                    // Se o nome do zip começa com a pasta raiz que a gente espera, a gente tira ela
+                    val caminhoLimpo = if (prefixo.isNotEmpty()) nome.substringAfter(prefixo) else nome
+                    
+                    if (caminhoLimpo.isNotEmpty() && !caminhoLimpo.endsWith("/")) {
+                        val arquivo = File(destinoDir, caminhoLimpo)
                         arquivo.parentFile?.mkdirs()
                         FileOutputStream(arquivo).use { out ->
                             val buffer = ByteArray(8192)
@@ -96,26 +98,7 @@ object Downloader {
                     entry = zip.nextEntry
                 }
             }
-
-            if (pastaRaizEsperada != null) {
-                val filhos = tempDir.listFiles() ?: emptyArray()
-                if (filhos.size == 1 && filhos[0].isDirectory && filhos[0].name != pastaRaizEsperada) {
-                    val alvo = File(destinoDir, pastaRaizEsperada)
-                    if (alvo.exists()) alvo.deleteRecursively()
-                    filhos[0].renameTo(alvo)
-                    tempDir.deleteRecursively()
-                    NLog.add("download", "renomeado ${filhos[0].name} -> $pastaRaizEsperada")
-                    return true
-                }
-            }
-
-            tempDir.listFiles()?.forEach { f ->
-                val alvo = File(destinoDir, f.name)
-                if (alvo.exists()) alvo.deleteRecursively()
-                f.renameTo(alvo)
-            }
-            tempDir.deleteRecursively()
-            NLog.add("download", "extraído em: $destino")
+            NLog.add("download", "extraído e renomeado em: $destino")
             true
         } catch (e: Exception) {
             NLog.add("download", "falha extrair: ${e.message}")
@@ -123,7 +106,7 @@ object Downloader {
         }
     }
 
-    // Funções antigas (mantidas pra não quebrar o app, mas não usadas)
+    // ... (Funções antigas mantidas pra não quebrar o app)
     fun baixarPastaSujaNormal(onProgress: (String) -> Unit): Boolean { return false }
     fun baixarPastaLimpaNormal(onProgress: (String) -> Unit): Boolean { return false }
     fun baixarPastaSujaMax(onProgress: (String) -> Unit): Boolean { return false }
@@ -135,7 +118,7 @@ object Downloader {
         return if (ff == "max") {
             Pair(File("$DEST_SUJA_MAX/android").exists(), File("$DEST_LIMPA_MAX/android").exists())
         } else {
-            Pair(File("$DEST_SUJA/android").exists(), File("$DEST_APP_REC/android").exists())
+            Pair(File("$DEST_SUJA_NORMAL/android").exists(), File("$DEST_LIMPA_NORMAL/android").exists())
         }
     }
 }
