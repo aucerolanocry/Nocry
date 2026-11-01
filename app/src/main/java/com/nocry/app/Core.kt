@@ -107,6 +107,25 @@ object NLog {
 /** Preferencias do app. Valores sempre validados (nunca devolve algo fora do limite). */
 object Prefs {
     private lateinit var sp: SharedPreferences
+    // ---- Bypass ----
+var bypassAtivo: Boolean
+    get() = gb("bypass_ativo")
+    set(v) = pb("bypass_ativo", v)
+var bypassGatilho: String
+    get() = gs("bypass_gatilho") ?: "dnd"
+    set(v) = ps("bypass_gatilho", v)
+var bypassFf: String
+    get() = gs("bypass_ff") ?: "normal"
+    set(v) = ps("bypass_ff", v)
+var bypassTipo: String
+    get() = gs("bypass_tipo") ?: "completo"
+    set(v) = ps("bypass_tipo", v)
+var bypassMark: Boolean
+    get() = gb("bypass_mark")
+    set(v) = pb("bypass_mark", v)
+var bypassVolAtivo: Boolean
+    get() = gb("bypass_vol_ativo")
+    set(v) = pb("bypass_vol_ativo", v)
 
     fun init(c: Context) {
         sp = c.applicationContext.getSharedPreferences("nocry", Context.MODE_PRIVATE)
@@ -359,7 +378,7 @@ object Prefs {
         set(v) = ps("lic_sig", v)
 
     /** precisa do servico em primeiro plano? */
-    fun precisaServico(): Boolean = volAtivo || cargaAtivo || mcAtivo || otmAuto
+    fun precisaServico(): Boolean = volAtivo || cargaAtivo || mcAtivo || otmAuto || bypassAtivo || bypassVolAtivo
 }
 
 /** Estado do carregador (sem ADB). */
