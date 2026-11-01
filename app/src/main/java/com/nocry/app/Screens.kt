@@ -26,6 +26,8 @@ object Atalhos {
         It("mc", R.drawable.ic_plug, "Modo carregador", "Ajusta a tela ao carregar"),
         It("otm", R.drawable.ic_chip, "Otimização", "Congela apps em 2º plano"),
         It("ajustes", R.drawable.ic_sliders, "Ajustes do toque", "Tempos de long e multi")
+        It("recursos", R.drawable.ic_download, "INSTALAR RECURSOS", "BAIXAR PASTAS A E B"),
+        It("bypass", R.drawable.ic_sliders, "BYPASS", "AJUSTES POR DND/BT/CARGA"),
     )
 
     private fun ids(s: String): List<String> = s.split(',').map { it.trim() }.filter { it.isNotEmpty() }
@@ -78,14 +80,25 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     }
 
     private fun tile(c: android.content.Context, it: Atalhos.It): View = when (it.id) {
-        "comp" -> Ui.tile(c, it.ico, it.nome, it.desc, estComp(), Comp.ligado()) { act.abre(CompScreen(act)) }
-        "vol" -> Ui.tile(c, it.ico, it.nome, it.desc, estVol(), Prefs.volAtivo) { act.abre(VolScreen(act)) }
-        "carga" -> Ui.tile(c, it.ico, it.nome, it.desc, estCarga(), Prefs.cargaAtivo) { act.abre(CargaScreen(act)) }
-        "mc" -> Ui.tile(c, it.ico, it.nome, it.desc, estMc(), Prefs.mcAtivo) { act.abre(McScreen(act)) }
-        "otm" -> Ui.tile(c, it.ico, it.nome, it.desc, estOtm(), Otm.status().first || Prefs.otmAuto) { act.abre(OtmScreen(act)) }
-        else -> Ui.tile(c, it.ico, it.nome, it.desc, "long ${Prefs.longOn} · multi ${Prefs.multiOn}", null) { act.abre(AjustesScreen(act)) }
+    "comp" -> Ui.tile(c, it.ico, it.nome, it.desc, estComp(), Comp.ligado()) { act.abre(CompScreen(act)) }
+    "vol" -> Ui.tile(c, it.ico, it.nome, it.desc, estVol(), Prefs.volAtivo) { act.abre(VolScreen(act)) }
+    "carga" -> Ui.tile(c, it.ico, it.nome, it.desc, estCarga(), Prefs.cargaAtivo) { act.abre(CargaScreen(act)) }
+    "mc" -> Ui.tile(c, it.ico, it.nome, it.desc, estMc(), Prefs.mcAtivo) { act.abre(McScreen(act)) }
+    "otm" -> Ui.tile(c, it.ico, it.nome, it.desc, estOtm(), Otm.status().first || Prefs.otmAuto) { act.abre(OtmScreen(act)) }
+    "recursos" -> {
+        val (a, b) = Downloader.pastasInstaladas("normal")
+        Ui.tile(c, it.ico, it.nome, it.desc,
+            if (a && b) "INSTALADO" else if (a || b) "PARCIAL" else "FALTANDO",
+            a && b) { act.abre(RecursosScreen(act)) }
     }
-
+    "bypass" -> Ui.tile(c, it.ico, it.nome, it.desc,
+        if (Prefs.bypassAtivo) "ATIVO · ${Prefs.bypassGatilho}"
+        else if (Prefs.bypassVolAtivo) "ATIVO · VOLUME"
+        else "DESATIVADO",
+        Prefs.bypassAtivo || Prefs.bypassVolAtivo) { act.abre(BypassScreen(act)) }
+    else -> Ui.tile(c, it.ico, it.nome, it.desc, "long ${Prefs.longOn} · multi ${Prefs.multiOn}", null) { act.abre(AjustesScreen(act)) }
+    }
+    
     override fun render() {
         limpa()
         val c = act
