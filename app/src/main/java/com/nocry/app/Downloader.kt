@@ -12,49 +12,53 @@ object Downloader {
 
     fun baixarComAdb(nomeArquivo: String, destino: String, pastaRaizEsperada: String, onProgress: (String) -> Unit): Boolean {
         return try {
-            // 👇 VERIFICA SE O ADB TÁ CONECTADO
             if (!Adb.connected) {
-                onProgress("ADB DESCONECTADO! Conecte na aba CONEXÃO e tente de novo.")
+                onProgress("ADB DESCONECTADO! Conecte na aba CONEXÃO.")
                 return false
             }
 
-            onProgress("INICIANDO DOWNLOAD...")
-            
+            onProgress("INICIANDO...")
             val tempDir = "/sdcard/Download/nocry_temp"
+            Adb.exec("rm -rf $tempDir") // limpa antes
             Adb.exec("mkdir -p $tempDir")
             
-            val zipPath = "$tempDir/$nomeArquivo"
-            onProgress("BAIXANDO $nomeArquivo...")
+            val zipPath = "$tempDir/arquivo.zip"
+            onProgress("BAIXANDO...")
             val curlResult = Adb.exec("curl -L -o \"$zipPath\" \"$BASE_URL/$nomeArquivo\"")
-            
             if (!curlResult.ok) {
-                onProgress("FALHA NO CURL: ${curlResult.out}")
+                onProgress("FALHA NO DOWNLOAD: ${curlResult.out}")
                 return false
             }
-            onProgress("DOWNLOAD COMPLETO! EXTRAINDO...")
             
+            onProgress("EXTRAINDO...")
             val extractDir = "$tempDir/extract"
             Adb.exec("mkdir -p $extractDir")
             val unzipResult = Adb.exec("unzip -o \"$zipPath\" -d \"$extractDir\"")
-            
             if (!unzipResult.ok) {
-                onProgress("FALHA NO UNZIP: ${unzipResult.out}")
+                onProgress("FALHA AO EXTRAIR: ${unzipResult.out}")
                 return false
             }
             
-            val pastaRaiz = File("$extractDir/$pastaRaizEsperada")
-            Adb.exec("rm -rf \"$destino/android\"")
+            // 👇 A MÁGICA: Cria a pasta 'android' e move tudo pra dentro dela
+            onProgress("ORGANIZANDO...")
+            val pastaAndroid = "$destino/android"
+            Adb.exec("rm -rf \"$pastaAndroid\"") // apaga a antiga se existir
+            Adb.exec("mkdir -p \"$pastaAndroid\"")
             
-            if (pastaRaiz.exists() && pastaRaiz.isDirectory) {
-                Adb.exec("cp -rf \"$pastaRaiz\" \"$destino/android\"")
-                onProgress("INSTALADO (renomeado $pastaRaizEsperada -> android)")
+            // Verifica se o zip tinha uma pasta raiz (ex: sujaffmax, limpaffmax)
+            // Se tiver, move o conteúdo dela. Se não, move tudo da extractDir
+            val raiz = pastaRaizEsperada
+            val checkRaiz = Adb.exec("test -d \"$extractDir/$raiz\"")
+            
+            if (checkRaiz.ok) {
+                // Tem a pasta raiz, move o conteúdo dela pra dentro de android/
+                Adb.exec("mv \"$extractDir/$raiz\"/* \"$pastaAndroid/\"")
             } else {
-                Adb.exec("cp -rf \"$extractDir\"/* \"$destino/\"")
-                onProgress("INSTALADO (direto)")
+                // Não tem pasta raiz, move tudo
+                Adb.exec("mv \"$extractDir\"/* \"$pastaAndroid/\"")
             }
             
             Adb.exec("rm -rf $tempDir")
-            
             onProgress("INSTALADO COM SUCESSO!")
             true
         } catch (e: Exception) {
