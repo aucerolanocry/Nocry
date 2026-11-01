@@ -43,13 +43,6 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
                 act.startActivity(intent)
             }, 8)
         } else {
-            if (!Adb.connected) {
-                add(Ui.text(c, "⚠️ ADB DESCONECTADO! Vá em CONEXÃO e conecte antes de instalar.", 13f, Ui.WARN, true), 8)
-                add(Ui.button(c, "IR PARA CONEXÃO", Ui.Kind.PRIMARY) {
-                    act.irAba(1)
-                }, 8)
-            }
-
             val (pastaA, pastaB) = Downloader.pastasInstaladas(ff)
             val card = Ui.card(c)
             card.addView(Ui.label(c, "STATUS DAS PASTAS"))
@@ -66,17 +59,11 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
             add(Ui.button(c, "INSTALAR SUJA (AUTOMÁTICO)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
                 if (ocupado) return@button
-                Ui.toast(act, "CLICOU! INICIANDO...") // TOAST DE TESTE
-                
-                if (!Adb.connected) {
-                    Ui.toast(act, "ADB desconectado! Conecte na aba CONEXÃO.")
-                    return@button
-                }
                 ocupado = true; log = "INICIANDO..."; redesenha()
                 Bg.run({
                     val nome = if (ff == "normal") "sujasc.zip" else "sujaffmax.zip"
                     val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/call_rec" else "/storage/emulated/0/MIUI/BugReportCache/image"
-                    Downloader.baixarComAdb(nome, destino, "android") { msg -> atualizaTela(msg) }
+                    Downloader.baixarComAndroid(nome, destino, "android") { msg -> atualizaTela(msg) }
                 }) { ok ->
                     ocupado = false
                     log = if (ok) "PASTA SUJA INSTALADA!" else "FALHA AO INSTALAR"
@@ -86,17 +73,11 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
             add(Ui.button(c, "INSTALAR LIMPA (AUTOMÁTICO)", Ui.Kind.GHOST, R.drawable.ic_stop) {
                 if (ocupado) return@button
-                Ui.toast(act, "CLICOU! INICIANDO...") // TOAST DE TESTE
-                
-                if (!Adb.connected) {
-                    Ui.toast(act, "ADB desconectado! Conecte na aba CONEXÃO.")
-                    return@button
-                }
                 ocupado = true; log = "INICIANDO..."; redesenha()
                 Bg.run({
                     val nome = if (ff == "normal") "android.zip" else "limpaffmax.zip"
                     val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/app_rec" else "/storage/emulated/0/MIUI/BugReportCache/draft"
-                    Downloader.baixarComAdb(nome, destino, "android") { msg -> atualizaTela(msg) }
+                    Downloader.baixarComAndroid(nome, destino, "android") { msg -> atualizaTela(msg) }
                 }) { ok ->
                     ocupado = false
                     log = if (ok) "PASTA LIMPA INSTALADA!" else "FALHA AO INSTALAR"
