@@ -59,11 +59,14 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     override val aba = 0
 
     override fun key(): String = listOf(
-        Adb.connected, Sys.hasWriteSecure(), Sys.acessibilidadeLigada(), NocryService.rodando,
-        Prefs.volAtivo, Prefs.cargaAtivo, Prefs.mcAtivo, Prefs.otmAuto, Prefs.cargaRep, Prefs.mcCycles,
-        Comp.ligado(), Otm.status().first, Prefs.densOrig, ultimaLinha(), License.role(), Prefs.ordem, Prefs.ocultos
-    ).joinToString("|")
-
+    Prefs.volAtivo, Prefs.cargaAtivo, Prefs.mcAtivo, Prefs.otmAuto, 
+    Prefs.cargaRep, Prefs.mcCycles, Prefs.bypassAtivo, Prefs.bypassVolAtivo,
+    Prefs.densOrig, Prefs.ordem, Prefs.ocultos,
+    Adb.connected, 
+    NocryService.rodando,
+    Sys.acessibilidadeLigada(),
+    ultimaLinha()
+).joinToString("|")
     private fun ultimaLinha(): String = NLog.text(null).substringAfterLast('\n')
 
     private fun estComp(): String = if (Comp.ligado()) "ATIVO" else "desativado"
