@@ -27,7 +27,7 @@ object Atalhos {
     It("otm", R.drawable.ic_chip, "Otimização", "Congela apps em 2º plano"),
     It("ajustes", R.drawable.ic_sliders, "Ajustes do toque", "Tempos de long e multi"),
     It("recursos", R.drawable.ic_log, "INSTALAR RECURSOS", "BAIXAR PASTAS A E B"),
-    It("bypass", R.drawable.ic_sliders, "BYPASS", "AJUSTES POR DND/BT/CARGA")
+    It("bypass", R.drawable.ic_bolt, "BYPASS", "AJUSTES POR DND/BT/CARGA")
 )
 
     private fun ids(s: String): List<String> = s.split(',').map { it.trim() }.filter { it.isNotEmpty() }
