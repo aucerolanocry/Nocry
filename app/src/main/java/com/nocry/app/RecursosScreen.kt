@@ -13,6 +13,7 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
     override fun key(): String = "$ff|$log|$ocupado"
 
+    // Atualiza a tela de forma segura, sem travar
     private fun atualizaTela(novoLog: String) {
         h.post {
             log = novoLog
@@ -43,7 +44,8 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
         add(Ui.button(c, "BAIXAR PASTA SUJA (XIT)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
             if (ocupado) return@button
-            ocupado = true; log = "INICIANDO..."; redesenha()
+            ocupado = true
+            log = "INICIANDO DOWNLOAD..."; redesenha()
             
             Bg.run({
                 if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> atualizaTela(msg) }
@@ -57,7 +59,8 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
         add(Ui.button(c, "BAIXAR PASTA LIMPA (RESTAURAR)", Ui.Kind.GHOST, R.drawable.ic_stop) {
             if (ocupado) return@button
-            ocupado = true; log = "INICIANDO..."; redesenha()
+            ocupado = true
+            log = "INICIANDO DOWNLOAD..."; redesenha()
             
             Bg.run({
                 if (ff == "normal") Downloader.baixarPastaLimpaNormal { msg -> atualizaTela(msg) }
@@ -71,7 +74,8 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
 
         add(Ui.button(c, "BAIXAR TUDO DE UMA VEZ", Ui.Kind.PRIMARY, R.drawable.ic_download) {
             if (ocupado) return@button
-            ocupado = true; log = "INICIANDO..."; redesenha()
+            ocupado = true
+            log = "INICIANDO DOWNLOAD..."; redesenha()
             
             Bg.run({
                 val okA = if (ff == "normal") Downloader.baixarPastaSujaNormal { msg -> atualizaTela(msg) }
