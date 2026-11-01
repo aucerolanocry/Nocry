@@ -23,6 +23,9 @@ android {
 
         ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a")) }
         buildConfigField("String", "API_URL", "\"" + apiUrl + "\"")
+        
+        // 👇 ADICIONADO AQUI: Puxa o token do repositório privado do GitHub Secrets
+        buildConfigField("String", "GH_TOKEN", "\"${System.getenv("GH_TOKEN_DOWNLOAD") ?: ""}\"")
     }
 
     buildFeatures { buildConfig = true }
