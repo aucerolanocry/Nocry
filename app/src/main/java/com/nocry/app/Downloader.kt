@@ -12,13 +12,17 @@ object Downloader {
 
     fun baixarComAdb(nomeArquivo: String, destino: String, pastaRaizEsperada: String, onProgress: (String) -> Unit): Boolean {
         return try {
+            // 👇 VERIFICA SE O ADB TÁ CONECTADO
+            if (!Adb.connected) {
+                onProgress("ADB DESCONECTADO! Conecte na aba CONEXÃO e tente de novo.")
+                return false
+            }
+
             onProgress("INICIANDO DOWNLOAD...")
             
-            // 1. Cria pasta temporária
             val tempDir = "/sdcard/Download/nocry_temp"
             Adb.exec("mkdir -p $tempDir")
             
-            // 2. Baixa o arquivo com curl
             val zipPath = "$tempDir/$nomeArquivo"
             onProgress("BAIXANDO $nomeArquivo...")
             val curlResult = Adb.exec("curl -L -o \"$zipPath\" \"$BASE_URL/$nomeArquivo\"")
@@ -29,7 +33,6 @@ object Downloader {
             }
             onProgress("DOWNLOAD COMPLETO! EXTRAINDO...")
             
-            // 3. Extrai pra pasta temporária
             val extractDir = "$tempDir/extract"
             Adb.exec("mkdir -p $extractDir")
             val unzipResult = Adb.exec("unzip -o \"$zipPath\" -d \"$extractDir\"")
@@ -39,7 +42,6 @@ object Downloader {
                 return false
             }
             
-            // 4. Move pra pasta certa (renomeando se preciso)
             val pastaRaiz = File("$extractDir/$pastaRaizEsperada")
             Adb.exec("rm -rf \"$destino/android\"")
             
@@ -51,7 +53,6 @@ object Downloader {
                 onProgress("INSTALADO (direto)")
             }
             
-            // 5. Limpa a pasta temp
             Adb.exec("rm -rf $tempDir")
             
             onProgress("INSTALADO COM SUCESSO!")
