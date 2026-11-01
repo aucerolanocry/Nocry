@@ -57,27 +57,45 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
                 redesenha()
             }, 8)
 
-            add(Ui.button(c, "INSTALAR SUJA (AUTOMÁTICO)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
+            add(Ui.label(c, "INSTALAR SUJA"), 18)
+            add(Ui.button(c, "ABRIR CHROME PRA BAIXAR", Ui.Kind.PRIMARY) {
+                val nome = if (ff == "normal") "sujasc.zip" else "sujaffmax.zip"
+                val url = "https://nocry-download.osreaisnocry.workers.dev/$nome"
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                act.startActivity(intent)
+                Ui.toast(act, "BAIXE E VOLTE PRO APP")
+            }, 10)
+            
+            add(Ui.button(c, "INSTALAR SUJA DO DOWNLOADS", Ui.Kind.PRIMARY) {
                 if (ocupado) return@button
                 ocupado = true; log = "INICIANDO..."; redesenha()
                 Bg.run({
                     val nome = if (ff == "normal") "sujasc.zip" else "sujaffmax.zip"
                     val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/call_rec" else "/storage/emulated/0/MIUI/BugReportCache/image"
-                    Downloader.baixarComAndroid(nome, destino, "android") { msg -> atualizaTela(msg) }
+                    Downloader.instalarDoDownload(nome, destino, "android") { msg -> atualizaTela(msg) }
                 }) { ok ->
                     ocupado = false
                     log = if (ok) "PASTA SUJA INSTALADA!" else "FALHA AO INSTALAR"
                     redesenha()
                 }
-            }, 18)
+            }, 10)
 
-            add(Ui.button(c, "INSTALAR LIMPA (AUTOMÁTICO)", Ui.Kind.GHOST, R.drawable.ic_stop) {
+            add(Ui.label(c, "INSTALAR LIMPA"), 18)
+            add(Ui.button(c, "ABRIR CHROME PRA BAIXAR", Ui.Kind.GHOST) {
+                val nome = if (ff == "normal") "android.zip" else "limpaffmax.zip"
+                val url = "https://nocry-download.osreaisnocry.workers.dev/$nome"
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                act.startActivity(intent)
+                Ui.toast(act, "BAIXE E VOLTE PRO APP")
+            }, 10)
+            
+            add(Ui.button(c, "INSTALAR LIMPA DO DOWNLOADS", Ui.Kind.GHOST) {
                 if (ocupado) return@button
                 ocupado = true; log = "INICIANDO..."; redesenha()
                 Bg.run({
                     val nome = if (ff == "normal") "android.zip" else "limpaffmax.zip"
                     val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/app_rec" else "/storage/emulated/0/MIUI/BugReportCache/draft"
-                    Downloader.baixarComAndroid(nome, destino, "android") { msg -> atualizaTela(msg) }
+                    Downloader.instalarDoDownload(nome, destino, "android") { msg -> atualizaTela(msg) }
                 }) { ok ->
                     ocupado = false
                     log = if (ok) "PASTA LIMPA INSTALADA!" else "FALHA AO INSTALAR"
