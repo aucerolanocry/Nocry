@@ -15,7 +15,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.whatsapp"
+        applicationId = "com.whatsapp.web"
         minSdk = 26
         targetSdk = 34
         versionCode = appVersionCode
