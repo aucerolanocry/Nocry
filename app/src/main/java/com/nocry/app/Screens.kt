@@ -118,7 +118,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         cab.addView(logo, lg)
         val col = Ui.vbox(c)
         col.addView(Ui.gradTexto(c, "NOCRY", 24f))
-        col.addView(Ui.text(c, "Vogt ama a Victoria", 10.5f, Ui.MUTED, true, mono = true))
+        col.addView(Ui.text(c, "App desenvolvido por Aucerola", 10.5f, Ui.MUTED, true, mono = true))
         cab.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val papel = License.roleNome()
         if (papel.isNotEmpty()) cab.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.MUTED, License.isAdmin()))
@@ -266,6 +266,23 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         val c = act
         add(Ui.gradTexto(c, "CONEXÃO", 28f), 0)
         add(Ui.text(c, "SIGA OS PASSOS ABAIXO UMA VEZ, NO WI-FI, PRA LIGAR O NOCRY NO CELULAR.", 13f, Ui.MUTED), 4)
+
+        // resumo rapido do que ja esta pronto, antes de entrar nos passos um por um
+        val conectadoRes = Adb.connected
+        val permRes = Sys.hasWriteSecure()
+        val accRes = Sys.acessibilidadeLigada()
+        val feitos = listOf(conectadoRes, permRes, accRes, temNotif()).count { it }
+        val resumo = Ui.card(c)
+        resumo.addView(Ui.hbox(c).also { row ->
+            row.addView(Ui.label(c, "RESUMO"))
+            row.addView(Ui.text(c, "$feitos de 4 prontos", 12f, if (feitos == 4) Ui.OK else Ui.MUTED, true, mono = true),
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.gravity = Gravity.END })
+        })
+        resumo.addView(Ui.status(c, "ADB", if (conectadoRes) "CONECTADO" else "DESCONECTADO", conectadoRes), Ui.lp(top = 8, c = c))
+        resumo.addView(Ui.status(c, "PERMISSÃO", if (permRes) "LIBERADA" else "FALTA", permRes))
+        resumo.addView(Ui.status(c, "ACESSIBILIDADE", if (accRes) "LIGADA" else "DESLIGADA", accRes))
+        resumo.addView(Ui.status(c, "NOTIFICAÇÕES", if (temNotif()) "PERMITIDAS" else "BLOQUEADAS", temNotif()))
+        add(resumo, 14)
 
         // 1
         val c1 = Ui.card(c)

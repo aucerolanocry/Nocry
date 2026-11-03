@@ -28,6 +28,15 @@ class RingView(c: Context) : View(c) {
     private var anim: ValueAnimator? = null
     private var pulso: ValueAnimator? = null
     private var luz = 1f
+    // o shader (degrade) so depende do tamanho da view e das cores do tema, nao do progresso -
+    // recriar ele e a Matrix em todo onDraw() (o pulso de brilho roda continuo, ~60fps, sempre que
+    // essa tela fica visivel) gerava lixo de memoria sem necessidade e pesava na rolagem/animacao.
+    // guarda e so recalcula quando o tamanho muda.
+    private var shaderW = -1f
+    private var shaderH = -1f
+    private var shaderCor1 = 0
+    private var shaderCor2 = 0
+    private var shaderCache: SweepGradient? = null
 
     init {
         for (p in listOf(trilho, brilho, arco)) {
@@ -83,10 +92,15 @@ class RingView(c: Context) : View(c) {
         cv.drawArc(r, -90f, 360f, false, trilho)
         val varre = 360f * mostrado
         if (varre < 0.5f) return
-        val sh = SweepGradient(w / 2f, h / 2f, intArrayOf(Theme.accent, Theme.accent2, Theme.accent), floatArrayOf(0f, 0.7f, 1f))
-        val mt = Matrix()
-        mt.postRotate(-90f, w / 2f, h / 2f)
-        sh.setLocalMatrix(mt)
+        if (shaderCache == null || shaderW != w || shaderH != h || shaderCor1 != Theme.accent || shaderCor2 != Theme.accent2) {
+            val sh = SweepGradient(w / 2f, h / 2f, intArrayOf(Theme.accent, Theme.accent2, Theme.accent), floatArrayOf(0f, 0.7f, 1f))
+            val mt = Matrix()
+            mt.postRotate(-90f, w / 2f, h / 2f)
+            sh.setLocalMatrix(mt)
+            shaderCache = sh
+            shaderW = w; shaderH = h; shaderCor1 = Theme.accent; shaderCor2 = Theme.accent2
+        }
+        val sh = shaderCache!!
         val g = Prefs.brilho / 100f
         if (g > 0f) {
             brilho.shader = sh
