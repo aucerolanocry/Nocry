@@ -38,7 +38,8 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         cardGatilho(R.drawable.ic_dnd, "Não perturbe", "LIGAR = ATIVA · DESLIGAR = DESATIVA", "dnd")
         cardGatilho(R.drawable.ic_bluetooth, "Bluetooth", "LIGAR = ATIVA · DESLIGAR = DESATIVA", "bt")
         cardGatilho(R.drawable.ic_plug, "Carregador", "TIRAR = APLICA · COLOCAR = RESTAURA", "carga")
-        cardGatilho(R.drawable.ic_volume, "Volume", "VOL+ Nx = APLICA · VOL− Nx = RESTAURA", "volume")
+        val nx = Prefs.bypassCliques
+        cardGatilho(R.drawable.ic_volume, "Volume", "VOLUME + $nx VEZES = ATIVA · VOLUME − $nx VEZES = DESATIVA", "volume")
 
         add(Ui.label(c, "ESCOLHA O FREE FIRE"), 18)
         add(Ui.segmento(c, listOf("NORMAL", "MAX"), if (Prefs.bypassFf == "normal") 0 else 1) { i ->
