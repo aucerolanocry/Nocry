@@ -288,11 +288,11 @@ var bypassVolAtivo: Boolean
         set(v) = pi("bg_blur", v.coerceIn(0, 25))
     /** cor 1 do degrade (a "cor de destaque" de antes) */
     var accent: Int
-        get() = sp.getInt("accent", 0xFF3DFF7A.toInt())
+        get() = sp.getInt("accent", 0xFFFFFFFF.toInt())
         set(v) = pi("accent", v or 0xFF000000.toInt())
     /** cor 2 do degrade */
     var accent2: Int
-        get() = sp.getInt("accent2", 0xFFF2F2F6.toInt())
+        get() = sp.getInt("accent2", 0xFFB8B8C4.toInt())
         set(v) = pi("accent2", v or 0xFF000000.toInt())
     /** cor lisa de fundo do app */
     var baseCor: Int
