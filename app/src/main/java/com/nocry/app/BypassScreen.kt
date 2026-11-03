@@ -1,6 +1,9 @@
 package com.nocry.app
 
+import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 
 class BypassScreen(a: MainActivity) : Screen(a) {
@@ -32,10 +35,10 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         add(card, 0)
 
         add(Ui.label(c, "ESCOLHA O GATILHO"), 18)
-        cardGatilho("📵 NÃO PERTURBE", "LIGAR = APLICA · DESLIGAR = RESTAURA", "dnd")
-        cardGatilho("🔵 BLUETOOTH", "LIGAR = APLICA · DESLIGAR = RESTAURA", "bt")
-        cardGatilho("🔌 CARREGADOR", "TIRAR = APLICA · COLOCAR = RESTAURA", "carga")
-        cardGatilho("🔊 VOLUME", "VOL+ Nx = APLICA · VOL− Nx = RESTAURA", "volume")
+        cardGatilho(R.drawable.ic_dnd, "Não perturbe", "LIGAR = APLICA · DESLIGAR = RESTAURA", "dnd")
+        cardGatilho(R.drawable.ic_bluetooth, "Bluetooth", "LIGAR = APLICA · DESLIGAR = RESTAURA", "bt")
+        cardGatilho(R.drawable.ic_plug, "Carregador", "TIRAR = APLICA · COLOCAR = RESTAURA", "carga")
+        cardGatilho(R.drawable.ic_volume, "Volume", "VOL+ Nx = APLICA · VOL− Nx = RESTAURA", "volume")
 
         add(Ui.label(c, "ESCOLHA O FREE FIRE"), 18)
         add(Ui.segmento(c, listOf("NORMAL", "MAX"), if (Prefs.bypassFf == "normal") 0 else 1) { i ->
@@ -104,18 +107,27 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         add(Ui.text(c, "O APP FICA EM SEGUNDO PLANO ESCUTANDO O GATILHO. PARA PARAR, TOQUE EM DESATIVAR.", 12f, Ui.MUTED), 18)
     }
 
-    private fun cardGatilho(nome: String, desc: String, id: String) {
+    private fun cardGatilho(iconRes: Int, nome: String, desc: String, id: String) {
         val c = act
         val atual = if (Prefs.bypassVolAtivo) "volume" else Prefs.bypassGatilho
+        val sel = atual == id
         val r = Ui.hbox(c)
         r.background = Ui.ripple(c, Ui.glass(c), Painel(c, mascara = true))
         r.setPadding(Ui.dp(c, 14), Ui.dp(c, 12), Ui.dp(c, 14), Ui.dp(c, 12))
+
+        val caixa = FrameLayout(c)
+        caixa.background = Botao(c, if (sel) "icoOn" else "ico", 12)
+        caixa.addView(Ui.icone(c, iconRes, if (sel) Ui.RED else Ui.MUTED, 18), FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        val lg = LinearLayout.LayoutParams(Ui.dp(c, 38), Ui.dp(c, 38))
+        lg.rightMargin = Ui.dp(c, 12)
+        r.addView(caixa, lg)
+
         val col = Ui.vbox(c)
-        col.addView(Ui.text(c, nome, 15f, if (atual == id) Ui.RED else Ui.TEXT, true))
+        col.addView(Ui.text(c, nome, 15f, if (sel) Ui.RED else Ui.TEXT, true))
         col.addView(Ui.text(c, desc, 12f, Ui.MUTED))
         r.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         val dot = View(c)
-        dot.background = Ui.shape(c, if (atual == id) Ui.RED else Ui.MUTED, 8)
+        dot.background = Ui.shape(c, if (sel) Ui.RED else Ui.MUTED, 8)
         r.addView(dot, LinearLayout.LayoutParams(Ui.dp(c, 10), Ui.dp(c, 10)))
         Ui.clique(r) {
             Prefs.bypassGatilho = id
