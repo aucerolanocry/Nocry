@@ -274,7 +274,7 @@ var bypassVolAtivo: Boolean
         set(v) = ps("bg_tipo", v)
     /** brasas | aurora | grade | noite | sol | chuva | petalas | neve | ouro */
     var bgPreset: String
-        get() = gs("bg_preset").let { if (it != null && it in Temas.FUNDOS) it else "brasas" }
+        get() = gs("bg_preset").let { if (it != null && it in Temas.FUNDOS) it else "chuva" }
         set(v) = ps("bg_preset", v)
     /** nome do arquivo copiado pra dentro do app (imagem ou video escolhidos da galeria) */
     var bgArquivo: String?
@@ -288,15 +288,15 @@ var bypassVolAtivo: Boolean
         set(v) = pi("bg_blur", v.coerceIn(0, 25))
     /** cor 1 do degrade (a "cor de destaque" de antes) */
     var accent: Int
-        get() = sp.getInt("accent", 0xFFFF2D55.toInt())
+        get() = sp.getInt("accent", 0xFF3DFF7A.toInt())
         set(v) = pi("accent", v or 0xFF000000.toInt())
     /** cor 2 do degrade */
     var accent2: Int
-        get() = sp.getInt("accent2", 0xFFFF8A1F.toInt())
+        get() = sp.getInt("accent2", 0xFFF2F2F6.toInt())
         set(v) = pi("accent2", v or 0xFF000000.toInt())
     /** cor lisa de fundo do app */
     var baseCor: Int
-        get() = sp.getInt("base_cor", 0xFF0A0506.toInt())
+        get() = sp.getInt("base_cor", 0xFF020A04.toInt())
         set(v) = pi("base_cor", v or 0xFF000000.toInt())
     /** angulo do degrade em graus */
     var angulo: Int
@@ -304,30 +304,30 @@ var bypassVolAtivo: Boolean
         set(v) = pi("angulo", v.coerceIn(0, 360))
     /** id do tema pronto escolhido por ultimo (so informativo; o visual vem dos valores abaixo) */
     var tema: String
-        get() = gs("tema") ?: "brasa"
+        get() = gs("tema") ?: "matrix"
         set(v) = ps("tema", v)
     /** vidro | contorno | solido | hud */
     var cartao: String
-        get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido") it else "hud" }
+        get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido") it else "contorno" }
         set(v) = ps("cartao", v)
     /** quanto o cartao de vidro e opaco (20 a 95 %) */
     var vidro: Int
-        get() = gi("vidro", 62, 20, 95)
+        get() = gi("vidro", 70, 20, 95)
         set(v) = pi("vidro", v.coerceIn(20, 95))
     var raio: Int
-        get() = gi("raio", 18, 2, 30)
+        get() = gi("raio", 2, 2, 30)
         set(v) = pi("raio", v.coerceIn(2, 30))
     /** intensidade do brilho neon (0 = sem brilho) */
     var brilho: Int
-        get() = gi("brilho", 55, 0, 100)
+        get() = gi("brilho", 60, 0, 100)
         set(v) = pi("brilho", v.coerceIn(0, 100))
     /** espessura da borda dos cartoes, em dp */
     var borda: Int
-        get() = gi("borda", 2, 1, 4)
+        get() = gi("borda", 1, 1, 4)
         set(v) = pi("borda", v.coerceIn(1, 4))
     /** id do pacote de fonte (ver Packs) */
     var fonte: String
-        get() = gs("fonte").let { if (it != null && Packs.existe(it)) it else "bigs" }
+        get() = gs("fonte").let { if (it != null && Packs.existe(it)) it else "pixelify" }
         set(v) = ps("fonte", v)
     var escala: Int
         get() = gi("escala", 100, 85, 130)
@@ -344,7 +344,7 @@ var bypassVolAtivo: Boolean
         get() = sp.getBoolean("particulas", true)
         set(v) = pb("particulas", v)
     var scanner: Boolean
-        get() = sp.getBoolean("scanner", false)
+        get() = sp.getBoolean("scanner", true)
         set(v) = pb("scanner", v)
     var pulso: Boolean
         get() = sp.getBoolean("pulso", true)
