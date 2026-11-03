@@ -257,7 +257,8 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         campoPorta?.let { portaTxt = it.text.toString() }
         limpa()
         val c = act
-        add(Ui.text(c, "Sem Termux: o NOCRY conversa com a depuração sem fio do próprio celular. Faça os passos abaixo UMA vez (precisa estar no Wi-Fi).", 13f, Ui.MUTED), 0)
+        add(Ui.gradTexto(c, "CONEXÃO", 28f), 0)
+        add(Ui.text(c, "SIGA OS PASSOS ABAIXO UMA VEZ, NO WI-FI, PRA LIGAR O NOCRY NO CELULAR.", 13f, Ui.MUTED), 4)
 
         // 1
         val c1 = Ui.card(c)

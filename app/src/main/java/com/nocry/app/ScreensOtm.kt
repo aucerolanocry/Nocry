@@ -321,14 +321,21 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
+        add(Ui.gradTexto(c, if (tag == null) "LOGS" else tag.uppercase(), 28f), 0)
+        add(Ui.text(c, "REGISTRO DO QUE O NOCRY FEZ, DO MAIS ANTIGO PRO MAIS NOVO.", 13f, Ui.MUTED), 4)
+
+        val card = Ui.card(c)
+        card.addView(Ui.label(c, "ÚLTIMOS REGISTROS"))
         val t = Ui.text(c, NLog.text(tag), 11.5f, Ui.TEXT, code = true)
         t.setTextIsSelectable(true)
-        add(t, 0)
+        card.addView(t, Ui.lp(top = 8, c = c))
+        add(card, 14)
+
         add(Ui.button(c, "copiar", Ui.Kind.GHOST) {
             val cm = act.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cm.setPrimaryClip(ClipData.newPlainText("NOCRY log", NLog.text(tag)))
             Ui.toast(act, "COPIADO")
-        }, 16)
+        }, 14)
         add(Ui.button(c, "limpar", Ui.Kind.DANGER) { NLog.clear(); redesenha() }, 10)
     }
 }

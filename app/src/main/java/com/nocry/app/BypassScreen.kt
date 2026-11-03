@@ -32,10 +32,10 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         add(card, 0)
 
         add(Ui.label(c, "ESCOLHA O GATILHO"), 18)
-        cardGatilho("📵 DND", "QUANDO LIGAR O NÃO PERTURBE", "dnd")
-        cardGatilho("🔵 BLUETOOTH", "QUANDO LIGAR O BLUETOOTH", "bt")
+        cardGatilho("📵 NÃO PERTURBE", "LIGAR = APLICA · DESLIGAR = RESTAURA", "dnd")
+        cardGatilho("🔵 BLUETOOTH", "LIGAR = APLICA · DESLIGAR = RESTAURA", "bt")
         cardGatilho("🔌 CARREGADOR", "TIRAR = APLICA · COLOCAR = RESTAURA", "carga")
-        cardGatilho("🔊 VOLUME", "VOL+ Nx = APLICA · VOL- Nx = RESTAURA", "volume")
+        cardGatilho("🔊 VOLUME", "VOL+ Nx = APLICA · VOL− Nx = RESTAURA", "volume")
 
         add(Ui.label(c, "ESCOLHA O FREE FIRE"), 18)
         add(Ui.segmento(c, listOf("NORMAL", "MAX"), if (Prefs.bypassFf == "normal") 0 else 1) { i ->
