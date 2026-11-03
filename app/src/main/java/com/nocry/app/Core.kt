@@ -352,6 +352,10 @@ var bypassVolAtivo: Boolean
     var vibrar: Boolean
         get() = sp.getBoolean("vibrar", false)
         set(v) = pb("vibrar", v)
+    /** ja tentou copiar o video de fundo padrao (dos assets) pra pasta interna; evita repetir toda vez */
+    var bgPadraoAplicado: Boolean
+        get() = sp.getBoolean("bg_padrao_aplicado", false)
+        set(v) = pb("bg_padrao_aplicado", v)
     /** ordem dos atalhos do inicio (ids separados por virgula) e os escondidos */
     var ordem: String
         get() = gs("ordem") ?: ""

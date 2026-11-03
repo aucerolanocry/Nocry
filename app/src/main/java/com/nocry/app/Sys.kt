@@ -5,12 +5,42 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.Settings
+import java.io.File
 
 /** Ajustes do aparelho: configuracoes seguras, density e permissoes. */
 object Sys {
     lateinit var app: Context
 
-    fun init(c: Context) { app = c.applicationContext }
+    fun init(c: Context) {
+        app = c.applicationContext
+        aplicarVideoPadrao()
+    }
+
+    /** nome do video de fundo padrao dentro de assets/bg/ (embutido no APK) */
+    private const val ASSET_VIDEO_PADRAO = "bg/padrao.mp4"
+
+    /**
+     * Na primeira vez que o app roda (ou enquanto o usuario nao escolheu nenhum fundo),
+     * copia o video padrao dos assets pra pasta interna e liga como fundo, sem precisar
+     * o usuario ir em Personalizar escolher nada. So faz isso uma vez (bgPadraoAplicado)
+     * e nunca mexe se o usuario ja tiver algum fundo (video/imagem) escolhido.
+     */
+    private fun aplicarVideoPadrao() {
+        if (Prefs.bgPadraoAplicado) return
+        Prefs.bgPadraoAplicado = true
+        if (Prefs.bgArquivo != null) return
+        try {
+            val nome = "bg_padrao.mp4"
+            val destino = File(app.filesDir, nome)
+            app.assets.open(ASSET_VIDEO_PADRAO).use { ins ->
+                destino.outputStream().use { outs -> ins.copyTo(outs) }
+            }
+            Prefs.bgArquivo = nome
+            Prefs.bgTipo = "video"
+        } catch (_: Exception) {
+            // sem asset embutido ainda (ou falhou copiar): fica no fundo animado normal
+        }
+    }
 
     private val nomeOk = Regex("[a-z_]+")
     private val valorOk = Regex("[0-9]{1,6}")
