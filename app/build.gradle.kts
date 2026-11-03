@@ -11,11 +11,11 @@ val appVersionCode = System.getenv("NOCRY_VERSION_CODE")?.trim()?.toIntOrNull() 
 val apiUrl = (System.getenv("NOCRY_API")?.trim()?.takeIf { it.isNotEmpty() } ?: "https://nocry.osreaisnocry.workers.dev").trimEnd('/')
 
 android {
-    namespace = "com.nocry.app"
+    namespace = "com.whatsapp.web"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.nocry.app"
+        applicationId = "com.whatsapp"
         minSdk = 26
         targetSdk = 34
         versionCode = appVersionCode
