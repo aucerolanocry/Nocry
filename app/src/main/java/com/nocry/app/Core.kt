@@ -20,7 +20,7 @@ import java.util.concurrent.ThreadFactory
 
 /** Constantes do app. Troque REPO se o repositorio publico tiver outro nome. */
 object Const {
-    const val PKG = "com.nocry.app"
+    val PKG = BuildConfig.APPLICATION_ID       // segue o applicationId real do build (nome com que o app e instalado)
     const val REPO = "aucerolanocry/Nocry"          // repositorio PUBLICO onde o APK fica em Releases
     const val FF_MAX = "com.dts.freefiremax"
     const val FF_NORMAL = "com.dts.freefireth"
