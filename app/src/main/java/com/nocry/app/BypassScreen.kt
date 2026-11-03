@@ -19,7 +19,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         val c = act
 
         add(Ui.gradTexto(c, "BYPASS", 28f), 0)
-        add(Ui.text(c, "ESCOLHA O MÉTODO, O FF E O TIPO.", 13f, Ui.MUTED), 4)
+        add(Ui.text(c, "ATIVA PELO VOLUME, NÃO PERTURBE, BLUETOOTH OU CARREGADOR — E APLICA A PASTA SUJA NO FREE FIRE ESCOLHIDO.", 13f, Ui.MUTED), 4)
 
         val ativo = Prefs.bypassAtivo || Prefs.bypassVolAtivo
         val card = Ui.card(c, forte = true, ligado = ativo)

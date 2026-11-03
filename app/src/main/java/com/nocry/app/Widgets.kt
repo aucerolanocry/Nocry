@@ -103,6 +103,80 @@ class RingView(c: Context) : View(c) {
     }
 }
 
+/** Barra de progresso horizontal em degrade, com brilho pulsando enquanto baixa (indeterminada quando p = null). */
+class BarraProgresso(c: Context) : View(c) {
+    private val fundo = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val cheio = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val rr = RectF()
+    private var mostrado = 0f
+    private var alvo = 0f
+    private var indet = false
+    private var fase = 0f
+    private var anim: ValueAnimator? = null
+    private var onda: ValueAnimator? = null
+
+    init {
+        if (Prefs.anim) {
+            val o = ValueAnimator.ofFloat(0f, 1f)
+            o.duration = 1100
+            o.repeatCount = ValueAnimator.INFINITE
+            o.addUpdateListener { fase = it.animatedValue as Float; if (indet || mostrado > 0f) invalidate() }
+            onda = o
+            o.start()
+        }
+    }
+
+    /** p de 0 a 1; null = indeterminado (ainda nao sabe o tamanho total) */
+    fun define(p: Float?) {
+        indet = p == null
+        val novo = (p ?: 1f).coerceIn(0f, 1f)
+        if (novo == alvo && !indet) { invalidate(); return }
+        alvo = novo
+        anim?.cancel()
+        if (!Prefs.anim) { mostrado = alvo; invalidate(); return }
+        val a = ValueAnimator.ofFloat(mostrado, alvo)
+        a.duration = 260
+        a.addUpdateListener { mostrado = it.animatedValue as Float; invalidate() }
+        anim = a
+        a.start()
+    }
+
+    override fun onDetachedFromWindow() { anim?.cancel(); onda?.cancel(); super.onDetachedFromWindow() }
+
+    override fun onMeasure(w: Int, h: Int) {
+        val d = resources.displayMetrics.density
+        setMeasuredDimension(MeasureSpec.getSize(w), (8 * d).toInt())
+    }
+
+    override fun onDraw(cv: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        rr.set(0f, 0f, w, h)
+        fundo.shader = null
+        fundo.color = Theme.alpha(Color.WHITE, 0x18)
+        cv.drawRoundRect(rr, h / 2f, h / 2f, fundo)
+        if (indet) {
+            val largura = w * 0.3f
+            val x = (w + largura) * fase - largura
+            cv.save()
+            cv.clipRect(0f, 0f, w, h)
+            cheio.shader = LinearGradient(x, 0f, x + largura, 0f, Theme.accent, Theme.accent2, Shader.TileMode.CLAMP)
+            cv.drawRoundRect(RectF(x, 0f, x + largura, h), h / 2f, h / 2f, cheio)
+            cv.restore()
+        } else if (mostrado > 0.001f) {
+            val fw = w * mostrado
+            cheio.shader = LinearGradient(0f, 0f, maxOf(fw, 1f), 0f, Theme.accent, Theme.accent2, Shader.TileMode.CLAMP)
+            cv.drawRoundRect(RectF(0f, 0f, fw, h), h / 2f, h / 2f, cheio)
+            if (Prefs.brilho > 0) {
+                val g = Prefs.brilho / 100f
+                cheio.alpha = (0x55 * g * (0.6f + 0.4f * fase)).toInt().coerceIn(0, 255)
+                cv.drawCircle(fw, h / 2f, h * 1.6f, cheio)
+                cheio.alpha = 255
+            }
+        }
+    }
+}
+
 /** Interruptor em degrade (liga/desliga com animacao). */
 class Chave(c: Context, ligado: Boolean, private val aoMudar: (Boolean) -> Unit) : View(c) {
     var ligado = ligado

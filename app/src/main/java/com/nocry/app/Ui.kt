@@ -430,7 +430,10 @@ object Ui {
         return col
     }
 
-    fun toast(c: Context, msg: String) { Toast.makeText(c, msg, Toast.LENGTH_SHORT).show() }
+    /** maiusculo o texto quando o modo "tudo maiusculo" esta ligado; usado onde o texto nao passa pelo text() */
+    private fun up(s: String): String = if (Prefs.maiusc) s.uppercase() else s
+
+    fun toast(c: Context, msg: String) { Toast.makeText(c, up(msg), Toast.LENGTH_SHORT).show() }
 
     // ---------------- caixas de dialogo ----------------
     private fun builder(c: Context) = AlertDialog.Builder(c, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
@@ -444,12 +447,12 @@ object Ui {
         box.setPadding(p, dp(c, 8), p, 0)
         box.addView(text(c, "de $min a $max", 12f, MUTED))
         box.addView(e, lp(top = 8, c = c))
-        builder(c).setTitle(titulo).setView(box)
-            .setPositiveButton("OK") { _, _ ->
+        builder(c).setTitle(up(titulo)).setView(box)
+            .setPositiveButton(up("OK")) { _, _ ->
                 val v = e.text.toString().trim().toIntOrNull()
                 if (v == null || v < min || v > max) toast(c, "Use um numero de $min a $max") else onOk(v)
             }
-            .setNegativeButton("CANCELAR", null)
+            .setNegativeButton(up("CANCELAR"), null)
             .show()
     }
 
@@ -459,23 +462,23 @@ object Ui {
         val p = dp(c, 20)
         box.setPadding(p, dp(c, 8), p, 0)
         box.addView(e)
-        builder(c).setTitle(titulo).setView(box)
-            .setPositiveButton("OK") { _, _ -> onOk(e.text.toString()) }
-            .setNegativeButton("CANCELAR", null)
+        builder(c).setTitle(up(titulo)).setView(box)
+            .setPositiveButton(up("OK")) { _, _ -> onOk(e.text.toString()) }
+            .setNegativeButton(up("CANCELAR"), null)
             .show()
     }
 
     fun dialogEscolha(c: Context, titulo: String, opcoes: List<String>, onPick: (Int) -> Unit) {
-        builder(c).setTitle(titulo)
-            .setItems(opcoes.toTypedArray()) { _, i -> onPick(i) }
-            .setNegativeButton("CANCELAR", null)
+        builder(c).setTitle(up(titulo))
+            .setItems(opcoes.map { up(it) }.toTypedArray()) { _, i -> onPick(i) }
+            .setNegativeButton(up("CANCELAR"), null)
             .show()
     }
 
     fun dialogConfirma(c: Context, titulo: String, msg: String, ok: String = "SIM", onOk: () -> Unit) {
-        builder(c).setTitle(titulo).setMessage(msg)
-            .setPositiveButton(ok) { _, _ -> onOk() }
-            .setNegativeButton("CANCELAR", null)
+        builder(c).setTitle(up(titulo)).setMessage(up(msg))
+            .setPositiveButton(up(ok)) { _, _ -> onOk() }
+            .setNegativeButton(up("CANCELAR"), null)
             .show()
     }
 }

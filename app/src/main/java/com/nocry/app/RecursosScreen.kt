@@ -15,15 +15,16 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
     private var ff = ffInicial
     private var log = ""
     private var ocupado = false
+    private var percent: Float? = null
 
-    override fun key(): String = "$ff|$log|$ocupado"
+    override fun key(): String = "$ff|$log|$ocupado|$percent"
 
     override fun render() {
         limpa()
         val c = act
 
         add(Ui.gradTexto(c, "INSTALAR RECURSOS", 28f), 0)
-        add(Ui.text(c, "BAIXE AS PASTAS DE CONFIGURAÇÃO DIRETO PELO APP.", 13f, Ui.MUTED), 4)
+        add(Ui.text(c, "INSTALA A PASTA SUJA (USADA PELO BYPASS) E A PASTA LIMPA (PRA RESTAURAR DEPOIS), DIRETO PELO APP.", 13f, Ui.MUTED), 4)
 
         val temPermissao = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
@@ -56,7 +57,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
             // BOTÃO DE INSTALAR SUJA
             add(Ui.button(c, "INSTALAR SUJA (AUTOMÁTICO)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
                 if (ocupado) return@button
-                ocupado = true; log = "INICIANDO SUJA..."; redesenha()
+                ocupado = true; log = "INICIANDO SUJA..."; percent = null; redesenha()
 
                 val nome = if (ff == "normal") "sujasc.zip" else "sujaffmax.zip"
                 val url = "https://nocry-download.osreaisnocry.workers.dev/$nome"
@@ -67,14 +68,17 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
                     ouvinte = object : Baixador.Ouvinte {
                         override fun aoProgredir(baixado: Long, total: Long) {
                             log = "BAIXANDO SUJA... ${Baixador.formatar(baixado)} de ${Baixador.formatar(total)}"
+                            percent = if (total > 0) (baixado.toFloat() / total.toFloat()) else null
                             redesenha()
                         }
 
                         override fun aoTerminar(arquivo: File) {
                             log = "SUJA BAIXADA! EXTRAINDO..."
+                            percent = null
                             redesenha()
                             Bg.run({ extrair(arquivo, destino, "android") }) { ok ->
                                 ocupado = false
+                                percent = if (ok) 1f else null
                                 log = if (ok) "PASTA SUJA INSTALADA!" else "FALHA AO EXTRAIR"
                                 redesenha()
                             }
@@ -82,6 +86,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
 
                         override fun aoFalhar(motivo: String) {
                             ocupado = false
+                            percent = null
                             log = "FALHA NA SUJA: $motivo"
                             redesenha()
                         }
@@ -101,7 +106,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
             // BOTÃO DE INSTALAR LIMPA
             add(Ui.button(c, "INSTALAR LIMPA (AUTOMÁTICO)", Ui.Kind.GHOST, R.drawable.ic_stop) {
                 if (ocupado) return@button
-                ocupado = true; log = "INICIANDO LIMPA..."; redesenha()
+                ocupado = true; log = "INICIANDO LIMPA..."; percent = null; redesenha()
 
                 val nome = if (ff == "normal") "android.zip" else "limpaffmax.zip"
                 val url = "https://nocry-download.osreaisnocry.workers.dev/$nome"
@@ -112,14 +117,17 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
                     ouvinte = object : Baixador.Ouvinte {
                         override fun aoProgredir(baixado: Long, total: Long) {
                             log = "BAIXANDO LIMPA... ${Baixador.formatar(baixado)} de ${Baixador.formatar(total)}"
+                            percent = if (total > 0) (baixado.toFloat() / total.toFloat()) else null
                             redesenha()
                         }
 
                         override fun aoTerminar(arquivo: File) {
                             log = "LIMPA BAIXADA! EXTRAINDO..."
+                            percent = null
                             redesenha()
                             Bg.run({ extrair(arquivo, destino, "android") }) { ok ->
                                 ocupado = false
+                                percent = if (ok) 1f else null
                                 log = if (ok) "PASTA LIMPA INSTALADA!" else "FALHA AO EXTRAIR"
                                 redesenha()
                             }
@@ -127,6 +135,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
 
                         override fun aoFalhar(motivo: String) {
                             ocupado = false
+                            percent = null
                             log = "FALHA NA LIMPA: $motivo"
                             redesenha()
                         }
@@ -145,8 +154,18 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
         }
 
         if (log.isNotEmpty()) {
-            add(Ui.labelIcone(c, R.drawable.ic_log, "LOG"), 18)
-            add(Ui.text(c, log, 12f, Ui.TEXT, mono = true), 8)
+            val sucesso = log.contains("INSTALADA!")
+            val falha = log.contains("FALHA")
+            val card = Ui.card(c, forte = ocupado)
+            card.addView(Ui.labelIcone(c, if (falha) R.drawable.ic_warn else R.drawable.ic_download, if (ocupado) "BAIXANDO" else if (sucesso) "PRONTO" else if (falha) "FALHOU" else "LOG"))
+            if (ocupado || sucesso) {
+                val bp = BarraProgresso(c)
+                bp.define(if (sucesso) 1f else percent)
+                card.addView(bp, Ui.lp(top = 10, c = c))
+            }
+            val cor = if (falha) Ui.BAD else if (sucesso) Ui.OK else Ui.TEXT
+            card.addView(Ui.text(c, log, 12f, cor, sucesso || falha, mono = true), Ui.lp(top = 8, c = c))
+            add(card, 18)
         }
     }
 
