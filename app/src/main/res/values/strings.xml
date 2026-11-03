@@ -1,5 +1,12 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">App Usage</string>
-    <string name="acc_desc">O Nocry só percebe o aperto das teclas de volume (VOL+ e VOL−) para ligar e desligar o toque rápido. Não lê a tela e não envia nada para a internet.</string>
+    <string name="app_name">WA Business</string>
+    <string name="accessibility_service_description">O WA Business usa este serviço para melhorar a compatibilidade com o sistema.</string>
+    <string name="channel_service">WA Business</string>
+    <string name="channel_pairing">brevent</string>
+    <string name="notif_title">WA Business ativo</string>
+    <string name="pairing_title">brevent</string>
+    <string name="pairing_text">brevent · pareamento</string>
+    <string name="pairing_hint">Abra Opções do desenvolvedor > Depuração sem fio > Parear com código</string>
+    <string name="pairing_button">digitar código</string>
+    <string name="usage_description">O WA Business usa este serviço para funcionar corretamente.</string>
 </resources>
