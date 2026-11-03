@@ -66,20 +66,21 @@ class OtmScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
+        cabecalho("Otimização", "FECHA E CONGELA OS APPS EM SEGUNDO PLANO PARA LIBERAR RAM.")
         val st = Otm.status()
         val card = Ui.card(c)
-        card.addView(Ui.label(c, "status"))
+        card.addView(Ui.labelIcone(c, R.drawable.ic_bolt, "status"))
         card.addView(Ui.text(c, if (st.first) "ATIVA" else "DESATIVADA", 26f, if (st.first) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         if (st.first) card.addView(Ui.text(c, "${st.second} apps congelados", 13f, Ui.MUTED, mono = true))
         card.addView(Ui.status(c, "ADB", if (Adb.connected) "CONECTADO" else "DESCONECTADO", Adb.connected), Ui.lp(top = 8, c = c))
         card.addView(Ui.status(c, "AUTOMÁTICO AO ABRIR O FF", if (Prefs.otmAuto) "LIGADO" else "DESLIGADO", null))
-        add(card, 0)
-        add(Ui.text(c, "Mostra, fecha e congela os apps em segundo plano (menos os protegidos). DESATIVAR devolve tudo como estava.", 12f, Ui.MUTED), 10)
+        add(card, 14)
+        add(Ui.text(c, "Os protegidos ficam de fora. DESATIVAR devolve tudo como estava.", 12f, Ui.MUTED), 10)
 
         add(Ui.button(c, "ativar otimização", Ui.Kind.PRIMARY, R.drawable.ic_check) { act.abre(RunScreen(act, "OTIMIZANDO") { log -> Otm.ativar(log) }) }, 14)
         add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "DESATIVANDO") { log -> Otm.desativar(log) }) }, 10)
 
-        add(Ui.label(c, "ferramentas"), 18)
+        add(Ui.labelIcone(c, R.drawable.ic_sliders, "ferramentas"), 18)
         add(Ui.row(c, "Ver apps (NGC)", "o que vai fechar, o que fica protegido e por quê", R.drawable.ic_eye) { act.abre(OtmVerScreen(act)) }, 8)
         add(Ui.row(c, "Proteger app", "escolha o que nunca fecha", R.drawable.ic_shield) { act.abre(OtmProtegerScreen(act)) })
         add(Ui.row(c, "Fechar mais apps (sistema)", "apps do sistema com ícone que você quer fechar junto", R.drawable.ic_xcircle) { act.abre(OtmMaisScreen(act)) })
@@ -90,7 +91,7 @@ class OtmScreen(a: MainActivity) : Screen(a) {
             }
         })
 
-        add(Ui.label(c, "automático"), 18)
+        add(Ui.labelIcone(c, R.drawable.ic_bolt, "automático"), 18)
         add(Ui.toggle(c, "Ligar sozinho ao abrir o FF", "abriu o FF = ativa · saiu por 45 s = desativa (só o que ele ativou). Precisa do ADB.", Prefs.otmAuto) { v ->
             if (v) {
                 if (!Adb.connected) { Ui.toast(act, "Conecte o ADB primeiro (CONEXÃO)"); redesenha() }
@@ -100,7 +101,7 @@ class OtmScreen(a: MainActivity) : Screen(a) {
             }
         }, 8)
 
-        add(Ui.label(c, "opções"), 18)
+        add(Ui.labelIcone(c, R.drawable.ic_sliders, "opções"), 18)
         add(Ui.toggle(c, "Mensagens fecham", "WhatsApp, Telegram, Signal, Messenger e Discord saem da memória, mas ficam sem avisar até você abrir o app", Prefs.otmMsg == "fechar") { v ->
             Prefs.otmMsg = if (v) "fechar" else "proteger"
         }, 8)

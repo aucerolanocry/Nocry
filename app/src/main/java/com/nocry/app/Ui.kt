@@ -138,6 +138,17 @@ object Ui {
         return t
     }
 
+    /** etiqueta com um iconezinho do lado, no mesmo padrao usado no Bypass e na Conexao */
+    fun labelIcone(c: Context, iconRes: Int, s: String): View {
+        val r = hbox(c)
+        val caixa = caixaIcone(c, iconRes, false, 26)
+        val lp = LinearLayout.LayoutParams(dp(c, 26), dp(c, 26))
+        lp.rightMargin = dp(c, 8)
+        r.addView(caixa, lp)
+        r.addView(label(c, s))
+        return r
+    }
+
     fun spacer(c: Context, h: Int): View {
         val v = View(c)
         v.layoutParams = LinearLayout.LayoutParams(1, dp(c, h))

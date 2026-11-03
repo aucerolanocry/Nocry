@@ -75,6 +75,12 @@ abstract class Screen(val act: MainActivity) {
 
     protected fun add(v: View, top: Int = 10) { root.addView(v, Ui.lp(top = top, c = act)) }
     protected fun limpa() { root.removeAllViews() }
+
+    /** titulo grande em degrade + subtitulo, no mesmo padrao usado em todas as telas */
+    protected fun cabecalho(titulo: String, subtitulo: String) {
+        add(Ui.gradTexto(act, titulo, 28f), 0)
+        add(Ui.text(act, subtitulo, 13f, Ui.MUTED), 4)
+    }
 }
 
 class MainActivity : Activity() {

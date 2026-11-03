@@ -9,10 +9,10 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
 
-class RecursosScreen(a: MainActivity) : Screen(a) {
+class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) {
     override val titulo = "INSTALAR RECURSOS"
 
-    private var ff = "normal"
+    private var ff = ffInicial
     private var log = ""
     private var ocupado = false
 
@@ -41,12 +41,12 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
         } else {
             val (pastaA, pastaB) = Downloader.pastasInstaladas(ff)
             val card = Ui.card(c)
-            card.addView(Ui.label(c, "STATUS DAS PASTAS"))
+            card.addView(Ui.labelIcone(c, R.drawable.ic_download, "STATUS DAS PASTAS"))
             card.addView(Ui.status(c, "PASTA SUJA (XIT)", if (pastaA) "INSTALADA" else "FALTA", pastaA), Ui.lp(top = 8, c = c))
             card.addView(Ui.status(c, "PASTA LIMPA (RESTAURAR)", if (pastaB) "INSTALADA" else "FALTA", pastaB))
             add(card, 0)
 
-            add(Ui.label(c, "ESCOLHA O FREE FIRE"), 18)
+            add(Ui.labelIcone(c, R.drawable.ic_gamepad, "ESCOLHA O FREE FIRE"), 18)
             add(Ui.segmento(c, listOf("NORMAL", "MAX"), if (ff == "normal") 0 else 1) { i ->
                 if (ocupado) return@segmento
                 ff = if (i == 0) "normal" else "max"
@@ -145,7 +145,7 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
         }
 
         if (log.isNotEmpty()) {
-            add(Ui.label(c, "LOG"), 18)
+            add(Ui.labelIcone(c, R.drawable.ic_log, "LOG"), 18)
             add(Ui.text(c, log, 12f, Ui.TEXT, mono = true), 8)
         }
     }

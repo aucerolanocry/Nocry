@@ -79,6 +79,14 @@ class BypassScreen(a: MainActivity) : Screen(a) {
                     Ui.toast(act, "LIMITE DIÁRIO ATINGIDO")
                     return@button
                 }
+                val ff = Prefs.bypassFf
+                if (!Downloader.pastasInstaladas(ff).first) {
+                    val nomeFf = if (ff == "max") "FF MAX" else "FF NORMAL"
+                    Ui.dialogConfirma(act, "FALTA A PASTA SUJA", "A pasta suja do $nomeFf ainda não foi instalada. Sem ela o bypass não tem o que aplicar. Instalar agora?", "INSTALAR") {
+                        act.abre(RecursosScreen(act, ff))
+                    }
+                    return@button
+                }
                 if (Prefs.bypassGatilho == "volume") {
                     Bg.run({ if (!Sys.acessibilidadeLigada()) Sys.ligarAcessibilidade() else true; EngineBypass.iniciarVolume(); 0 }) { _ ->
                         if (Sys.acessibilidadeLigada()) {

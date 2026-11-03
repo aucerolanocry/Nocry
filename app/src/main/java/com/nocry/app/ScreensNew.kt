@@ -177,7 +177,7 @@ class OrganizarScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        add(Ui.text(c, "Escolha a ordem dos modos na tela inicial. O olho mostra ou esconde cada um.", 13f, Ui.MUTED), 0)
+        cabecalho("Organizar início", "ESCOLHA A ORDEM DOS MODOS. O OLHO MOSTRA OU ESCONDE CADA UM.")
 
         val lista = Atalhos.ordem()
         val ocultos = lista.filter { Atalhos.escondido(it.id) }.map { it.id }
@@ -280,9 +280,9 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     /** mudou so o fundo */
     private fun fundo() { act.refazFundo(); redesenha() }
 
-    private fun secao(c: Context, titulo: String, forte: Boolean = false): LinearLayout {
+    private fun secao(c: Context, titulo: String, forte: Boolean = false, icone: Int? = null): LinearLayout {
         val k = Ui.card(c, forte = forte)
-        k.addView(Ui.label(c, titulo))
+        k.addView(if (icone != null) Ui.labelIcone(c, icone, titulo) else Ui.label(c, titulo))
         return k
     }
 
@@ -303,7 +303,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         add(Ui.text(c, "Deixe o NOCRY do seu jeito. Tudo muda na hora e fica salvo.", 13f, Ui.MUTED), 0)
 
         // ---------------- temas prontos ----------------
-        val tm = secao(c, "temas prontos", forte = true)
+        val tm = secao(c, "temas prontos", forte = true, icone = R.drawable.ic_sparkle)
         val cartas = ArrayList<View>()
         for (t in Temas.lista) {
             val sel = Prefs.tema == t.id
@@ -324,7 +324,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         add(tm, 12)
 
         // ---------------- cores ----------------
-        val k = secao(c, "cores")
+        val k = secao(c, "cores", icone = R.drawable.ic_brush)
         val faixa = FaixaGrad(c)
         k.addView(faixa, Ui.lp(top = 12, h = Ui.dp(c, 18), c = c))
 
@@ -341,7 +341,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         add(k, 12)
 
         // ---------------- cartoes ----------------
-        val v = secao(c, "cartões e botões")
+        val v = secao(c, "cartões e botões", icone = R.drawable.ic_image)
         val estilos = listOf("vidro", "contorno", "solido", "hud")
         v.addView(Ui.segmento(c, listOf("Vidro", "Contorno", "Sólido", "HUD"), estilos.indexOf(Prefs.cartao).coerceAtLeast(0)) { i ->
             Prefs.cartao = estilos[i]
@@ -363,14 +363,14 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         add(secaoFundo(c), 12)
 
         // ---------------- fontes ----------------
-        val t = secao(c, "fonte")
+        val t = secao(c, "fonte", icone = R.drawable.ic_sliders)
         t.addView(fontes(c), Ui.lp(top = 12, c = c))
         t.addView(Ui.toggle(c, "Tudo em maiúsculo", "títulos, botões e textos em CAIXA ALTA", Prefs.maiusc) { x -> Prefs.maiusc = x; muda() }, Ui.lp(top = 14, c = c))
         t.addView(Ui.slider(c, "Tamanho do texto", Prefs.escala, 85, 130, "%") { x -> Prefs.escala = x; muda() }, Ui.lp(top = 14, c = c))
         add(t, 12)
 
         // ---------------- efeitos ----------------
-        val e = secao(c, "efeitos")
+        val e = secao(c, "efeitos", icone = R.drawable.ic_bolt)
         e.addView(Ui.toggle(c, "Animações", "fundo animado, anel e transições", Prefs.anim) { x -> Prefs.anim = x; muda() }, Ui.lp(top = 12, c = c))
         e.addView(Ui.toggle(c, "Partículas", "brasas, neve, pétalas, chuva de código", Prefs.particulas) { x -> Prefs.particulas = x; muda() }, Ui.lp(top = 8, c = c))
         e.addView(Ui.toggle(c, "Linhas de scanner", "listras e uma faixa de luz que varre a tela", Prefs.scanner) { x -> Prefs.scanner = x; muda() }, Ui.lp(top = 8, c = c))
@@ -393,7 +393,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
 
     // ---------------- intro de abertura ----------------
     private fun secaoIntro(c: Context): View {
-        val s = secao(c, "intro de abertura")
+        val s = secao(c, "intro de abertura", icone = R.drawable.ic_play)
         s.addView(Ui.text(c, "Animação HACKER com “app desenvolvido por aucerola”. Toque na tela para pular.", 12f, Ui.MUTED), Ui.lp(top = 10, c = c))
 
         val modos = listOf("sempre", "novo", "off")
@@ -588,7 +588,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
 
     // ---------------- fundo ----------------
     private fun secaoFundo(c: Context): View {
-        val f = secao(c, "fundo")
+        val f = secao(c, "fundo", icone = R.drawable.ic_image)
         val tipos = listOf("animado", "imagem", "vídeo", "liso")
         val atual = when (Prefs.bgTipo) { "imagem" -> 1; "video" -> 2; "solido" -> 3; else -> 0 }
         f.addView(Ui.segmento(c, tipos, atual) { i ->

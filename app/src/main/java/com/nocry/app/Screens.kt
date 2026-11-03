@@ -406,13 +406,13 @@ class CompScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
+        cabecalho("Modo competitivo", "TOQUE RÁPIDO (LONG = 1 · MULTI = 0), SEM MEXER NA TELA.")
         val on = Comp.ligado()
         val card = Ui.card(c)
-        card.addView(Ui.label(c, "status"))
+        card.addView(Ui.labelIcone(c, R.drawable.ic_gamepad, "status"))
         card.addView(Ui.text(c, if (on) "ATIVO" else "DESATIVADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         card.addView(Ui.text(c, "long_press_timeout = ${Sys.getSecure("long_press_timeout") ?: "padrão"}\nmulti_press_timeout = ${Sys.getSecure("multi_press_timeout") ?: "padrão"}", 13f, Ui.MUTED, mono = true), Ui.lp(top = 8, c = c))
-        add(card, 0)
-        add(Ui.text(c, "ATIVO: toque rápido (long = 1 · multi = 0).\nINATIVO: volta ao que o aparelho tinha antes.", 13f, Ui.MUTED), 12)
+        add(card, 14)
         if (!Toque.podeMexer()) add(Ui.text(c, "Sem permissão e sem ADB. Faça a CONEXÃO primeiro.", 13f, Ui.WARN, true), 10)
         add(Ui.button(c, if (ocupado) "aguarde..." else "ativar modo competitivo") { if (!ocupado) roda({ Comp.ativar() }, "MODO COMPETITIVO ATIVO", "O aparelho não aceitou a mudança") }, 14)
         add(Ui.button(c, "desativar modo competitivo", Ui.Kind.DANGER) { if (!ocupado) roda({ Comp.desativar(true) }, "DESATIVADO — tudo voltou ao normal", "O aparelho não aceitou a mudança") }, 10)
@@ -432,16 +432,17 @@ class VolScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
+        cabecalho("Toque via volume", "SÓ MEXE EM LONG PRESS E MULTI PRESS, SEM DENSITY E SEM ABRIR O APP.")
         val on = Prefs.volAtivo
         val card = Ui.card(c)
-        card.addView(Ui.label(c, "monitor"))
+        card.addView(Ui.labelIcone(c, R.drawable.ic_volume, "monitor"))
         card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         card.addView(Ui.text(c, "VOL+ ${Prefs.clicksUp}x rápido → LIGADO (long ${Prefs.longOn} · multi ${Prefs.multiOn})\nVOL− ${Prefs.clicksDown}x rápido → NORMAL (${Prefs.normal})", 13f, Ui.TEXT, mono = true), Ui.lp(top = 8, c = c))
         val escuta = if (KeyService.ativo) "acessibilidade" else if (Adb.connected) "ADB (getevent)" else "NENHUMA — faça a CONEXÃO"
         card.addView(Ui.status(c, "ESCUTA", escuta, KeyService.ativo || Adb.connected), Ui.lp(top = 8, c = c))
         card.addView(Ui.status(c, "TOQUE AGORA", if (Prefs.markVol) "LIGADO POR AQUI" else "NORMAL", null))
-        add(card, 0)
-        add(Ui.text(c, "Só mexe em long press e multi press. Sem density, sem abrir app. Aperte o mesmo botão de volume rápido (até 0,9 s entre os apertos).", 12f, Ui.MUTED), 10)
+        add(card, 14)
+        add(Ui.text(c, "Aperte o mesmo botão de volume rápido (até 0,9 s entre os apertos).", 12f, Ui.MUTED), 10)
 
         if (on) add(Ui.button(c, if (ocupado) "aguarde..." else "parar monitor", Ui.Kind.DANGER) {
             if (!ocupado) {
@@ -479,9 +480,10 @@ class CargaScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
+        cabecalho("Toque via carregador", "SÓ REAGE QUANDO O CARREGADOR MUDA.")
         val on = Prefs.cargaAtivo
         val card = Ui.card(c)
-        card.addView(Ui.label(c, "monitor"))
+        card.addView(Ui.labelIcone(c, R.drawable.ic_plug, "monitor"))
         card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         val g = if (on) Prefs.cargaGatilho else gatilho
         val txt = if (g == "tirou") "TIROU o carregador → LIGADO (long ${Prefs.longOn} · multi ${Prefs.multiOn})\nCOLOCOU o carregador → NORMAL (${Prefs.normal})"
@@ -490,8 +492,8 @@ class CargaScreen(a: MainActivity) : Screen(a) {
         card.addView(Ui.status(c, "CARREGADOR AGORA", if (Power.plugged(c)) "LIGADO" else "DESLIGADO", null), Ui.lp(top = 8, c = c))
         if (on) card.addView(Ui.status(c, "REPETIÇÕES RESTANTES", Prefs.cargaRep.toString(), null))
         card.addView(Ui.status(c, "TOQUE AGORA", if (Prefs.markCarga) "LIGADO POR AQUI" else "NORMAL", null))
-        add(card, 0)
-        add(Ui.text(c, "Só reage quando o carregador MUDA. Cada repetição = liga e volta ao normal; ao acabar, o monitor para sozinho.", 12f, Ui.MUTED), 10)
+        add(card, 14)
+        add(Ui.text(c, "Cada repetição = liga e volta ao normal; ao acabar, o monitor para sozinho.", 12f, Ui.MUTED), 10)
 
         if (on) {
             add(Ui.button(c, if (ocupado) "aguarde..." else "parar monitor", Ui.Kind.DANGER) {
@@ -537,9 +539,10 @@ class McScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
+        cabecalho("Modo carregador", "PRECISA DO ADB CONECTADO.")
         val on = Prefs.mcAtivo
         val card = Ui.card(c)
-        card.addView(Ui.label(c, "monitor"))
+        card.addView(Ui.labelIcone(c, R.drawable.ic_plug, "monitor"))
         card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
         val nome = if ((if (on) Prefs.mcFf else ff) == "normal") "FF NORMAL" else "FF MAX"
         card.addView(Ui.text(c, "LIGOU o carregador → density ${if (on) Prefs.mcDens else dens} + abre o $nome\nTIROU o carregador → a density volta ao que era", 13f, Ui.TEXT, mono = true), Ui.lp(top = 8, c = c))
@@ -547,8 +550,8 @@ class McScreen(a: MainActivity) : Screen(a) {
         card.addView(Ui.status(c, "CARREGADOR AGORA", if (Power.plugged(c)) "LIGADO" else "DESLIGADO", null))
         if (on) card.addView(Ui.status(c, "REPETIÇÕES RESTANTES", Prefs.mcCycles.toString(), null))
         card.addView(Ui.status(c, "TELA", if (Prefs.densOrig != null) "DENSITY ALTERADA" else "NORMAL", if (Prefs.densOrig != null) false else true))
-        add(card, 0)
-        add(Ui.text(c, "Precisa do ADB conectado. Pra parar sem abrir o app: VOL+ VOL− VOL+ VOL− rápido (só vale com a density alterada).", 12f, Ui.MUTED), 10)
+        add(card, 14)
+        add(Ui.text(c, "Pra parar sem abrir o app: VOL+ VOL− VOL+ VOL− rápido (só vale com a density alterada).", 12f, Ui.MUTED), 10)
 
         if (Prefs.densOrig != null) {
             add(Ui.button(c, if (ocupado) "aguarde..." else "restaurar a tela agora", Ui.Kind.PRIMARY) {
@@ -603,8 +606,8 @@ class AjustesScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        add(Ui.text(c, "Valores em milissegundos, de 1 a 600. Valem na hora para os monitores de volume e de carregador.", 13f, Ui.MUTED), 0)
-        add(Ui.label(c, "toque LIGADO"), 14)
+        cabecalho("Ajustes do toque", "VALORES EM MILISSEGUNDOS (1 A 600), VALEM NA HORA PROS MONITORES DE VOLUME E CARREGADOR.")
+        add(Ui.labelIcone(c, R.drawable.ic_sliders, "toque LIGADO"), 14)
         add(Ui.row(c, "Long press: ${Prefs.longOn}", "toque para mudar (1 a 600)") {
             Ui.dialogNumero(act, "LONG PRESS LIGADO", "1 a 600", 1, 600, Prefs.longOn) { v -> Prefs.longOn = v; redesenha() }
         }, 8)
@@ -614,11 +617,11 @@ class AjustesScreen(a: MainActivity) : Screen(a) {
         add(Ui.row(c, "Igualar os dois", "multi press = long press (${Prefs.longOn})") {
             Prefs.multiOn = Prefs.longOn; redesenha()
         })
-        add(Ui.label(c, "toque NORMAL"), 14)
+        add(Ui.labelIcone(c, R.drawable.ic_sliders, "toque NORMAL"), 14)
         add(Ui.row(c, "Valor normal: ${Prefs.normal}", "usado nos dois quando volta ao normal (1 a 600)") {
             Ui.dialogNumero(act, "VALOR NORMAL", "1 a 600", 1, 600, Prefs.normal) { v -> Prefs.normal = v; redesenha() }
         }, 8)
-        add(Ui.label(c, "toque via volume · quantos apertos"), 14)
+        add(Ui.labelIcone(c, R.drawable.ic_volume, "toque via volume · quantos apertos"), 14)
         add(Ui.row(c, "VOL+ : ${Prefs.clicksUp} apertos", "liga o toque rápido (2 a 9)") {
             Ui.dialogNumero(act, "APERTOS DO VOL+", "2 a 9", 2, 9, Prefs.clicksUp) { v -> Prefs.clicksUp = v; redesenha() }
         }, 8)
@@ -659,7 +662,11 @@ class TestarScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        add(Ui.text(c, saida, 13f, Ui.TEXT, mono = true), 0)
+        cabecalho("Testar agora", "MEXE NO TOQUE DE VERDADE E MOSTRA O QUE O APARELHO LEU DE VOLTA.")
+        val card = Ui.card(c)
+        card.addView(Ui.labelIcone(c, R.drawable.ic_check, "resultado"))
+        card.addView(Ui.text(c, saida, 13f, Ui.TEXT, mono = true), Ui.lp(top = 6, c = c))
+        add(card, 14)
         add(Ui.button(c, "testar: ligar o toque rápido") { testa("rapido") }, 16)
         add(Ui.button(c, "testar: voltar ao normal", Ui.Kind.GHOST) { testa("normal") }, 10)
     }
