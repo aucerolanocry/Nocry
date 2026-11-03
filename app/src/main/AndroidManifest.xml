@@ -13,7 +13,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-    
+    <!-- pra instalar o APK da atualizacao direto pelo app, sem precisar do navegador -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- concedida pelo proprio app via ADB (pm grant) depois do pareamento -->
     <uses-permission
         android:name="android.permission.WRITE_SECURE_SETTINGS"
@@ -80,5 +82,16 @@
         <receiver
             android:name=".PairReceiver"
             android:exported="false" />
+
+        <!-- da acesso ao APK baixado (pasta Downloads do app) pro instalador do sistema -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

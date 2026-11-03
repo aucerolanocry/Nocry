@@ -366,6 +366,16 @@ var bypassVolAtivo: Boolean
     var updateAvisada: String
         get() = gs("update_avisada") ?: ""
         set(v) = ps("update_avisada", v)
+    /** cache local (sem precisar de internet) da ultima versao que o app conhece no github */
+    var updateTagConhecida: String
+        get() = gs("update_tag_conhecida") ?: ""
+        set(v) = ps("update_tag_conhecida", v)
+    var updatePaginaConhecida: String
+        get() = gs("update_pagina_conhecida") ?: ""
+        set(v) = ps("update_pagina_conhecida", v)
+    var updateApkConhecida: String
+        get() = gs("update_apk_conhecida") ?: ""
+        set(v) = ps("update_apk_conhecida", v)
     /** ordem dos atalhos do inicio (ids separados por virgula) e os escondidos */
     var ordem: String
         get() = gs("ordem") ?: ""

@@ -109,6 +109,7 @@ class MainActivity : Activity() {
     private val conectando = AtomicBoolean(false)
     private var gate = false
     private var intro: IntroView? = null
+    private var gateAtualizacaoTag: String? = null
 
     /** quem pediu uma tela do sistema (escolher video/imagem) recebe a resposta aqui */
     var aoResultado: ((Int, Int, Intent?) -> Unit)? = null
@@ -118,6 +119,18 @@ class MainActivity : Activity() {
             if (!gate && !License.valid()) mostraGate() else atual()?.tick()
             h.postDelayed(this, 1200)
         }
+    }
+
+    /** mostra a tela de atualizacao obrigatoria, bloqueando tudo (tem prioridade sobre a tela da key) */
+    fun mostraUpdateGate(info: Update.Info) {
+        // ja esta mostrando essa mesma atualizacao: nao reconstroi (perderia o progresso/mensagem do download em andamento)
+        if (gate && gateAtualizacaoTag == info.tag) return
+        gateAtualizacaoTag = info.tag
+        gate = true
+        topo.visibility = View.GONE
+        nav.removeAllViews()
+        conteudo.removeAllViews()
+        conteudo.addView(AtualizarGate(this, info).criar(), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -138,10 +151,19 @@ class MainActivity : Activity() {
 
         License.saiu = { mostraGate() }
         montaChrome()
-        if (License.valid()) abre(HomeScreen(this)) else mostraGate()
+        val updJaConhecida = Update.pendente(applicationContext)
+        if (updJaConhecida != null) mostraUpdateGate(updJaConhecida)
+        else if (License.valid()) abre(HomeScreen(this)) else mostraGate()
 
-        // intro de abertura (so quando o app abre do zero, nunca ao recriar a tela)
-        if (savedInstanceState == null && Intro.deveTocar(this)) tocaIntro()
+        // intro de abertura (so quando o app abre do zero, nunca ao recriar a tela, e nunca por cima do bloqueio de atualizacao)
+        if (savedInstanceState == null && updJaConhecida == null && Intro.deveTocar(this)) tocaIntro()
+
+        // confere no github se ha versao mais nova (cache local e, no maximo a cada 20 min, uma busca de verdade)
+        Bg.io {
+            Update.atualizarCache(applicationContext)
+            val i = Update.pendente(applicationContext)
+            if (i != null) Bg.ui { mostraUpdateGate(i) }
+        }
     }
 
     // ------------------------------------------------------------------ intro
@@ -363,14 +385,21 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         bg.retoma()
-        if (!gate && !License.valid()) mostraGate()
+        val updPendente = Update.pendente(applicationContext)
+        if (updPendente != null) mostraUpdateGate(updPendente)
+        else if (!gate && !License.valid()) mostraGate()
         Engine.onChange = { if (!gate) atual()?.tick() }
         if (!gate) atual()?.aoMostrar()
         h.removeCallbacks(ciclo)
         h.postDelayed(ciclo, 1200)
+        // confere no github de novo (independente do gate, pra pegar uma atualizacao obrigatoria mesmo parado na tela da key)
+        Bg.io {
+            Update.atualizarCache(applicationContext)
+            val i = Update.pendente(applicationContext)
+            if (i != null) Bg.ui { mostraUpdateGate(i) }
+        }
         if (!gate) {
             Bg.io { License.tick(applicationContext) }
-            Bg.io { Update.checarEmSegundoPlanoEAvisar(applicationContext) }
             // tenta conectar sozinho (depuracao sem fio ja pareada)
             if (!Adb.connected && conectando.compareAndSet(false, true)) {
                 Bg.io {

@@ -5,10 +5,12 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -347,6 +349,12 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
 object Update {
     class Info(val tag: String, val pagina: String, val apk: String?)
 
+    /** a cada quanto tempo, no maximo, confere de novo no github (nao precisa ser instantaneo) */
+    private const val INTERVALO_CHECAGEM = 20 * 60 * 1000L
+
+    fun versaoInstalada(c: Context): String =
+        try { c.packageManager.getPackageInfo(Const.PKG, 0).versionName ?: "?" } catch (_: Exception) { "?" }
+
     /** busca a ultima versao publicada no GitHub (repositorio publico, sem token) */
     fun buscar(): Info? {
         return try {
@@ -383,17 +391,67 @@ object Update {
         return false
     }
 
-    /** checa (no maximo a cada 6h) se saiu versao nova e avisa por notificacao; silencioso se nao achar nada */
-    fun checarEmSegundoPlanoEAvisar(c: Context) {
+    /** o que o app ja sabe (sem rede, instantaneo): se a versao instalada ja esta desatualizada frente a ultima conhecida */
+    fun pendente(c: Context): Info? {
+        val tag = Prefs.updateTagConhecida
+        if (tag.isEmpty()) return null
+        if (!maisNova(versaoInstalada(c), tag)) return null
+        return Info(tag, Prefs.updatePaginaConhecida, Prefs.updateApkConhecida.takeIf { it.isNotEmpty() })
+    }
+
+    /** busca no github (no maximo a cada 20 min), atualiza o cache local e avisa (notificacao) na primeira vez que ve cada versao nova */
+    fun atualizarCache(c: Context) {
         val agora = System.currentTimeMillis()
-        if (agora - Prefs.updateUltimaChecagem < 6 * 60 * 60 * 1000L) return
+        if (agora - Prefs.updateUltimaChecagem < INTERVALO_CHECAGEM) return
         Prefs.updateUltimaChecagem = agora
-        val atual = try { c.packageManager.getPackageInfo(Const.PKG, 0).versionName ?: "?" } catch (_: Exception) { "?" }
         val i = buscar() ?: return
-        if (!maisNova(atual, i.tag)) return
+        Prefs.updateTagConhecida = i.tag
+        Prefs.updatePaginaConhecida = i.pagina
+        Prefs.updateApkConhecida = i.apk ?: ""
+        if (!maisNova(versaoInstalada(c), i.tag)) return
         if (Prefs.updateAvisada == i.tag) return
         Prefs.updateAvisada = i.tag
         Notif.atualizacaoDisponivel(c, i.tag, i.apk ?: i.pagina)
+    }
+
+    /** checagem antiga, mantida por compatibilidade: so atualiza o cache (o aviso/bloqueio sai do pendente()) */
+    fun checarEmSegundoPlanoEAvisar(c: Context) = atualizarCache(c)
+
+    /** baixa o APK da versao nova e abre o instalador do sistema; chama onProgresso(null) quando indeterminado */
+    fun baixarEInstalar(c: Context, info: Info, onProgresso: (Float?) -> Unit, onPronto: () -> Unit, onErro: (String) -> Unit) {
+        val url = info.apk
+        if (url == null) { onErro("Essa versão não tem um .apk anexado — baixe pela página de releases."); return }
+        val app = c.applicationContext
+        val nome = "nocry-${info.tag}.apk"
+        Baixador.baixar(app, url, nome, tamanhoEsperado = -1, sha256 = null, soWifi = false, ouvinte = object : Baixador.Ouvinte {
+            override fun aoProgredir(baixado: Long, total: Long) {
+                onProgresso(if (total > 0) baixado.toFloat() / total.toFloat() else null)
+            }
+            override fun aoAguardar(motivo: String) { onProgresso(null) }
+            override fun aoVerificar() { onProgresso(null) }
+            override fun aoFalhar(motivo: String) { onErro(motivo) }
+            override fun aoTerminar(arquivo: File) {
+                try {
+                    if (!app.packageManager.canRequestPackageInstalls()) {
+                        onErro("Autorize \"instalar apps desconhecidos\" pro NOCRY e toque em instalar de novo.")
+                        try {
+                            val i = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + app.packageName))
+                            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            app.startActivity(i)
+                        } catch (_: Exception) {}
+                        return
+                    }
+                    val uri = androidx.core.content.FileProvider.getUriForFile(app, app.packageName + ".fileprovider", arquivo)
+                    val i = Intent(Intent.ACTION_VIEW)
+                    i.setDataAndType(uri, "application/vnd.android.package-archive")
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    app.startActivity(i)
+                    onPronto()
+                } catch (e: Exception) {
+                    onErro("Não consegui abrir o instalador: ${e.message}")
+                }
+            }
+        })
     }
 }
 
@@ -401,10 +459,12 @@ class SobreScreen(a: MainActivity) : Screen(a) {
     override val titulo = "Sobre"
     override val aba = 4
     private var msg = ""
-    private var link: String? = null
+    private var info: Update.Info? = null
     private var buscando = false
+    private var instalando = false
+    private var percent: Float? = null
 
-    override fun key(): String = "$msg|$buscando|${License.role()}"
+    override fun key(): String = "$msg|$buscando|$instalando|$percent|${License.role()}"
 
     private fun versao(): String = try { act.packageManager.getPackageInfo(Const.PKG, 0).versionName ?: "?" } catch (_: Exception) { "?" }
 
@@ -454,23 +514,39 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         add(kc, 14)
 
         val card = Ui.card(c)
-        card.addView(Ui.label(c, "atualização"))
-        card.addView(Ui.text(c, if (msg.isEmpty()) "Toque em verificar para ver se há versão nova." else msg, 13f), Ui.lp(top = 6, c = c))
+        card.addView(Ui.labelIcone(c, R.drawable.ic_download, "atualização"))
+        card.addView(Ui.text(c, if (msg.isEmpty()) "Toque em verificar para ver se há versão nova." else msg, 13f, if (msg.contains("Falhou") || msg.contains("Não consegui")) Ui.WARN else Ui.TEXT), Ui.lp(top = 6, c = c))
+        if (instalando) {
+            val bp = BarraProgresso(c)
+            bp.define(percent)
+            card.addView(bp, Ui.lp(top = 10, c = c))
+        }
         card.addView(Ui.button(c, if (buscando) "procurando..." else "verificar atualização", Ui.Kind.GHOST) {
-            if (!buscando) {
+            if (!buscando && !instalando) {
                 buscando = true
                 redesenha()
                 Bg.run({ Update.buscar() }) { i ->
                     buscando = false
-                    if (i == null) { msg = "Não consegui verificar agora (sem internet ou ainda não há versão publicada)."; link = null }
-                    else if (Update.maisNova(versao(), i.tag)) { msg = "Versão nova disponível: ${i.tag}"; link = i.apk ?: i.pagina }
-                    else { msg = "Você está na versão mais nova (${i.tag})."; link = null }
+                    if (i == null) { msg = "Não consegui verificar agora (sem internet ou ainda não há versão publicada)."; info = null }
+                    else if (Update.maisNova(versao(), i.tag)) { msg = "Versão nova disponível: ${i.tag}"; info = i }
+                    else { msg = "Você está na versão mais nova (${i.tag})."; info = null }
                     redesenha()
                 }
             }
         }, Ui.lp(top = 10, c = c))
-        val l = link
-        if (l != null) card.addView(Ui.button(c, "baixar a versão nova") { abre(l) }, Ui.lp(top = 8, c = c))
+        val inf = info
+        if (inf != null) {
+            card.addView(Ui.button(c, if (instalando) "baixando..." else "baixar e instalar agora", Ui.Kind.PRIMARY, R.drawable.ic_download) {
+                if (!instalando) {
+                    instalando = true; percent = null; msg = "Baixando ${inf.tag}..."; redesenha()
+                    Update.baixarEInstalar(c, inf,
+                        onProgresso = { p -> percent = p; redesenha() },
+                        onPronto = { instalando = false; msg = "Baixado! Confirme a instalação na tela que abriu."; redesenha() },
+                        onErro = { erro -> instalando = false; msg = "Falhou: $erro"; redesenha() }
+                    )
+                }
+            }, Ui.lp(top = 8, c = c))
+        }
         add(card, 14)
 
         val card2 = Ui.card(c)

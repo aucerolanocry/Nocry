@@ -158,6 +158,70 @@ class KeyGate(private val act: MainActivity) {
 }
 
 // =====================================================================================
+// ATUALIZACAO OBRIGATORIA (bloqueia o app ate instalar a versao nova)
+// =====================================================================================
+class AtualizarGate(private val act: MainActivity, private val info: Update.Info) {
+    private val dono = FrameLayout(act)
+    private var instalando = false
+    private var percent: Float? = null
+    private var msg = ""
+
+    fun criar(): View {
+        monta()
+        return dono
+    }
+
+    private fun monta() {
+        dono.removeAllViews()
+        val c = act
+        val sv = ScrollView(c)
+        sv.isFillViewport = true
+        sv.isVerticalScrollBarEnabled = false
+        sv.overScrollMode = View.OVER_SCROLL_NEVER
+        val col = Ui.vbox(c)
+        col.gravity = Gravity.CENTER_VERTICAL
+        val p = Ui.dp(c, 20)
+        col.setPadding(p, Ui.dp(c, 28), p, Ui.dp(c, 28))
+
+        val logo = FrameLayout(c)
+        logo.background = Botao(c, "icoOn", 22)
+        val ic = Ui.icone(c, R.drawable.ic_download, Theme.sobreGrad(), 34)
+        logo.addView(ic, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        col.addView(logo, LinearLayout.LayoutParams(Ui.dp(c, 76), Ui.dp(c, 76)))
+        col.addView(Ui.gradTexto(c, "ATUALIZAÇÃO", 32f), Ui.lp(top = 16, c = c))
+        col.addView(Ui.text(c, "Obrigatória pra continuar", 14f, Ui.TEXT, true, mono = true), Ui.lp(top = 0, c = c))
+        col.addView(Ui.text(c, "Saiu a versão ${info.tag} e essa aqui (${Update.versaoInstalada(c)}) já ficou pra trás. Baixa e instala pra voltar a usar o NOCRY.", 13f, Ui.MUTED), Ui.lp(top = 6, c = c))
+
+        val card = Ui.card(c, forte = true)
+        card.addView(Ui.labelIcone(c, R.drawable.ic_sparkle, "versão nova"))
+        card.addView(Ui.text(c, info.tag, 24f, Ui.TEXT, true, mono = true), Ui.lp(top = 4, c = c))
+        if (instalando) {
+            val bp = BarraProgresso(c)
+            bp.define(percent)
+            card.addView(bp, Ui.lp(top = 12, c = c))
+        }
+        if (msg.isNotEmpty()) card.addView(Ui.text(c, msg, 12.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        card.addView(Ui.button(c, if (instalando) "baixando..." else "baixar e instalar agora", Ui.Kind.PRIMARY, R.drawable.ic_download) {
+            if (!instalando) {
+                instalando = true; percent = null; msg = "Baixando..."; monta()
+                Update.baixarEInstalar(c, info,
+                    onProgresso = { v -> percent = v; monta() },
+                    onPronto = { instalando = false; msg = "Baixado! Confirme a instalação na tela que abriu — depois volte aqui."; monta() },
+                    onErro = { e -> instalando = false; msg = "Falhou: $e"; monta() }
+                )
+            }
+        }, Ui.lp(top = 14, c = c))
+        card.addView(Ui.button(c, "abrir no navegador", Ui.Kind.GHOST, R.drawable.ic_globe) {
+            try { c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.pagina))) } catch (_: Exception) {}
+        }, Ui.lp(top = 8, c = c))
+        col.addView(card, Ui.lp(top = 22, c = c))
+
+        sv.addView(col, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        dono.addView(sv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+}
+
+// =====================================================================================
 // ORGANIZAR O INICIO (ordem e quais modos aparecem)
 // =====================================================================================
 class OrganizarScreen(a: MainActivity) : Screen(a) {
