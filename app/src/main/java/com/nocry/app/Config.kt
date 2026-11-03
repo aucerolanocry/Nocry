@@ -50,6 +50,20 @@ object Config {
         }
     }
 
+    /** apaga a pasta "android" da suja instalada (call_rec no normal, BugReportCache/image no max) */
+    fun apagarSuja(ff: String = "normal"): Boolean {
+        if (!Adb.ensure(Sys.app)) return false
+        val (_, srcA, _) = destinos(ff)
+        return try {
+            Adb.exec("rm -rf \"$srcA/android\"")
+            NLog.add("config", "suja apagada: $ff")
+            true
+        } catch (e: Exception) {
+            NLog.add("config", "falha ao apagar suja: ${e.message}")
+            false
+        }
+    }
+
     fun restaurar(ff: String = "normal"): Boolean {
         if (!Adb.ensure(Sys.app)) return false
         val (destino, _, srcB) = destinos(ff)

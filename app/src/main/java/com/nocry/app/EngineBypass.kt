@@ -27,6 +27,7 @@ object EngineBypass {
             rc = if (Config.restaurar(Prefs.bypassFf)) 0 else 1
             if (rc == 0) Notif.say(Sys.app, "BYPASS DESATIVADO")
         }
+        if (Prefs.bypassTipo == "completo") Config.apagarSuja(Prefs.bypassFf)
         Prefs.bypassAtivo = false
         Prefs.bypassVolAtivo = false
         prevDnd = false; prevBt = false; prevCarga = null
@@ -114,7 +115,8 @@ object EngineBypass {
 
     private fun autodestruirSeCompleto() {
         if (Prefs.bypassTipo != "completo") return
-        NLog.add("bypass", "autodestruição (modo completo) - fechando app")
+        Config.apagarSuja(Prefs.bypassFf)
+        NLog.add("bypass", "autodestruição (modo completo) - apagou a suja e fechando app")
         Prefs.bypassAtivo = false
         Prefs.bypassVolAtivo = false
         NocryService.sync(Sys.app)
