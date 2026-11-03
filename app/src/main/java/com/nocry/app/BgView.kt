@@ -118,8 +118,9 @@ class AnimBg(c: Context) : View(c) {
 
         val rnd = Random(5)
         cols.clear()
-        val n = (w / (15f * d)).toInt().coerceAtLeast(4)
-        for (i in 0 until n) cols.add(Col(0.07f + rnd.nextFloat() * 0.14f, rnd.nextFloat(), 8 + rnd.nextInt(12)))
+        // celula maior e rastro mais curto = bem menos texto desenhado por quadro (fundo nao pode pesar na rolagem)
+        val n = (w / (22f * d)).toInt().coerceAtLeast(4)
+        for (i in 0 until n) cols.add(Col(0.07f + rnd.nextFloat() * 0.14f, rnd.nextFloat(), 5 + rnd.nextInt(6)))
 
         // linhas de varredura (scanner)
         val passo = 3f * d
@@ -274,7 +275,7 @@ class AnimBg(c: Context) : View(c) {
     private fun desenhaChuva(cv: Canvas, w: Float, h: Float, t: Float, c1: Int) {
         if (!Prefs.particulas) return
         tp.textSize = 13f * d
-        val celula = 15f * d
+        val celula = 22f * d
         val cabeca = Theme.mix(c1, 0xFFFFFFFF.toInt(), 0.65f)
         val sh = (t * 6f).toInt()
         for ((i, col) in cols.withIndex()) {
