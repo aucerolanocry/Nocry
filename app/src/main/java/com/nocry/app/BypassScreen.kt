@@ -35,8 +35,8 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         add(card, 0)
 
         add(Ui.label(c, "ESCOLHA O GATILHO"), 18)
-        cardGatilho(R.drawable.ic_dnd, "Não perturbe", "LIGAR = APLICA · DESLIGAR = RESTAURA", "dnd")
-        cardGatilho(R.drawable.ic_bluetooth, "Bluetooth", "LIGAR = APLICA · DESLIGAR = RESTAURA", "bt")
+        cardGatilho(R.drawable.ic_dnd, "Não perturbe", "LIGAR = ATIVA · DESLIGAR = DESATIVA", "dnd")
+        cardGatilho(R.drawable.ic_bluetooth, "Bluetooth", "LIGAR = ATIVA · DESLIGAR = DESATIVA", "bt")
         cardGatilho(R.drawable.ic_plug, "Carregador", "TIRAR = APLICA · COLOCAR = RESTAURA", "carga")
         cardGatilho(R.drawable.ic_volume, "Volume", "VOL+ Nx = APLICA · VOL− Nx = RESTAURA", "volume")
 
