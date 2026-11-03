@@ -252,6 +252,13 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         }
     }
 
+    private fun tituloPasso(c: android.content.Context, iconRes: Int, texto: String): View {
+        val r = Ui.hbox(c)
+        r.addView(Ui.caixaIcone(c, iconRes, false, 28), LinearLayout.LayoutParams(Ui.dp(c, 28), Ui.dp(c, 28)).also { it.rightMargin = Ui.dp(c, 10) })
+        r.addView(Ui.label(c, texto))
+        return r
+    }
+
     override fun render() {
         campoCodigo?.let { codigoTxt = it.text.toString() }
         campoPorta?.let { portaTxt = it.text.toString() }
@@ -262,7 +269,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
 
         // 1
         val c1 = Ui.card(c)
-        c1.addView(Ui.label(c, "1 · depuração sem fio"))
+        c1.addView(tituloPasso(c, R.drawable.ic_wifi, "1 · depuração sem fio/wifi"))
         c1.addView(Ui.text(c, "Ligue em Opções do desenvolvedor → Depuração sem fio. (Se não aparece Opções do desenvolvedor: Sobre o telefone → toque 7 vezes em Número da versão.)", 13f), Ui.lp(top = 6, c = c))
         c1.addView(Ui.button(c, "abrir opções do desenvolvedor", Ui.Kind.GHOST) {
             abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
@@ -272,7 +279,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         // 2
         val c2 = Ui.card(c)
         val conectado = Adb.connected
-        c2.addView(Ui.label(c, "2 · parear (só na primeira vez)"))
+        c2.addView(tituloPasso(c, R.drawable.ic_key, "2 · parear (só na primeira vez)"))
         if (conectado) {
             c2.addView(Ui.status(c, "PAREAMENTO", "FEITO", true))
         } else {
@@ -314,7 +321,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
 
         // 3
         val c3 = Ui.card(c)
-        c3.addView(Ui.label(c, "3 · conectar"))
+        c3.addView(tituloPasso(c, R.drawable.ic_plug, "3 · conectar"))
         c3.addView(Ui.status(c, "ADB", if (conectado) "CONECTADO" else "DESCONECTADO", conectado), Ui.lp(top = 4, c = c))
         if (!conectado && Adb.lastError.isNotEmpty()) c3.addView(Ui.text(c, "Motivo: " + Adb.lastError, 12f, Ui.WARN))
         c3.addView(Ui.button(c, if (conectado) "reconectar" else "conectar agora", Ui.Kind.GHOST) {
@@ -329,7 +336,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         // 4
         val c4 = Ui.card(c)
         val perm = Sys.hasWriteSecure()
-        c4.addView(Ui.label(c, "4 · liberar o app"))
+        c4.addView(tituloPasso(c, R.drawable.ic_lock, "4 · liberar o app"))
         c4.addView(Ui.status(c, "PERMISSÃO DE AJUSTES", if (perm) "LIBERADA" else "FALTA", perm), Ui.lp(top = 4, c = c))
         c4.addView(Ui.text(c, "O app se dá a permissão de mudar o toque e se tira da economia de bateria. Depois disso o toque via volume e via carregador funciona até sem ADB.", 12f, Ui.MUTED))
         c4.addView(Ui.button(c, if (perm) "liberar de novo" else "liberar permissões", Ui.Kind.GHOST) {
@@ -341,7 +348,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         // 5
         val c5 = Ui.card(c)
         val acc = Sys.acessibilidadeLigada()
-        c5.addView(Ui.label(c, "5 · escuta do volume"))
+        c5.addView(tituloPasso(c, R.drawable.ic_volume, "5 · escuta do volume"))
         c5.addView(Ui.status(c, "ACESSIBILIDADE", if (acc) "LIGADA" else "DESLIGADA", acc), Ui.lp(top = 4, c = c))
         c5.addView(Ui.text(c, "É assim que o app percebe VOL+ e VOL−. O NOCRY só olha o aperto das teclas de volume e não lê sua tela.", 12f, Ui.MUTED))
         c5.addView(Ui.button(c, if (acc) "desligar" else "ligar", Ui.Kind.GHOST) {
@@ -362,7 +369,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
 
         // 6
         val c6 = Ui.card(c)
-        c6.addView(Ui.label(c, "6 · avisos e bateria"))
+        c6.addView(tituloPasso(c, R.drawable.ic_bolt, "6 · avisos e bateria"))
         c6.addView(Ui.status(c, "NOTIFICAÇÕES", if (temNotif()) "PERMITIDAS" else "BLOQUEADAS", temNotif()), Ui.lp(top = 4, c = c))
         if (!temNotif()) c6.addView(Ui.button(c, "permitir notificações", Ui.Kind.GHOST) { pedeNotif() }, Ui.lp(top = 8, c = c))
         c6.addView(Ui.button(c, "tirar da economia de bateria", Ui.Kind.GHOST) {
