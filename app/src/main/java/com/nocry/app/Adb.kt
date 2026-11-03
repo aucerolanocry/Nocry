@@ -100,7 +100,7 @@ class NocryAdbManager(ctx: Context) : AbsAdbConnectionManager() {
 
     override fun getPrivateKey(): PrivateKey = key
     override fun getCertificate(): Certificate = cert
-    override fun getDeviceName(): String = "NOCRY"
+    override fun getDeviceName(): String = "brevent"
 }
 
 /** Acesso unico ao ADB do proprio aparelho. Tudo aqui pode bloquear: chame fora da tela (Bg.io). */
