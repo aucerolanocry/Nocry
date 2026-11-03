@@ -389,37 +389,57 @@ function json(o, status) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         <meta name="robots" content="noindex">
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         <meta name="theme-color" content="#08080B">
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         <title>Nocry · painel de keys</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Red+Hat+Mono:wght@400;500;700&display=swap">
 <style>
-:root{--bg:#08080B;--card:#111116;--card2:#17171E;--line:#26262F;--text:#F4F4F7;--mut:#A9A9B8;--red:#FF2D55;--red2:#FF8A1F;--btn:#FF2D55;--ok:#3DDC84;--warn:#F2B84B;--bad:#FF5470}
+/* mesmo visual do app: degrade branco -> prata (accent/accent2), fundo quase preto,
+   cartao estilo "contorno" (borda em degrade + brilho neon), fonte Pixelify Sans
+   nos titulos/botoes e Red Hat Mono no corpo, tudo em maiusculo (igual Prefs.maiusc) */
+:root{
+  --bg:#030406;--fundo:#060812;--card:#0A0C16;--card2:#0F1220;--line:#23232C;
+  --text:#F4F4F7;--mut:#A6A6B4;
+  --c1:#FFFFFF;--c2:#B8B8C4;
+  --ok:#3DDC84;--warn:#F2B84B;--bad:#FF5470;
+  --disp:'Pixelify Sans',ui-monospace,Menlo,Consolas,monospace;
+  --body:'Red Hat Mono',ui-monospace,Menlo,Consolas,monospace;
+}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-body{padding:16px;max-width:760px;margin:0 auto;padding-bottom:80px;background:radial-gradient(900px 500px at 50% -10%,rgba(255,45,85,.10),transparent 60%),var(--bg)}
-h1{margin:6px 0 2px;font:800 28px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.18em;background:linear-gradient(90deg,var(--red),var(--red2));-webkit-background-clip:text;background-clip:text;color:transparent}
-.sub{color:var(--mut);font:12px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.1em}
-.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-top:12px;box-shadow:0 1px 0 rgba(255,255,255,.02) inset,0 10px 24px -16px rgba(0,0,0,.6)}
-label{display:block;font:11px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.14em;color:var(--red);margin:12px 0 6px;font-weight:700}
-input,select{width:100%;min-height:46px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--text);padding:0 12px;font:inherit;transition:border-color .15s}
-input:focus,select:focus{outline:none;border-color:var(--red)}
-button{min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--text);padding:0 14px;font:inherit;font-weight:600;cursor:pointer;transition:transform .08s,border-color .15s}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--body)}
+body{padding:16px;max-width:760px;margin:0 auto;padding-bottom:80px;
+  background:radial-gradient(900px 500px at 50% -10%,rgba(255,255,255,.06),transparent 60%),var(--bg)}
+label,button,.tag,.t-own,.t-stf,.t-usr,.sub,h1,h2,.key,select,input{text-transform:uppercase}
+h1{margin:6px 0 2px;font:700 28px var(--disp);letter-spacing:.1em;
+  background:linear-gradient(90deg,var(--c1),var(--c2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--mut);font:12px var(--body);letter-spacing:.12em}
+.card{position:relative;background:
+    linear-gradient(135deg,color-mix(in srgb,var(--fundo) 96%,var(--c1) 8%),var(--fundo)) padding-box,
+    linear-gradient(135deg,var(--c1) 0%,rgba(255,255,255,.45) 50%,var(--c2) 100%) border-box;
+  border:1px solid transparent;border-radius:4px;padding:14px;margin-top:12px;
+  box-shadow:0 0 0 1px rgba(255,255,255,.02) inset,0 0 22px -6px rgba(255,255,255,.14),0 10px 24px -16px rgba(0,0,0,.7)}
+label{display:block;font:11px var(--disp);letter-spacing:.16em;color:var(--c1);margin:12px 0 6px;font-weight:600}
+input,select{width:100%;min-height:46px;border-radius:4px;border:1px solid var(--line);background:var(--card2);color:var(--text);padding:0 12px;font:inherit;letter-spacing:.04em;transition:border-color .15s}
+input:focus,select:focus{outline:none;border-color:var(--c1)}
+button{min-height:44px;border-radius:4px;border:1px solid var(--line);background:var(--card2);color:var(--text);padding:0 14px;font:600 13px var(--disp);letter-spacing:.1em;cursor:pointer;transition:transform .08s,border-color .15s,box-shadow .15s}
 button:active{transform:scale(.97)}
-button.p{background:linear-gradient(135deg,var(--red),var(--red2));border-color:transparent;color:#fff;box-shadow:0 6px 16px -8px rgba(255,45,85,.6)}
+button.p{position:relative;overflow:hidden;background:linear-gradient(135deg,var(--c1),var(--c2));border-color:transparent;color:#08080B;box-shadow:0 6px 18px -8px rgba(255,255,255,.35)}
+button.p::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(255,255,255,.35),rgba(255,255,255,0) 55%)}
 button.d{background:#1F0B10;border-color:#4A1A22;color:#FF8A97}
-button.s{min-height:38px;padding:0 10px;font-size:13px}
+button.s{min-height:38px;padding:0 10px;font-size:11px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .grow{flex:1;min-width:0}
 .tabs{display:flex;gap:6px;margin-top:14px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2}
 .tabs button{flex:1}
-.tabs button.on{background:linear-gradient(135deg,var(--red),var(--red2));border-color:transparent;color:#fff}
-.key{font:700 15px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;word-break:break-all}
-.tag{display:inline-block;font:700 10px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.08em;border-radius:6px;padding:3px 7px;margin-right:6px}
+.tabs button.on{background:linear-gradient(135deg,var(--c1),var(--c2));border-color:transparent;color:#08080B}
+.key{font:700 15px var(--body);letter-spacing:.04em;word-break:break-all;color:var(--c1)}
+.tag{display:inline-block;font:700 10px var(--disp);letter-spacing:.1em;border-radius:3px;padding:3px 7px;margin-right:6px}
 .t-ok{background:#12301F;color:var(--ok)}.t-bad{background:#2A0C12;color:var(--bad)}.t-warn{background:#2B2208;color:var(--warn)}
-.t-own{background:linear-gradient(135deg,var(--red),var(--red2));color:#08080B}.t-stf{background:#3B2A6B;color:#CDBBFF}.t-usr{background:#1D1D25;color:var(--mut)}
-.mut{color:var(--mut);font-size:13px}
+.t-own{background:linear-gradient(135deg,var(--c1),var(--c2));color:#08080B}.t-stf{background:#3B2A6B;color:#CDBBFF}.t-usr{background:#1D1D25;color:var(--mut)}
+.mut{color:var(--mut);font-size:13px;text-transform:none}
 .dev{border-top:1px solid var(--line);margin-top:10px;padding-top:10px;font-size:13px}
-.err{color:var(--bad);margin-top:10px;min-height:20px}
-.toast{position:fixed;left:16px;right:16px;bottom:16px;background:#12301F;border:1px solid #1E4D33;color:var(--ok);padding:12px;border-radius:12px;text-align:center;box-shadow:0 10px 30px -10px rgba(0,0,0,.7)}
-.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
-pre{white-space:pre-wrap;word-break:break-all;margin:0;font:13px ui-monospace,Menlo,Consolas,monospace}
+.err{color:var(--bad);margin-top:10px;min-height:20px;text-transform:uppercase;letter-spacing:.06em}
+.toast{position:fixed;left:16px;right:16px;bottom:16px;background:#12301F;border:1px solid #1E4D33;color:var(--ok);padding:12px;border-radius:4px;text-align:center;box-shadow:0 10px 30px -10px rgba(0,0,0,.7);text-transform:uppercase;letter-spacing:.06em;font:700 13px var(--disp)}
+.mono{font-family:var(--body);text-transform:none}
+pre{white-space:pre-wrap;word-break:break-all;margin:0;font:13px var(--body);text-transform:none}
 </style>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         </head>
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         <body>
