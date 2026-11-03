@@ -74,8 +74,13 @@ class BypassScreen(a: MainActivity) : Screen(a) {
                     return@button
                 }
                 if (Prefs.bypassGatilho == "volume") {
-                    Bg.run({ EngineBypass.iniciarVolume(); 0 }) { _ ->
-                        Ui.toast(act, "BYPASS ATIVO — VOL+ ${Prefs.bypassCliques}X APLICA")
+                    Bg.run({ if (!Sys.acessibilidadeLigada()) Sys.ligarAcessibilidade() else true; EngineBypass.iniciarVolume(); 0 }) { _ ->
+                        if (Sys.acessibilidadeLigada()) {
+                            Ui.toast(act, "BYPASS ATIVO — VOL+ ${Prefs.bypassCliques}X APLICA")
+                        } else {
+                            EngineBypass.pararVolume()
+                            Ui.toast(act, "LIGUE A ACESSIBILIDADE (TELA DE CONEXÃO) PARA USAR O VOLUME")
+                        }
                         redesenha()
                     }
                 } else {

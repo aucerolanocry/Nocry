@@ -125,21 +125,29 @@ object Sys {
         Settings.Secure.getString(app.contentResolver, name)
     } catch (_: Exception) { null }
 
-    /** liga o servico de volume sozinho (precisa da permissao propria). false = tem que ligar na mao */
+    /** liga o servico de volume sozinho: pela permissao propria se tiver, senao pelo ADB (se estiver conectado) */
     fun ligarAcessibilidade(): Boolean {
         if (acessibilidadeLigada()) return true
-        if (!hasWriteSecure()) return false
-        return try {
-            val atual = getSecureStr(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
-            val novo = if (atual.isEmpty()) servico() else atual + ":" + servico()
-            Settings.Secure.putString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, novo)
-            Settings.Secure.putString(app.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, "1")
-            NLog.add("setup", "acessibilidade ligada")
-            acessibilidadeLigada()
-        } catch (t: Exception) {
-            NLog.add("setup", "nao consegui ligar a acessibilidade: $t")
-            false
+        val atual = getSecureStr(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+        val novo = if (atual.isEmpty()) servico() else atual + ":" + servico()
+        if (hasWriteSecure()) {
+            try {
+                Settings.Secure.putString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, novo)
+                Settings.Secure.putString(app.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, "1")
+            } catch (t: Exception) {
+                NLog.add("setup", "nao consegui ligar a acessibilidade pela permissao: $t")
+            }
         }
+        if (!acessibilidadeLigada() && Adb.connected) {
+            Adb.exec(
+                "settings put secure enabled_accessibility_services '$novo' </dev/null >/dev/null 2>&1; " +
+                    "settings put secure accessibility_enabled 1 </dev/null >/dev/null 2>&1",
+                8000
+            )
+        }
+        val ok = acessibilidadeLigada()
+        NLog.add("setup", if (ok) "acessibilidade ligada" else "nao consegui ligar a acessibilidade")
+        return ok
     }
 
     fun desligarAcessibilidade() {
