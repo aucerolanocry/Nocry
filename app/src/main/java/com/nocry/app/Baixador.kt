@@ -44,10 +44,11 @@ object Baixador {
         tamanhoEsperado: Long = -1L,
         sha256: String? = null,
         soWifi: Boolean = false,
+        headers: Map<String, String> = emptyMap(),
         ouvinte: Ouvinte
     ): Long {
         NLog.add("download", "pedido: $nome (esperado ${formatar(tamanhoEsperado)}, soWifi=$soWifi, host=${Uri.parse(url).host})")
-        return iniciar(ctx, url, nome, tamanhoEsperado, sha256, soWifi, comLog(nome, ouvinte))
+        return iniciar(ctx, url, nome, tamanhoEsperado, sha256, soWifi, headers, comLog(nome, ouvinte))
     }
 
     private fun comLog(nome: String, o: Ouvinte): Ouvinte = object : Ouvinte {
@@ -96,6 +97,7 @@ object Baixador {
         tamanhoEsperado: Long,
         sha256: String?,
         soWifi: Boolean,
+        headers: Map<String, String>,
         ouvinte: Ouvinte
     ): Long {
         val app = ctx.applicationContext
@@ -156,12 +158,13 @@ object Baixador {
             .setAllowedOverMetered(!soWifi)
             .setAllowedOverRoaming(!soWifi)
             .setDestinationUri(Uri.fromFile(destino))
+        headers.forEach { (k, v) -> pedido.addRequestHeader(k, v) }
 
         val id = try {
             dm.enqueue(pedido)
         } catch (e: Exception) {
             NLog.add("download", "$nome: Gerenciador de downloads indisponivel (${e.message}); baixando direto pelo app")
-            baixarDireto(app, url, nome, tamanhoEsperado, sha256, soWifi, ouvinte)
+            baixarDireto(app, url, nome, tamanhoEsperado, sha256, soWifi, headers, ouvinte)
             return -2L
         }
         prefs.edit().putLong(nome, id).apply()
@@ -288,7 +291,7 @@ object Baixador {
     private val ativos = ConcurrentHashMap<String, Boolean>()
     private val cancelados = ConcurrentHashMap<String, Boolean>()
 
-    private fun baixarDireto(app: Context, url: String, nome: String, tamanho: Long, sha: String?, soWifi: Boolean, o: Ouvinte) {
+    private fun baixarDireto(app: Context, url: String, nome: String, tamanho: Long, sha: String?, soWifi: Boolean, headers: Map<String, String>, o: Ouvinte) {
         if (ativos.putIfAbsent(nome, true) != null) {
             NLog.add("download", "$nome: ja esta baixando, ignorei o pedido repetido")
             return
@@ -309,7 +312,7 @@ object Baixador {
                         continue
                     }
                     try {
-                        val total = transferir(url, parcial, nome, tamanho, o)
+                        val total = transferir(url, parcial, nome, tamanho, headers, o)
                         if (total <= 0 || parcial.length() >= total) {
                             val feito = parcial.length()
                             main.post { o.aoProgredir(feito, feito) }
@@ -350,7 +353,7 @@ object Baixador {
         }.start()
     }
 
-    private fun transferir(url: String, parcial: File, nome: String, tamanhoEsperado: Long, o: Ouvinte): Long {
+    private fun transferir(url: String, parcial: File, nome: String, tamanhoEsperado: Long, headers: Map<String, String>, o: Ouvinte): Long {
         val tem = if (parcial.isFile) parcial.length() else 0L
         val c = URL(url).openConnection() as HttpURLConnection
         try {
@@ -358,6 +361,7 @@ object Baixador {
             c.readTimeout = 30000
             c.setRequestProperty("Accept-Encoding", "identity")
             c.setRequestProperty("User-Agent", "Nocry")
+            headers.forEach { (k, v) -> c.setRequestProperty(k, v) }
             if (tem > 0) c.setRequestProperty("Range", "bytes=$tem-")
 
             val code = c.responseCode

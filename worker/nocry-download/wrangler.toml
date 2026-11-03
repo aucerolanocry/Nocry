@@ -2,7 +2,15 @@ name = "nocry-download"
 main = "worker.js"
 compatibility_date = "2026-10-28"
 
-# O secret (GITHUB_TOKEN) NAO fica aqui.
-# Ele continua guardado so no Cloudflare e e definido manualmente com:
+# Mesmo banco D1 do Worker "nocry" - usado so pra conferir se a key
+# existe, nao esta revogada e nao venceu, antes de entregar o arquivo.
+[[d1_databases]]
+binding = "DB"
+database_name = "nocry"
+database_id = "b32af7f2-079a-4cb5-a3d0-8351226ed928"
+
+# Os secrets (OWNER_KEY, GITHUB_TOKEN) NAO ficam aqui.
+# Continuam guardados so no Cloudflare e sao definidos manualmente com:
+#   wrangler secret put OWNER_KEY --name nocry-download
 #   wrangler secret put GITHUB_TOKEN --name nocry-download
 # Um deploy automatico nunca sobrescreve nem apaga secrets existentes.

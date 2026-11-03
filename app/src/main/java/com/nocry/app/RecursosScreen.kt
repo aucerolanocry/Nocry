@@ -63,6 +63,7 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
                 val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/call_rec" else "/storage/emulated/0/MIUI/BugReportCache/image"
 
                 Baixador.baixar(c, url, nome, tamanhoEsperado = -1, sha256 = null, soWifi = false,
+                    headers = mapOf("X-Key" to Prefs.licKey.orEmpty()),
                     ouvinte = object : Baixador.Ouvinte {
                         override fun aoProgredir(baixado: Long, total: Long) {
                             log = "BAIXANDO SUJA... ${Baixador.formatar(baixado)} de ${Baixador.formatar(total)}"
@@ -107,6 +108,7 @@ class RecursosScreen(a: MainActivity) : Screen(a) {
                 val destino = if (ff == "normal") "/storage/emulated/0/MIUI/sound_recorder/app_rec" else "/storage/emulated/0/MIUI/BugReportCache/draft"
 
                 Baixador.baixar(c, url, nome, tamanhoEsperado = -1, sha256 = null, soWifi = false,
+                    headers = mapOf("X-Key" to Prefs.licKey.orEmpty()),
                     ouvinte = object : Baixador.Ouvinte {
                         override fun aoProgredir(baixado: Long, total: Long) {
                             log = "BAIXANDO LIMPA... ${Baixador.formatar(baixado)} de ${Baixador.formatar(total)}"
