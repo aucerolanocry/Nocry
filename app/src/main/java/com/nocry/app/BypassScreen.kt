@@ -37,7 +37,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         add(Ui.label(c, "ESCOLHA O GATILHO"), 18)
         cardGatilho(R.drawable.ic_dnd, "Não perturbe", "LIGAR = ATIVA · DESLIGAR = DESATIVA", "dnd")
         cardGatilho(R.drawable.ic_bluetooth, "Bluetooth", "LIGAR = ATIVA · DESLIGAR = DESATIVA", "bt")
-        cardGatilho(R.drawable.ic_plug, "Carregador", "TIRAR = APLICA · COLOCAR = RESTAURA", "carga")
+        cardGatilho(R.drawable.ic_plug, "Carregador", "TIRAR = ATIVA · COLOCAR = DESATIVA", "carga")
         val nx = Prefs.bypassCliques
         cardGatilho(R.drawable.ic_volume, "Volume", "VOLUME + $nx VEZES = ATIVA · VOLUME − $nx VEZES = DESATIVA", "volume")
 
@@ -54,12 +54,14 @@ class BypassScreen(a: MainActivity) : Screen(a) {
             redesenha()
         }, 8)
 
-        add(Ui.label(c, "CLIQUES DO VOLUME (2 a 10)"), 18)
-        add(Ui.segmento(c, listOf("2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x"),
-            Prefs.bypassCliques - 2) { i ->
-            Prefs.bypassCliques = i + 2
-            redesenha()
-        }, 8)
+        if (Prefs.bypassGatilho == "volume") {
+            add(Ui.label(c, "CLIQUES DO VOLUME (2 a 10)"), 18)
+            add(Ui.segmento(c, listOf("2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x"),
+                Prefs.bypassCliques - 2) { i ->
+                Prefs.bypassCliques = i + 2
+                redesenha()
+            }, 8)
+        }
 
         add(Ui.button(c, if (ativo) "DESATIVAR" else "ATIVAR",
             if (ativo) Ui.Kind.DANGER else Ui.Kind.PRIMARY, R.drawable.ic_check) {

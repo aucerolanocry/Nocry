@@ -3,10 +3,12 @@ package com.nocry.app
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.BatteryManager
 import android.os.Handler
 import android.os.Looper
@@ -356,6 +358,14 @@ var bypassVolAtivo: Boolean
     var bgPadraoAplicado: Boolean
         get() = sp.getBoolean("bg_padrao_aplicado", false)
         set(v) = pb("bg_padrao_aplicado", v)
+    /** quando foi a ultima vez que o app checou se ha versao nova no github */
+    var updateUltimaChecagem: Long
+        get() = sp.getLong("update_ultima_checagem", 0L)
+        set(v) { sp.edit().putLong("update_ultima_checagem", v).apply() }
+    /** tag da versao nova sobre a qual ja avisamos (evita avisar de novo toda hora) */
+    var updateAvisada: String
+        get() = gs("update_avisada") ?: ""
+        set(v) = ps("update_avisada", v)
     /** ordem dos atalhos do inicio (ids separados por virgula) e os escondidos */
     var ordem: String
         get() = gs("ordem") ?: ""
@@ -404,6 +414,7 @@ object Notif {
     const val ID_SVC = 1001
     const val ID_ALERT = 2001
     const val ID_PAIR = 3001
+    const val ID_UPDATE = 4001
 
     fun init(c: Context) {
         val nm = c.getSystemService(NotificationManager::class.java) ?: return
@@ -424,6 +435,26 @@ object Notif {
                 .setTimeoutAfter(6000)
                 .build()
             nm.notify(ID_ALERT, n)
+        } catch (_: Exception) {
+        }
+    }
+
+    /** avisa que tem versao nova, com toque abrindo o link de download */
+    fun atualizacaoDisponivel(c: Context, tag: String, url: String) {
+        try {
+            val nm = c.getSystemService(NotificationManager::class.java) ?: return
+            val pi = PendingIntent.getActivity(
+                c, 0, Intent(Intent.ACTION_VIEW, Uri.parse(url)),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            val n = Notification.Builder(c, CH_ALERT)
+                .setSmallIcon(R.drawable.ic_stat)
+                .setContentTitle("NOCRY $tag disponível")
+                .setContentText("Toque para baixar a versão nova.")
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .build()
+            nm.notify(ID_UPDATE, n)
         } catch (_: Exception) {
         }
     }

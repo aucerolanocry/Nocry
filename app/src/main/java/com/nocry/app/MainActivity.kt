@@ -364,6 +364,7 @@ class MainActivity : Activity() {
         h.postDelayed(ciclo, 1200)
         if (!gate) {
             Bg.io { License.tick(applicationContext) }
+            Bg.io { Update.checarEmSegundoPlanoEAvisar(applicationContext) }
             // tenta conectar sozinho (depuracao sem fio ja pareada)
             if (!Adb.connected && conectando.compareAndSet(false, true)) {
                 Bg.io {

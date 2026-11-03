@@ -381,6 +381,19 @@ object Update {
         }
         return false
     }
+
+    /** checa (no maximo a cada 6h) se saiu versao nova e avisa por notificacao; silencioso se nao achar nada */
+    fun checarEmSegundoPlanoEAvisar(c: Context) {
+        val agora = System.currentTimeMillis()
+        if (agora - Prefs.updateUltimaChecagem < 6 * 60 * 60 * 1000L) return
+        Prefs.updateUltimaChecagem = agora
+        val atual = try { c.packageManager.getPackageInfo(Const.PKG, 0).versionName ?: "?" } catch (_: Exception) { "?" }
+        val i = buscar() ?: return
+        if (!maisNova(atual, i.tag)) return
+        if (Prefs.updateAvisada == i.tag) return
+        Prefs.updateAvisada = i.tag
+        Notif.atualizacaoDisponivel(c, i.tag, i.apk ?: i.pagina)
+    }
 }
 
 class SobreScreen(a: MainActivity) : Screen(a) {
@@ -403,7 +416,7 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         val c = act
         add(Ui.gradTexto(c, "NOCRY", 38f), 0)
         add(Ui.text(c, "versão " + versao(), 13f, Ui.MUTED, true, mono = true), 0)
-        add(Ui.text(c, "Modo competitivo, toque via volume e carregador e otimização de segundo plano, direto no celular, sem abrir o Termux.", 13f), 12)
+        add(Ui.text(c, "Toque via volume e carregador, com monitores de segundo plano direto no celular.", 13f), 12)
 
         // ---------------- sua key ----------------
         val kc = Ui.card(c, forte = true)
