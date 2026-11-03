@@ -118,7 +118,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         cab.addView(logo, lg)
         val col = Ui.vbox(c)
         col.addView(Ui.gradTexto(c, "NOCRY", 24f))
-        col.addView(Ui.text(c, "Sistema de toque", 10.5f, Ui.MUTED, true, mono = true))
+        col.addView(Ui.text(c, "App desenvolvido por Aucerola", 10.5f, Ui.MUTED, true, mono = true))
         cab.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val papel = License.roleNome()
         if (papel.isNotEmpty()) cab.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.MUTED, License.isAdmin()))
