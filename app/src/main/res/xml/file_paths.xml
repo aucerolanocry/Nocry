@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- onde o Baixador salva os arquivos baixados (inclusive o APK da atualização) -->
-    <external-files-path name="downloads" path="Downloads/" />
+    <!-- onde o Baixador salva os arquivos baixados (inclusive o APK da atualização).
+         Environment.DIRECTORY_DOWNLOADS na pratica aponta pra pasta "Download" (singular) -
+         cobre a raiz toda dos arquivos externos do app pra nao depender desse nome exato. -->
+    <external-files-path name="externos" path="." />
 </paths>
