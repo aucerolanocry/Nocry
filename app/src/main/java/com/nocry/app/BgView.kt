@@ -36,6 +36,11 @@ class AnimBg(c: Context) : View(c) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val tp = Paint(Paint.ANTI_ALIAS_FLAG)
 
+    /** limita o fundo animado a ~30fps: ele fica atras de tudo e nao precisa dos 60fps do resto da tela,
+        isso sobra CPU/GPU pra rolagem nao travar enquanto ele roda sem parar */
+    private var ultimoFrame = 0L
+    private val intervaloFrame = 33L
+
     private class Pt(val x: Float, val y: Float, val r: Float, val v: Float, val fase: Float)
     private class Col(val v: Float, val fase: Float, val len: Int)
     private val pts = ArrayList<Pt>()
@@ -166,7 +171,12 @@ class AnimBg(c: Context) : View(c) {
             else -> desenhaBrasas(cv, w, h, t, c1, c2)
         }
         if (Prefs.scanner) desenhaScanner(cv, w, h, t)
-        if (animar && rodando) postInvalidateOnAnimation()
+        if (animar && rodando) {
+            val agora = System.currentTimeMillis()
+            val falta = intervaloFrame - (agora - ultimoFrame)
+            ultimoFrame = agora
+            if (falta > 0) postInvalidateDelayed(falta) else postInvalidateOnAnimation()
+        }
     }
 
     private fun desenhaBrasas(cv: Canvas, w: Float, h: Float, t: Float, c1: Int, c2: Int) {
