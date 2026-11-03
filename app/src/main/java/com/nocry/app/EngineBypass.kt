@@ -1,9 +1,5 @@
 package com.nocry.app
 
-import android.content.Intent
-import android.os.Handler
-import android.os.Looper
-
 object EngineBypass {
     private var prevDnd = false
     private var prevBt = false
@@ -116,15 +112,10 @@ object EngineBypass {
     private fun autodestruirSeCompleto() {
         if (Prefs.bypassTipo != "completo") return
         Config.apagarSuja(Prefs.bypassFf)
-        NLog.add("bypass", "autodestruição (modo completo) - apagou a suja e fechando app")
+        NLog.add("bypass", "autodestruição (modo completo) - apagou a suja")
         Prefs.bypassAtivo = false
         Prefs.bypassVolAtivo = false
         NocryService.sync(Sys.app)
-        Handler(Looper.getMainLooper()).postDelayed({
-            val i = Intent(Sys.app, MainActivity::class.java)
-            i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-            Sys.app.startActivity(i)
-        }, 500)
     }
 
     fun onVolume(up: Boolean, now: Long) {
