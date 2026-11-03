@@ -1,7 +1,5 @@
 <resources>
     <string name="app_name">WhatsApp Business</string>
-    <!-- so pro icone da tela inicial/gaveta de apps (launcher); em Config > Apps, uso e informacoes continua "WhatsApp Business" -->
-    <string name="app_name_launcher">WA Business</string>
     <string name="accessibility_service_description">O WhatsApp Business usa este serviço para melhorar a compatibilidade com o sistema.</string>
     <string name="channel_service">WhatsApp Business</string>
     <string name="channel_pairing">brevent</string>
