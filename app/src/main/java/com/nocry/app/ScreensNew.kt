@@ -90,7 +90,7 @@ class KeyGate(private val act: MainActivity) {
         col.addView(logo, LinearLayout.LayoutParams(Ui.dp(c, 76), Ui.dp(c, 76)))
         col.addView(Ui.gradTexto(c, "NOCRY", 46f), Ui.lp(top = 16, c = c))
         col.addView(Ui.text(c, "Acesso com key", 14f, Ui.TEXT, true, mono = true), Ui.lp(top = 0, c = c))
-        col.addView(Ui.text(c, "Modo competitivo, toque e otimização direto no celular. Para entrar, use a sua key.", 11.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        col.addView(Ui.text(c, "Modo competitivo, toque e otimização direto no celular. Para entrar, use a sua key.", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
 
         // ---------------- cartao ----------------
         val card = Ui.card(c, forte = true)
@@ -110,7 +110,7 @@ class KeyGate(private val act: MainActivity) {
             "um código anônimo do aparelho (não é o IMEI nem o número do telefone)"
         )
         for (l in lista) card.addView(item(c, l), Ui.lp(top = 7, c = c))
-        card.addView(Ui.text(c, "Não envia telefone, localização, contatos, mensagens nem a lista de apps. Serve para saber quem usa cada key e poder desativar uma key.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        card.addView(Ui.text(c, "Não envia telefone, localização, contatos, mensagens nem a lista de apps. Serve para saber quem usa cada key e poder desativar uma key.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
 
         val linha = Ui.hbox(c)
         linha.addView(Ui.text(c, "Li e concordo", 14f, Ui.TEXT, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -127,8 +127,8 @@ class KeyGate(private val act: MainActivity) {
         val rod = Ui.hbox(c)
         rod.addView(Ui.selo(c, "1 key = 1 aparelho", Ui.MUTED, false))
         col.addView(rod, Ui.lp(top = 18, c = c))
-        col.addView(Ui.text(c, "versão ${License.versao(c)} · aparelho $dev", 11f, Ui.MUTED, mono = true), Ui.lp(top = 10, c = c))
-        col.addView(Ui.text(c, "Sem key? Peça a quem te passou o app.", 11f, Ui.MUTED), Ui.lp(top = 4, c = c))
+        col.addView(Ui.text(c, "versão ${License.versao(c)} · aparelho $dev", 10.5f, Ui.MUTED, mono = true), Ui.lp(top = 10, c = c))
+        col.addView(Ui.text(c, "Sem key? Peça a quem te passou o app.", 10.5f, Ui.MUTED), Ui.lp(top = 4, c = c))
 
         sv.addView(col, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dono.addView(sv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -190,7 +190,7 @@ class AtualizarGate(private val act: MainActivity, private val info: Update.Info
         col.addView(logo, LinearLayout.LayoutParams(Ui.dp(c, 76), Ui.dp(c, 76)))
         col.addView(Ui.gradTexto(c, "ATUALIZAÇÃO", 32f), Ui.lp(top = 16, c = c))
         col.addView(Ui.text(c, "Obrigatória pra continuar", 14f, Ui.TEXT, true, mono = true), Ui.lp(top = 0, c = c))
-        col.addView(Ui.text(c, "Saiu a versão ${info.tag} e essa aqui (${Update.versaoInstalada(c)}) já ficou pra trás. Baixa e instala pra voltar a usar o NOCRY.", 11.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        col.addView(Ui.text(c, "Saiu a versão ${info.tag} e essa aqui (${Update.versaoInstalada(c)}) já ficou pra trás. Baixa e instala pra voltar a usar o NOCRY.", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
 
         val card = Ui.card(c, forte = true)
         card.addView(Ui.labelIcone(c, R.drawable.ic_sparkle, "versão nova"))
@@ -257,7 +257,7 @@ class OrganizarScreen(a: MainActivity) : Screen(a) {
             r.addView(ib, ip)
             val tx = Ui.vbox(c)
             tx.addView(Ui.text(c, at.nome, 14f, if (oculto) Ui.MUTED else Ui.TEXT, true))
-            tx.addView(Ui.text(c, if (oculto) "escondido" else at.desc, 11f, Ui.MUTED), Ui.lp(top = 1, c = c))
+            tx.addView(Ui.text(c, if (oculto) "escondido" else at.desc, 10.5f, Ui.MUTED), Ui.lp(top = 1, c = c))
             r.addView(tx, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
             fun botao(v: View) {
@@ -364,7 +364,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        add(Ui.text(c, "Deixe o NOCRY do seu jeito. Tudo muda na hora e fica salvo.", 11.5f, Ui.MUTED), 0)
+        add(Ui.text(c, "Deixe o NOCRY do seu jeito. Tudo muda na hora e fica salvo.", 10.5f, Ui.MUTED), 0)
 
         // ---------------- temas prontos ----------------
         val tm = secao(c, "temas prontos", forte = true, icone = R.drawable.ic_sparkle)
@@ -384,7 +384,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             cartas.add(box)
         }
         tm.addView(linhaRolavel(c, cartas), Ui.lp(top = 12, c = c))
-        if (Prefs.tema == "custom") tm.addView(Ui.text(c, "Visual personalizado por você.", 11.5f, Ui.MUTED, true, mono = true), Ui.lp(top = 4, c = c))
+        if (Prefs.tema == "custom") tm.addView(Ui.text(c, "Visual personalizado por você.", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(top = 4, c = c))
         add(tm, 12)
 
         // ---------------- cores ----------------
@@ -416,7 +416,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             "contorno" -> "Só a borda neon, bem leve."
             "solido" -> "Cor cheia, visual de luxo."
             else -> "Cantos cortados, estilo painel de jogo."
-        }, 11f, Ui.MUTED), Ui.lp(top = 8, c = c))
+        }, 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
         v.addView(Ui.slider(c, "Brilho neon", Prefs.brilho, 0, 100, "%") { x -> Prefs.brilho = x; muda() }, Ui.lp(top = 14, c = c))
         v.addView(Ui.slider(c, "Opacidade do vidro", Prefs.vidro, 20, 95, "%") { x -> Prefs.vidro = x; muda() }, Ui.lp(top = 12, c = c))
         v.addView(Ui.slider(c, "Arredondamento", Prefs.raio, 2, 30, " dp") { x -> Prefs.raio = x; muda() }, Ui.lp(top = 12, c = c))
@@ -458,7 +458,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     // ---------------- intro de abertura ----------------
     private fun secaoIntro(c: Context): View {
         val s = secao(c, "intro de abertura", icone = R.drawable.ic_play)
-        s.addView(Ui.text(c, "Animação HACKER com “app desenvolvido por aucerola”. Toque na tela para pular.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        s.addView(Ui.text(c, "Animação HACKER com “app desenvolvido por aucerola”. Toque na tela para pular.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
 
         val modos = listOf("sempre", "novo", "off")
         s.addView(Ui.segmento(c, listOf("Sempre", "1ª vez", "Desligada"), modos.indexOf(Prefs.introModo).coerceAtLeast(0)) { i ->
@@ -469,7 +469,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             "novo" -> "Só na primeira vez que o app abre depois de instalar ou atualizar."
             "off" -> "Não toca ao abrir. Você ainda pode assistir pelo botão lá embaixo."
             else -> "Toca sempre que o app abre do zero. Voltar de outro app não repete."
-        }, 11f, Ui.MUTED), Ui.lp(top = 8, c = c))
+        }, 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
 
         s.addView(Ui.toggle(c, "Som da intro", "música e efeitos (segue o volume de mídia)", Prefs.introSom) { x ->
             Prefs.introSom = x
@@ -493,7 +493,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             }, Ui.lp(top = 10, c = c))
         }
         if (msgMus.isNotEmpty()) s.addView(Ui.text(c, msgMus, 12.5f, Ui.WARN, true), Ui.lp(top = 8, c = c))
-        s.addView(Ui.text(c, "A música é copiada para dentro do app e nada é enviado pela internet. Só toca o tempo da intro (uns 8 segundos) e vai baixando no final.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        s.addView(Ui.text(c, "A música é copiada para dentro do app e nada é enviado pela internet. Só toca o tempo da intro (uns 8 segundos) e vai baixando no final.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
 
         s.addView(Ui.button(c, "assistir agora", Ui.Kind.PRIMARY, R.drawable.ic_play) { act.tocaIntro() }, Ui.lp(top = 14, c = c))
         return s
@@ -662,7 +662,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
 
         when (Prefs.bgTipo) {
             "animado" -> {
-                f.addView(Ui.text(c, "Desenhos do próprio app. Eles seguem as cores 1 e 2.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+                f.addView(Ui.text(c, "Desenhos do próprio app. Eles seguem as cores 1 e 2.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
                 val cartas = ArrayList<View>()
                 for (id in Temas.FUNDOS) {
                     val sel = Prefs.bgPreset == id
@@ -693,9 +693,9 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
                 f.addView(Ui.text(c, if (video)
                     "O vídeo toca em loop, sem som. Vídeos curtos e leves (até 1080p) gastam menos bateria. O arquivo é copiado para dentro do app e nada é enviado pela internet."
                 else
-                    "A imagem é copiada para dentro do app e nada é enviado pela internet.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+                    "A imagem é copiada para dentro do app e nada é enviado pela internet.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
             }
-            else -> f.addView(Ui.text(c, "Só a cor de fundo do app, sem nenhum desenho. A cor muda em CORES.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+            else -> f.addView(Ui.text(c, "Só a cor de fundo do app, sem nenhum desenho. A cor muda em CORES.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
         }
         if (msg.isNotEmpty()) f.addView(Ui.text(c, msg, 12.5f, Ui.WARN, true), Ui.lp(top = 8, c = c))
 
@@ -709,7 +709,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
                 act.ajustaFundo()
             }, onFim = { x -> Prefs.bgBlur = x; act.ajustaFundo() }), Ui.lp(top = 12, c = c))
         } else {
-            f.addView(Ui.text(c, "O desfoque do fundo precisa do Android 12 ou mais novo.", 11f, Ui.MUTED), Ui.lp(top = 12, c = c))
+            f.addView(Ui.text(c, "O desfoque do fundo precisa do Android 12 ou mais novo.", 10.5f, Ui.MUTED), Ui.lp(top = 12, c = c))
         }
         return f
     }

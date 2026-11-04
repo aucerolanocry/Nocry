@@ -19,7 +19,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         val c = act
 
         add(Ui.gradTexto(c, "BYPASS", 28f), 0)
-        add(Ui.text(c, "Ativa pelo volume, não perturbe, bluetooth ou carregador — e aplica a pasta suja no Free Fire escolhido.", 11.5f, Ui.MUTED), 4)
+        add(Ui.text(c, "Ativa pelo volume, não perturbe, bluetooth ou carregador — e aplica a pasta suja no Free Fire escolhido.", 10.5f, Ui.MUTED), 4)
 
         val ativo = Prefs.bypassAtivo || Prefs.bypassVolAtivo
         val card = Ui.card(c, forte = true, ligado = ativo)
@@ -115,7 +115,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
             }, 10)
         }
 
-        add(Ui.text(c, "O app fica em segundo plano escutando o gatilho. Para parar, toque em desativar.", 11f, Ui.MUTED), 18)
+        add(Ui.text(c, "O app fica em segundo plano escutando o gatilho. Para parar, toque em desativar.", 10.5f, Ui.MUTED), 18)
     }
 
     private fun cardGatilho(iconRes: Int, nome: String, desc: String, id: String) {
@@ -135,7 +135,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
 
         val col = Ui.vbox(c)
         col.addView(Ui.text(c, nome, 15f, if (sel) Ui.RED else Ui.TEXT, true))
-        col.addView(Ui.text(c, desc, 11f, Ui.MUTED))
+        col.addView(Ui.text(c, desc, 10.5f, Ui.MUTED))
         r.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         val dot = View(c)
         dot.background = Ui.shape(c, if (sel) Ui.RED else Ui.MUTED, 8)

@@ -24,7 +24,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
         val c = act
 
         add(Ui.gradTexto(c, "INSTALAR RECURSOS", 28f), 0)
-        add(Ui.text(c, "Instala a pasta suja (usada pelo bypass) e a pasta limpa (pra restaurar depois), direto pelo app.", 11.5f, Ui.MUTED), 4)
+        add(Ui.text(c, "Instala a pasta suja (usada pelo bypass) e a pasta limpa (pra restaurar depois), direto pelo app.", 10.5f, Ui.MUTED), 4)
 
         val temPermissao = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()

@@ -29,7 +29,9 @@ object Packs {
         // corpo trocado de Red Hat Mono pra Outfit: com "tudo maiusculo" ligado (padrao do app),
         // um paragrafo inteiro de explicacao em mono+caixa alta fica pesado/dificil de ler; a
         // Outfit e uma sans mais limpa e compacta em caixa alta, mantendo a Pixelify só nos titulos.
-        Pack("pixelify", "Pixelify", "PixelifySans-Medium.ttf", "PixelifySans-Medium.ttf", "Outfit-Regular.ttf", "Outfit-Bold.ttf", 1.0f, 0.06f),
+        // escala em 0.88 pra reduzir TUDO (titulos, botoes, cards, explicacoes) de uma vez, nao so
+        // os paragrafos individualmente - combinado com os tamanhos ja cortados ponto a ponto.
+        Pack("pixelify", "Pixelify", "PixelifySans-Medium.ttf", "PixelifySans-Medium.ttf", "Outfit-Regular.ttf", "Outfit-Bold.ttf", 0.88f, 0.06f),
         Pack("grotesk", "Space Grotesk", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", 1.0f, 0.06f, variavel = true),
         Pack("mono", "JetBrains Mono", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", 0.96f, 0.04f, variavel = true),
         Pack("sistema", "Sistema", "", "", "", "", 1.0f, 0.04f, sistema = true)
@@ -82,7 +84,9 @@ object Temas {
         Tema("sakura", "Sakura", "Suave e arredondado", 0xFFFF8FC7.toInt(), 0xFFB48CFF.toInt(), 0xFF110A18.toInt(), "vidro", "poppins", 30, 1, 50, 55, "petalas"),
         Tema("gelo", "Gelo", "Minimal prata", 0xFFE8F1FF.toInt(), 0xFF7FC8FF.toInt(), 0xFF070A0F.toInt(), "vidro", "instrument", 20, 1, 40, 55, "neve"),
         Tema("grafite", "Grafite", "Corporativo, clean", 0xFF9FB4C7.toInt(), 0xFF3E6FA8.toInt(), 0xFF0A0C10.toInt(), "contorno", "instrument", 16, 1, 35, 45, "noite"),
-        Tema("platina", "Platina", "Executivo, elegante", 0xFFE4E4EC.toInt(), 0xFF7B6CFF.toInt(), 0xFF08090D.toInt(), "vidro", "outfit", 20, 1, 30, 45, "grade")
+        Tema("platina", "Platina", "Executivo, elegante", 0xFFE4E4EC.toInt(), 0xFF7B6CFF.toInt(), 0xFF08090D.toInt(), "vidro", "outfit", 20, 1, 30, 45, "grade"),
+        Tema("nebulosa", "Nebulosa", "Roxo profundo, misterioso", 0xFFB388FF.toInt(), 0xFF5B2A9E.toInt(), 0xFF08050F.toInt(), "vidro", "bricolage", 26, 1, 60, 50, "noite"),
+        Tema("esmeralda", "Esmeralda", "Verde elegante, sofisticado", 0xFF4FD1A5.toInt(), 0xFF1B6E52.toInt(), 0xFF04100A.toInt(), "vidro", "instrument", 22, 1, 45, 55, "grade")
     )
 
     fun get(id: String): Tema = lista.firstOrNull { it.id == id } ?: lista[0]
