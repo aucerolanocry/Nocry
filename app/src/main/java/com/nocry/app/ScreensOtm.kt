@@ -37,11 +37,24 @@ class RunScreen(a: MainActivity, override val titulo: String, private val work: 
 
     override fun render() {
         limpa()
-        val t = Ui.text(act, buf.toString(), 12.5f, Ui.TEXT, mono = true)
+        val c = act
+        val hero = Ui.hero(c, if (fim) (if (ok) R.drawable.ic_check else R.drawable.ic_warn) else R.drawable.ic_bolt, "andamento",
+            if (!fim) "Trabalhando..." else if (ok) "Concluído" else "Terminou com avisos", if (!fim) null else ok,
+            if (!fim) "Não feche o app enquanto termina." else "Veja abaixo o que foi feito.")
+        if (!fim) {
+            val bp = BarraProgresso(c)
+            bp.define(null)
+            hero.addView(bp, Ui.lp(top = 16, h = Ui.dp(c, 8), c = c))
+        }
+        add(hero, 0)
+        val card = Ui.card(c)
+        card.addView(Ui.labelIcone(c, R.drawable.ic_log, "registro"))
+        val t = Ui.text(c, buf.toString(), 10.5f, Ui.TEXT, code = true)
         t.setTextIsSelectable(true)
         tv = t
-        add(t, 0)
-        if (fim) add(Ui.button(act, "voltar", Ui.Kind.GHOST) { act.fecha() }, 16)
+        card.addView(t, Ui.lp(top = 10, c = c))
+        add(card, 12)
+        if (fim) add(Ui.button(c, "voltar", Ui.Kind.GHOST, R.drawable.ic_back) { act.fecha() }, 16)
         if (!iniciou) {
             iniciou = true
             Bg.io {
@@ -72,56 +85,82 @@ class OtmScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Otimização", "FECHA E CONGELA OS APPS EM SEGUNDO PLANO PARA LIBERAR RAM.")
+        cabecalho("Otimização", "Fecha e congela os apps em segundo plano para liberar RAM.")
         val st = Otm.status()
-        val card = Ui.card(c)
-        card.addView(Ui.labelIcone(c, R.drawable.ic_bolt, "status"))
-        card.addView(Ui.text(c, if (st.first) "ATIVA" else "DESATIVADA", 26f, if (st.first) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
-        if (st.first) card.addView(Ui.text(c, "${st.second} apps congelados", 13f, Ui.MUTED, mono = true))
-        card.addView(Ui.status(c, "ADB", if (Adb.connected) "CONECTADO" else "DESCONECTADO", Adb.connected), Ui.lp(top = 8, c = c))
-        card.addView(Ui.status(c, "AUTOMÁTICO AO ABRIR O FF", if (Prefs.otmAuto) "LIGADO" else "DESLIGADO", null))
-        add(card, 14)
+        val on = st.first
+        val hero = Ui.hero(c, R.drawable.ic_chip, "otimização", if (on) "Ativa" else "Desativada", on,
+            if (on) "${st.second} apps congelados agora." else "Os apps em segundo plano estão livres.")
+        hero.addView(Ui.chips(c,
+            Ui.chip(c, "ADB", if (Adb.connected) "OK" else "OFF", Adb.connected),
+            Ui.chip(c, "AUTOMÁTICO", if (Prefs.otmAuto) "LIGADO" else "DESLIGADO", if (Prefs.otmAuto) true else null),
+            Ui.chip(c, "CONGELADOS", if (on) st.second.toString() else "0", if (on) true else null)
+        ), Ui.lp(top = 16, c = c))
+        add(hero, 12)
         add(Ui.dica(c, "Os protegidos ficam de fora. Desativar devolve tudo como estava.", Ui.Dica.INFO), 12)
 
-        add(Ui.button(c, "ativar otimização", Ui.Kind.PRIMARY, R.drawable.ic_check) { act.abre(RunScreen(act, "OTIMIZANDO") { log -> Otm.ativar(log) }) }, 14)
-        add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "DESATIVANDO") { log -> Otm.desativar(log) }) }, 10)
+        if (on) {
+            add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "Desativando") { log -> Otm.desativar(log) }) }, 14)
+            add(Ui.button(c, "otimizar de novo", Ui.Kind.GHOST, R.drawable.ic_check) { act.abre(RunScreen(act, "Otimizando") { log -> Otm.ativar(log) }) }, 10)
+        } else {
+            add(Ui.button(c, "ativar otimização", Ui.Kind.PRIMARY, R.drawable.ic_check) { act.abre(RunScreen(act, "Otimizando") { log -> Otm.ativar(log) }) }, 14)
+        }
 
-        add(Ui.labelIcone(c, R.drawable.ic_sliders, "ferramentas"), 18)
-        add(Ui.row(c, "Ver apps (NGC)", "o que vai fechar, o que fica protegido e por quê", R.drawable.ic_eye) { act.abre(OtmVerScreen(act)) }, 8)
-        add(Ui.row(c, "Proteger app", "escolha o que nunca fecha", R.drawable.ic_shield) { act.abre(OtmProtegerScreen(act)) })
-        add(Ui.row(c, "Fechar mais apps (sistema)", "apps do sistema com ícone que você quer fechar junto", R.drawable.ic_xcircle) { act.abre(OtmMaisScreen(act)) })
-        add(Ui.row(c, "Preparar o FF", "compila o Free Fire e tira da economia de energia", R.drawable.ic_gamepad) {
-            Ui.dialogEscolha(act, "PREPARAR O FF", listOf("FREE FIRE NORMAL", "FREE FIRE MAX")) { i ->
-                val pkg = if (i == 0) Const.FF_NORMAL else Const.FF_MAX
-                act.abre(RunScreen(act, "PREPARANDO O FF") { log -> Otm.prepararFf(pkg, log) })
+        add(Ui.grupo(c, "ferramentas", listOf(
+            Ui.item(c, "Ver apps (NGC)", "o que vai fechar, o que fica protegido e por quê", R.drawable.ic_eye) { act.abre(OtmVerScreen(act)) },
+            Ui.item(c, "Proteger app", "escolha o que nunca fecha", R.drawable.ic_shield) { act.abre(OtmProtegerScreen(act)) },
+            Ui.item(c, "Fechar mais apps", "apps do sistema com ícone que você quer fechar junto", R.drawable.ic_xcircle) { act.abre(OtmMaisScreen(act)) },
+            Ui.item(c, "Preparar o FF", "compila o Free Fire e tira da economia de energia", R.drawable.ic_gamepad) {
+                Ui.dialogEscolha(act, "PREPARAR O FF", listOf("FREE FIRE NORMAL", "FREE FIRE MAX")) { i ->
+                    val pkg = if (i == 0) Const.FF_NORMAL else Const.FF_MAX
+                    act.abre(RunScreen(act, "Preparando o FF") { log -> Otm.prepararFf(pkg, log) })
+                }
             }
-        })
+        )), 22)
 
-        add(Ui.labelIcone(c, R.drawable.ic_bolt, "automático"), 18)
-        add(Ui.toggle(c, "Ligar sozinho ao abrir o FF", "abriu o FF = ativa · saiu por 45 s = desativa (só o que ele ativou). Precisa do ADB.", Prefs.otmAuto) { v ->
-            if (v) {
-                if (!Adb.connected) { Ui.toast(act, "Conecte o ADB primeiro (CONEXÃO)"); redesenha() }
-                else { OtmAuto.ligar(); Ui.toast(act, "AUTOMÁTICO LIGADO — abra o FF"); redesenha() }
-            } else {
-                Bg.run({ OtmAuto.desligar(); true }) { _ -> Ui.toast(act, "AUTOMÁTICO DESLIGADO"); redesenha() }
+        add(Ui.grupo(c, "automático", listOf(
+            Ui.itemChave(c, "Ligar sozinho ao abrir o FF", "abriu o FF = ativa · saiu por 45 s = desativa (só o que ele ativou). Precisa do ADB.", Prefs.otmAuto) { v ->
+                if (v) {
+                    if (!Adb.connected) { Ui.toast(act, "Conecte o ADB primeiro (CONEXÃO)"); redesenha() }
+                    else { OtmAuto.ligar(); Ui.toast(act, "AUTOMÁTICO LIGADO — abra o FF"); redesenha() }
+                } else {
+                    Bg.run({ OtmAuto.desligar(); true }) { _ -> Ui.toast(act, "AUTOMÁTICO DESLIGADO"); redesenha() }
+                }
             }
-        }, 8)
+        )), 20)
 
-        add(Ui.labelIcone(c, R.drawable.ic_sliders, "opções"), 18)
-        add(Ui.toggle(c, "Mensagens fecham", "WhatsApp, Telegram, Signal, Messenger e Discord saem da memória, mas ficam sem avisar até você abrir o app", Prefs.otmMsg == "fechar") { v ->
-            Prefs.otmMsg = if (v) "fechar" else "proteger"
-        }, 8)
-        add(Ui.toggle(c, "CPU/GPU em nível fixo", "estável, não mais forte (esquenta mais). Vale na próxima ativação", Prefs.otmPerf) { v -> Prefs.otmPerf = v })
+        add(Ui.grupo(c, "opções", listOf(
+            Ui.itemChave(c, "Mensagens fecham", "WhatsApp, Telegram, Signal, Messenger e Discord saem da memória, mas ficam sem avisar até você abrir o app", Prefs.otmMsg == "fechar") { v ->
+                Prefs.otmMsg = if (v) "fechar" else "proteger"
+            },
+            Ui.itemChave(c, "CPU/GPU em nível fixo", "estável, não mais forte (esquenta mais). Vale na próxima ativação", Prefs.otmPerf) { v -> Prefs.otmPerf = v }
+        )), 20)
     }
 }
 
-/** linha simples de lista dentro de um cartao */
-private fun linhas(c: Context, titulo: String, itens: List<String>, vazio: String): LinearLayout {
-    val card = Ui.card(c)
-    card.addView(Ui.label(c, titulo))
-    if (itens.isEmpty()) card.addView(Ui.text(c, vazio, 13f, Ui.MUTED), Ui.lp(top = 6, c = c))
-    for (i in itens) card.addView(Ui.text(c, i, 12.5f, Ui.TEXT, mono = true), Ui.lp(top = 6, c = c))
+/** tela "lendo o celular...": cartao com barra andando */
+private fun carregandoCelular(c: Context): View {
+    val card = Ui.hero(c, R.drawable.ic_chip, "aguarde", "Lendo o celular...", null, "Isso leva só alguns segundos.")
+    val bp = BarraProgresso(c)
+    bp.define(null)
+    card.addView(bp, Ui.lp(top = 16, h = Ui.dp(c, 8), c = c))
     return card
+}
+
+/** grupo de apps (nome, detalhe e tamanho em pilula); vazio vira uma linha so com o aviso */
+private fun grupoApps(c: Context, titulo: String, itens: List<View>, vazio: String): View =
+    Ui.grupo(c, titulo, if (itens.isEmpty()) listOf(Ui.item(c, vazio)) else itens)
+
+/** linha com um check verde e o texto (lista do que a otimizacao tambem ajusta) */
+private fun feito(c: Context, texto: String): View {
+    val l = Ui.hbox(c)
+    l.gravity = Gravity.TOP
+    l.setPadding(0, Ui.dp(c, 9), 0, Ui.dp(c, 9))
+    val ip = LinearLayout.LayoutParams(Ui.dp(c, 14), Ui.dp(c, 14))
+    ip.topMargin = Ui.dp(c, 2)
+    ip.rightMargin = Ui.dp(c, 10)
+    l.addView(Ui.icone(c, R.drawable.ic_check, Ui.OK, 14), ip)
+    l.addView(Ui.text(c, texto, 10.5f, Ui.TEXT), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    return l
 }
 
 // =====================================================================================
@@ -154,24 +193,32 @@ class OtmVerScreen(a: MainActivity) : Screen(a) {
         val c = act
         if (!iniciou) { iniciou = true; carrega(); return }
         val p = plano
-        if (carregando) { add(Ui.text(c, "LENDO O CELULAR...", 14f, Ui.MUTED, true, mono = true), 0); return }
+        if (carregando) { add(carregandoCelular(c), 0); return }
         if (p == null) {
-            add(Ui.text(c, "[x] Não consegui ler o celular. Confira a CONEXÃO e tente de novo.", 13f, Ui.WARN, true), 0)
+            add(Ui.dica(c, "Não consegui ler o celular. Confira a Conexão e tente de novo.", Ui.Dica.AVISO), 0)
             add(Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() }, 14)
             return
         }
-        add(Ui.text(c, p.perfil(), 13f, Ui.TEXT, true, mono = true), 0)
-        add(Ui.text(c, "RAM LIVRE: ${Otm.gb(p.memAvail)} GB · ${p.nivel()}", 10.5f, Ui.MUTED, mono = true), 4)
-        if (p.setFail) add(Ui.text(c, "O celular não deixou ler as configurações: ATIVAR não fecha nada até resolver — reinicie o celular.", 12f, Ui.WARN, true), 10)
-
         val tot = p.c.sumOf { it.kb }
-        add(linhas(c, "vai fechar e congelar (${p.c.size}) · ~${Otm.mb(tot)} MB",
-            p.c.map { it.pk + "  " + Otm.mb(it.kb) + " MB" + (if (it.escolhido) "  · ESCOLHIDO POR VOCÊ" else "") }, "nenhum app em segundo plano"), 14)
-        add(linhas(c, "ficam protegidos (${p.x.size})", p.x.map { it.pk + "  " + it.why }, "nenhum"), 12)
-        val sis = p.s.take(12).map { it.pk + "  " + Otm.mb(it.kb) + " MB · " + (if (it.pode) "pode fechar (FECHAR MAIS APPS)" else "sistema" + (if (it.why.isNotEmpty()) " · " + it.why else "")) }.toMutableList()
-        if (p.s.size > 12) sis.add("+ mais ${p.s.size - 12} apps do sistema")
-        if (p.n.isNotEmpty()) sis.add("+ ${p.n.size} processos nativos do Android · ${Otm.mb(p.n.sumOf { it.kb })} MB (não mexe)")
-        add(linhas(c, "sistema rodando — só olhando (${p.s.size})", sis, "nenhum"), 12)
+        val hero = Ui.hero(c, R.drawable.ic_chip, "seu celular", p.perfil(), null, "RAM livre: ${Otm.gb(p.memAvail)} GB · ${p.nivel()}")
+        hero.addView(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_xcircle, "vai fechar", p.c.size.toString(), Ui.RED),
+            Ui.infoBox(c, R.drawable.ic_shield, "protegidos", p.x.size.toString(), Ui.OK),
+            Ui.infoBox(c, R.drawable.ic_bolt, "libera ~", "${Otm.mb(tot)} MB")
+        ), Ui.lp(top = 16, c = c))
+        add(hero, 0)
+        if (p.setFail) add(Ui.dica(c, "O celular não deixou ler as configurações: ativar não fecha nada até resolver — reinicie o celular.", Ui.Dica.AVISO), 12)
+
+        add(grupoApps(c, "vai fechar e congelar (${p.c.size})",
+            p.c.map { Ui.item(c, Otm.curto(it.pk), if (it.escolhido) "escolhido por você" else it.pk, 0, "${Otm.mb(it.kb)} MB") },
+            "nenhum app em segundo plano"), 20)
+        add(grupoApps(c, "ficam protegidos (${p.x.size})",
+            p.x.map { Ui.item(c, Otm.curto(it.pk), it.why, R.drawable.ic_shield) }, "nenhum"), 20)
+        val sis = ArrayList<View>()
+        for (s in p.s.take(12)) sis.add(Ui.item(c, Otm.curto(s.pk), if (s.pode) "pode fechar (em Fechar mais apps)" else "sistema" + (if (s.why.isNotEmpty()) " · " + s.why else ""), 0, "${Otm.mb(s.kb)} MB"))
+        if (p.s.size > 12) sis.add(Ui.item(c, "+ mais ${p.s.size - 12} apps do sistema"))
+        if (p.n.isNotEmpty()) sis.add(Ui.item(c, "+ ${p.n.size} processos nativos do Android", "não mexe", 0, "${Otm.mb(p.n.sumOf { it.kb })} MB"))
+        add(grupoApps(c, "sistema rodando — só olhando (${p.s.size})", sis, "nenhum"), 20)
 
         val aj = ArrayList<String>()
         aj.add("animações zeradas e sem desfoque de janela")
@@ -186,8 +233,8 @@ class OtmVerScreen(a: MainActivity) : Screen(a) {
             aj.add("Free Fire em modo jogo \"desempenho\" (se o jogo oferecer)")
         }
         if (Prefs.otmPerf && p.sdk >= 30) aj.add("CPU/GPU em nível fixo (se o celular aceitar)")
-        add(linhas(c, "também ajusta (volta ao desativar)", aj, ""), 12)
-        add(Ui.button(c, "atualizar", Ui.Kind.GHOST) { carrega() }, 14)
+        add(Ui.grupo(c, "também ajusta (volta ao desativar)", aj.map { feito(c, it) }), 20)
+        add(Ui.button(c, "atualizar", Ui.Kind.GHOST) { carrega() }, 16)
     }
 }
 
@@ -222,34 +269,33 @@ class OtmProtegerScreen(a: MainActivity) : Screen(a) {
         limpa()
         val c = act
         if (!iniciou) { iniciou = true; carrega(); return }
-        if (carregando) { add(Ui.text(c, "LENDO O CELULAR...", 14f, Ui.MUTED, true, mono = true), 0); return }
+        if (carregando) { add(carregandoCelular(c), 0); return }
         val p = plano
         if (p == null) {
-            add(Ui.text(c, "[x] Não consegui ler o celular. Confira a CONEXÃO.", 13f, Ui.WARN, true), 0)
+            add(Ui.dica(c, "Não consegui ler o celular. Confira a Conexão.", Ui.Dica.AVISO), 0)
             add(Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() }, 14)
             return
         }
-        add(Ui.text(c, "Toque num app para alternar. Sem escudo = FECHA na otimização · com escudo = nunca fecha. Só dá para mudar o que você protegeu e as mensagens.", 10.5f, Ui.MUTED), 0)
-        add(Ui.label(c, "vão fechar"), 14)
-        if (p.c.isEmpty()) add(Ui.text(c, "nenhum app em segundo plano", 13f, Ui.MUTED), 6)
-        for (a2 in p.c) {
-            if (a2.escolhido) continue
-            add(Ui.row(c, a2.pk.removePrefix("com."), Otm.mb(a2.kb).toString() + " MB · toque para proteger") { alterna(a2.pk, "") }, 6)
+        add(Ui.dica(c, "Toque num app para alternar. Sem escudo = fecha na otimização · com escudo = nunca fecha. Só dá para mudar o que você protegeu e as mensagens.", Ui.Dica.INFO), 0)
+        val fecham = p.c.filter { !it.escolhido }.map { a2 ->
+            Ui.item(c, Otm.curto(a2.pk), "toque para proteger", R.drawable.ic_xcircle, "${Otm.mb(a2.kb)} MB") { alterna(a2.pk, "") }
         }
-        add(Ui.label(c, "protegidos"), 14)
-        for (x in p.x) add(Ui.row(c, x.pk.removePrefix("com."), x.why, R.drawable.ic_shield) { alterna(x.pk, x.why) }, 6)
+        add(grupoApps(c, "vão fechar", fecham, "nenhum app em segundo plano"), 18)
+        val prot = ArrayList<View>()
+        for (x in p.x) prot.add(Ui.item(c, Otm.curto(x.pk), x.why, R.drawable.ic_shield) { alterna(x.pk, x.why) })
         val vistos = HashSet<String>()
         p.c.forEach { vistos.add(it.pk) }
         p.x.forEach { vistos.add(it.pk) }
         for (pk in Otm.protegidos()) {
             if (pk in vistos) continue
-            add(Ui.row(c, pk.removePrefix("com."), "SUA LISTA · não está rodando agora", R.drawable.ic_shield) { alterna(pk, "SUA LISTA") }, 6)
+            prot.add(Ui.item(c, Otm.curto(pk), "sua lista · não está rodando agora", R.drawable.ic_shield) { alterna(pk, "SUA LISTA") })
         }
-        add(Ui.button(c, "adicionar pelo nome do app", Ui.Kind.GHOST) {
+        add(grupoApps(c, "protegidos", prot, "nenhum"), 20)
+        add(Ui.button(c, "adicionar pelo nome do app", Ui.Kind.GHOST, R.drawable.ic_shield) {
             Ui.dialogTexto(act, "PROTEGER APP", "ex.: com.whatsapp") { nome ->
                 if (Otm.protegerPorNome(nome)) { Ui.toast(act, "PROTEGIDO"); carrega() } else Ui.toast(act, "Nome inválido (só letras, números e ponto)")
             }
-        }, 16)
+        }, 18)
     }
 }
 
@@ -285,34 +331,29 @@ class OtmMaisScreen(a: MainActivity) : Screen(a) {
         limpa()
         val c = act
         if (!iniciou) { iniciou = true; carrega(); return }
-        if (carregando) { add(Ui.text(c, "LENDO O CELULAR...", 14f, Ui.MUTED, true, mono = true), 0); return }
+        if (carregando) { add(carregandoCelular(c), 0); return }
         val p = plano
         if (p == null) {
-            add(Ui.text(c, "[x] Não consegui ler o celular. Confira a CONEXÃO.", 13f, Ui.WARN, true), 0)
+            add(Ui.dica(c, "Não consegui ler o celular. Confira a Conexão.", Ui.Dica.AVISO), 0)
             add(Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() }, 14)
             return
         }
-        add(Ui.text(c, "Toque num app do sistema para fechar junto na otimização. Toque de novo para tirar. Só aparece o que NÃO é essencial (Telefone, Configurações, Play Services, teclado... ficam de fora).", 10.5f, Ui.MUTED), 0)
+        add(Ui.dica(c, "Toque num app do sistema para fechar junto na otimização. Toque de novo para tirar. Só aparece o que não é essencial (Telefone, Configurações, Play Services, teclado... ficam de fora).", Ui.Dica.INFO), 0)
         val mostrados = HashSet<String>()
-        add(Ui.label(c, "escolhidos por você"), 14)
-        var algum = false
+        val escolhidos = ArrayList<View>()
         for (a2 in p.c) {
             if (!a2.escolhido) continue
-            algum = true
             mostrados.add(a2.pk)
-            add(Ui.row(c, Otm.curto(a2.pk), Otm.mb(a2.kb).toString() + " MB · VAI FECHAR", R.drawable.ic_xcircle) { alterna(a2.pk) }, 6)
+            escolhidos.add(Ui.item(c, Otm.curto(a2.pk), "vai fechar", R.drawable.ic_xcircle, "${Otm.mb(a2.kb)} MB") { alterna(a2.pk) })
         }
         for (pk in Otm.extras()) {
             if (pk in mostrados) continue
-            algum = true
             val why = p.x.firstOrNull { it.pk == pk }?.why
-            add(Ui.row(c, Otm.curto(pk), "ESCOLHIDO · " + (why ?: "NÃO ESTÁ RODANDO")) { alterna(pk) }, 6)
+            escolhidos.add(Ui.item(c, Otm.curto(pk), "escolhido · " + (why ?: "não está rodando"), R.drawable.ic_xcircle) { alterna(pk) })
         }
-        if (!algum) add(Ui.text(c, "nenhum", 13f, Ui.MUTED), 6)
-        add(Ui.label(c, "você pode escolher"), 14)
-        val pode = p.s.filter { it.pode }
-        if (pode.isEmpty()) add(Ui.text(c, "nenhum app do sistema com ícone rodando agora", 13f, Ui.MUTED), 6)
-        for (s in pode) add(Ui.row(c, Otm.curto(s.pk), Otm.mb(s.kb).toString() + " MB") { alterna(s.pk) }, 6)
+        add(grupoApps(c, "escolhidos por você", escolhidos, "nenhum"), 18)
+        val pode = p.s.filter { it.pode }.map { s -> Ui.item(c, Otm.curto(s.pk), "toque para fechar junto", 0, "${Otm.mb(s.kb)} MB") { alterna(s.pk) } }
+        add(grupoApps(c, "você pode escolher", pode, "nenhum app do sistema com ícone rodando agora"), 20)
     }
 }
 

@@ -32,21 +32,27 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
         }
 
         if (!temPermissao) {
-            add(Ui.text(c, "⚠️ O app precisa da permissão 'Acesso a todos os arquivos'.", 13f, Ui.WARN, true), 8)
-            add(Ui.button(c, "PERMITIR ACESSO AOS ARQUIVOS", Ui.Kind.PRIMARY) {
+            add(Ui.hero(c, R.drawable.ic_lock, "permissão", "Falta liberar", false, "O app precisa do acesso a todos os arquivos pra instalar as pastas."), 12)
+            add(Ui.dica(c, "Na tela que abrir, ache o NOCRY e ligue \"Permitir acesso para gerenciar todos os arquivos\".", Ui.Dica.INFO), 12)
+            add(Ui.button(c, "permitir acesso aos arquivos", Ui.Kind.PRIMARY, R.drawable.ic_lock) {
                 val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
                 intent.data = Uri.parse("package:${act.packageName}")
                 act.startActivity(intent)
             }, 8)
         } else {
             val (pastaA, pastaB) = Downloader.pastasInstaladas(ff)
-            val card = Ui.card(c)
-            card.addView(Ui.labelIcone(c, R.drawable.ic_download, "STATUS DAS PASTAS"))
-            card.addView(Ui.status(c, "PASTA SUJA (XIT)", if (pastaA) "INSTALADA" else "FALTA", pastaA), Ui.lp(top = 8, c = c))
-            card.addView(Ui.status(c, "PASTA LIMPA (RESTAURAR)", if (pastaB) "INSTALADA" else "FALTA", pastaB))
-            add(card, 0)
+            val nomeFf = if (ff == "max") "FF MAX" else "FF normal"
+            val tudo = pastaA && pastaB
+            val hero = Ui.hero(c, R.drawable.ic_download, "pastas do $nomeFf",
+                if (tudo) "Tudo instalado" else if (pastaA || pastaB) "Falta uma" else "Nada instalado", if (tudo) true else if (pastaA || pastaB) null else false,
+                if (tudo) "O bypass já pode aplicar e restaurar." else "Instale as duas abaixo.")
+            hero.addView(Ui.chips(c,
+                Ui.chip(c, "SUJA (XIT)", if (pastaA) "INSTALADA" else "FALTA", pastaA),
+                Ui.chip(c, "LIMPA", if (pastaB) "INSTALADA" else "FALTA", pastaB)
+            ), Ui.lp(top = 16, c = c))
+            add(hero, 12)
 
-            add(Ui.labelIcone(c, R.drawable.ic_gamepad, "ESCOLHA O FREE FIRE"), 18)
+            add(Ui.labelIcone(c, R.drawable.ic_gamepad, "escolha o free fire"), 20)
             add(Ui.segmento(c, listOf("NORMAL", "MAX"), if (ff == "normal") 0 else 1) { i ->
                 if (ocupado) return@segmento
                 ff = if (i == 0) "normal" else "max"
@@ -54,7 +60,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
             }, 8)
 
             // BOTÃO DE INSTALAR SUJA
-            add(Ui.button(c, "INSTALAR SUJA (AUTOMÁTICO)", Ui.Kind.PRIMARY, R.drawable.ic_check) {
+            add(Ui.button(c, if (pastaA) "instalar suja de novo" else "instalar pasta suja", if (pastaA) Ui.Kind.GHOST else Ui.Kind.PRIMARY, R.drawable.ic_download) {
                 if (ocupado) return@button
                 ocupado = true; log = "INICIANDO SUJA..."; percent = null; redesenha()
 
@@ -103,7 +109,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
             }, 18)
 
             // BOTÃO DE INSTALAR LIMPA
-            add(Ui.button(c, "INSTALAR LIMPA (AUTOMÁTICO)", Ui.Kind.GHOST, R.drawable.ic_stop) {
+            add(Ui.button(c, if (pastaB) "instalar limpa de novo" else "instalar pasta limpa", if (pastaB || !pastaA) Ui.Kind.GHOST else Ui.Kind.PRIMARY, R.drawable.ic_download) {
                 if (ocupado) return@button
                 ocupado = true; log = "INICIANDO LIMPA..."; percent = null; redesenha()
 
@@ -155,15 +161,16 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
         if (log.isNotEmpty()) {
             val sucesso = log.contains("INSTALADA!")
             val falha = log.contains("FALHA")
-            val card = Ui.card(c, forte = ocupado)
-            card.addView(Ui.labelIcone(c, if (falha) R.drawable.ic_warn else R.drawable.ic_download, if (ocupado) "BAIXANDO" else if (sucesso) "PRONTO" else if (falha) "FALHOU" else "LOG"))
+            val card = Ui.hero(c, if (falha) R.drawable.ic_warn else if (sucesso) R.drawable.ic_check else R.drawable.ic_download, "andamento",
+                if (ocupado) "Instalando..." else if (sucesso) "Pronto" else if (falha) "Falhou" else "Aguardando", if (ocupado) null else if (sucesso) true else if (falha) false else null,
+                log.lowercase().replaceFirstChar { it.uppercase() })
             if (ocupado || sucesso) {
                 val bp = BarraProgresso(c)
                 bp.define(if (sucesso) 1f else percent)
-                card.addView(bp, Ui.lp(top = 10, c = c))
+                card.addView(bp, Ui.lp(top = 16, h = Ui.dp(c, 8), c = c))
+                val pz = percent
+                if (ocupado && pz != null) card.addView(Ui.text(c, "${(pz * 100).toInt()}%", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(top = 6, c = c))
             }
-            val cor = if (falha) Ui.BAD else if (sucesso) Ui.OK else Ui.TEXT
-            card.addView(Ui.text(c, log, 12f, cor, sucesso || falha, mono = true), Ui.lp(top = 8, c = c))
             add(card, 18)
         }
     }

@@ -367,6 +367,35 @@ object Ui {
         return r
     }
 
+    /** abas em pilulas que rolam na horizontal (icone + nome); a escolhida fica em degrade */
+    fun abas(c: Context, opcoes: List<Pair<Int, String>>, escolhido: Int, onPick: (Int) -> Unit): View {
+        val hs = android.widget.HorizontalScrollView(c)
+        hs.isHorizontalScrollBarEnabled = false
+        hs.overScrollMode = View.OVER_SCROLL_NEVER
+        val l = hbox(c)
+        for ((i, o) in opcoes.withIndex()) {
+            val sel = i == escolhido
+            val b = hbox(c)
+            b.gravity = Gravity.CENTER
+            b.background = if (sel) Botao(c, "grad", 14) else shape(c, Theme.alpha(Color.WHITE, 0x0A), 14, Theme.alpha(Color.WHITE, 0x22), 1)
+            b.setPadding(dp(c, 14), dp(c, 9), dp(c, 15), dp(c, 9))
+            val cor = if (sel) Theme.sobreGrad() else MUTED
+            b.addView(icone(c, o.first, cor, 15))
+            val t = text(c, o.second, 11f, cor, true, mono = true)
+            t.maxLines = 1
+            val tp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            tp.leftMargin = dp(c, 7)
+            b.addView(t, tp)
+            b.contentDescription = o.second
+            clique(b) { onPick(i) }
+            val p = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            if (i > 0) p.leftMargin = dp(c, 8)
+            l.addView(b, p)
+        }
+        hs.addView(l)
+        return hs
+    }
+
     /** grupo de itens: rotulo em cima e um cartao so, com os itens separados por linhas finas */
     fun grupo(c: Context, titulo: String?, itens: List<View>): View {
         val col = vbox(c)

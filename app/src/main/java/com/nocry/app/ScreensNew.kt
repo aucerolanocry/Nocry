@@ -56,18 +56,6 @@ class KeyGate(private val act: MainActivity) {
         return dono
     }
 
-    private fun item(c: Context, texto: String): View {
-        val l = Ui.hbox(c)
-        l.gravity = Gravity.TOP
-        val ic = Ui.icone(c, R.drawable.ic_check, Ui.OK, 14)
-        val ip = LinearLayout.LayoutParams(Ui.dp(c, 14), Ui.dp(c, 14))
-        ip.topMargin = Ui.dp(c, 3)
-        ip.rightMargin = Ui.dp(c, 10)
-        l.addView(ic, ip)
-        l.addView(Ui.text(c, texto, 12.5f, Ui.TEXT), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        return l
-    }
-
     private fun monta() {
         campo?.let { keyTxt = it.text.toString() }
         dono.removeAllViews()
@@ -78,57 +66,46 @@ class KeyGate(private val act: MainActivity) {
         sv.overScrollMode = View.OVER_SCROLL_NEVER
         val col = Ui.vbox(c)
         col.gravity = Gravity.CENTER_VERTICAL
-        val p = Ui.dp(c, 20)
-        col.setPadding(p, Ui.dp(c, 28), p, Ui.dp(c, 28))
+        val p = Ui.dp(c, 18)
+        col.setPadding(p, Ui.dp(c, 30), p, Ui.dp(c, 28))
 
         // ---------------- marca ----------------
-        val logo = FrameLayout(c)
-        logo.background = Botao(c, "icoOn", 22)
-        val n = Ui.text(c, "N", 40f, Theme.sobreGrad(), true, mono = true)
-        n.gravity = Gravity.CENTER
-        logo.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        col.addView(logo, LinearLayout.LayoutParams(Ui.dp(c, 76), Ui.dp(c, 76)))
-        col.addView(Ui.gradTexto(c, "NOCRY", 46f), Ui.lp(top = 16, c = c))
-        col.addView(Ui.text(c, "Acesso com key", 14f, Ui.TEXT, true, mono = true), Ui.lp(top = 0, c = c))
-        col.addView(Ui.text(c, "Modo competitivo, toque e otimização direto no celular. Para entrar, use a sua key.", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        col.addView(marca(c, "N", null, "App desenvolvido por Aucerola"))
+        col.addView(Ui.text(c, "Modo competitivo, toque e otimização direto no celular. Para entrar, use a sua key.", 10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
 
-        // ---------------- cartao ----------------
+        // ---------------- entrar ----------------
         val card = Ui.card(c, forte = true)
-        card.addView(Ui.label(c, "sua key"))
+        card.addView(Ui.labelIcone(c, R.drawable.ic_key, "entrar com a sua key"))
         val e = Ui.field(c, "XXXX-XXXX-XXXX-XXXX", false)
         e.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         e.setText(keyTxt)
         e.setSelection(e.text.length)
         campo = e
-        card.addView(e, Ui.lp(top = 8, c = c))
-
-        card.addView(Ui.label(c, "o que o NOCRY envia"), Ui.lp(top = 18, c = c))
-        val lista = listOf(
-            "seu IP (o servidor vê sozinho)",
-            "marca e modelo do celular",
-            "versão do Android e do app",
-            "um código anônimo do aparelho (não é o IMEI nem o número do telefone)"
-        )
-        for (l in lista) card.addView(item(c, l), Ui.lp(top = 7, c = c))
-        card.addView(Ui.text(c, "Não envia telefone, localização, contatos, mensagens nem a lista de apps. Serve para saber quem usa cada key e poder desativar uma key.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
-
-        val linha = Ui.hbox(c)
-        linha.addView(Ui.text(c, "Li e concordo", 14f, Ui.TEXT, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        linha.addView(Ui.interruptor(c, concordo) { v -> concordo = v })
-        card.addView(linha, Ui.lp(top = 16, c = c))
-
-        if (erro.isNotEmpty()) card.addView(Ui.text(c, erro, 13f, Ui.WARN, true), Ui.lp(top = 12, c = c))
+        card.addView(e, Ui.lp(top = 12, c = c))
+        card.addView(Ui.itemChave(c, "Li e concordo", "com o que o NOCRY envia (veja abaixo)", concordo) { v -> concordo = v }, Ui.lp(top = 6, c = c))
+        if (erro.isNotEmpty()) card.addView(Ui.dica(c, erro, Ui.Dica.AVISO), Ui.lp(top = 6, c = c))
         card.addView(Ui.button(c, if (ocupado) "confirmando..." else "entrar", Ui.Kind.PRIMARY, R.drawable.ic_key) {
             tenta(e.text.toString())
-        }, Ui.lp(top = 14, c = c))
-        col.addView(card, Ui.lp(top = 22, c = c))
+        }, Ui.lp(top = 12, c = c))
+        col.addView(card, Ui.lp(top = 18, c = c))
 
-        val dev = License.devId(c).take(8)
-        val rod = Ui.hbox(c)
-        rod.addView(Ui.selo(c, "1 key = 1 aparelho", Ui.MUTED, false))
-        col.addView(rod, Ui.lp(top = 18, c = c))
-        col.addView(Ui.text(c, "versão ${License.versao(c)} · aparelho $dev", 10.5f, Ui.MUTED, mono = true), Ui.lp(top = 10, c = c))
-        col.addView(Ui.text(c, "Sem key? Peça a quem te passou o app.", 10.5f, Ui.MUTED), Ui.lp(top = 4, c = c))
+        // ---------------- privacidade ----------------
+        col.addView(Ui.grupo(c, "o que o NOCRY envia", listOf(
+            Ui.item(c, "Seu IP", "o servidor vê sozinho", R.drawable.ic_globe),
+            Ui.item(c, "Marca e modelo", "do celular", R.drawable.ic_info),
+            Ui.item(c, "Versões", "do Android e do app", R.drawable.ic_chip),
+            Ui.item(c, "Código anônimo do aparelho", "não é o IMEI nem o número do telefone", R.drawable.ic_lock)
+        )), Ui.lp(top = 22, c = c))
+        col.addView(Ui.dica(c, "Não envia telefone, localização, contatos, mensagens nem a lista de apps. Serve para saber quem usa cada key e poder desativar uma key.", Ui.Dica.OK), Ui.lp(top = 10, c = c))
+
+        // ---------------- rodape ----------------
+        col.addView(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_user, "regra", "1 key = 1 aparelho"),
+            Ui.infoBox(c, R.drawable.ic_chip, "aparelho", License.devId(c).take(8))
+        ), Ui.lp(top = 18, c = c))
+        val v = Ui.text(c, "versão ${License.versao(c)} · sem key? Peça a quem te passou o app.", 10f, Ui.MUTED)
+        v.gravity = Gravity.CENTER
+        col.addView(v, Ui.lp(top = 12, c = c))
 
         sv.addView(col, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dono.addView(sv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -157,6 +134,28 @@ class KeyGate(private val act: MainActivity) {
     }
 }
 
+/** cabecalho de marca das telas de bloqueio (key e atualizacao): icone, nome em degrade e uma linha */
+private fun marca(c: Context, letra: String?, ico: Int?, sub: String): View {
+    val r = Ui.hbox(c)
+    val logo = FrameLayout(c)
+    logo.background = Botao(c, "icoOn", 18)
+    if (ico != null) {
+        logo.addView(Ui.icone(c, ico, Theme.sobreGrad(), 28), FrameLayout.LayoutParams(Ui.dp(c, 28), Ui.dp(c, 28), Gravity.CENTER))
+    } else {
+        val n = Ui.text(c, letra ?: "N", 30f, Theme.sobreGrad(), true, mono = true)
+        n.gravity = Gravity.CENTER
+        logo.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+    val lg = LinearLayout.LayoutParams(Ui.dp(c, 60), Ui.dp(c, 60))
+    lg.rightMargin = Ui.dp(c, 14)
+    r.addView(logo, lg)
+    val col = Ui.vbox(c)
+    col.addView(Ui.gradTexto(c, "NOCRY", 30f))
+    col.addView(Ui.text(c, sub, 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 2, c = c))
+    r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    return r
+}
+
 // =====================================================================================
 // ATUALIZACAO OBRIGATORIA (bloqueia o app ate instalar a versao nova)
 // =====================================================================================
@@ -165,6 +164,7 @@ class AtualizarGate(private val act: MainActivity, private val info: Update.Info
     private var instalando = false
     private var percent: Float? = null
     private var msg = ""
+    private var falhou = false
 
     fun criar(): View {
         monta()
@@ -180,41 +180,49 @@ class AtualizarGate(private val act: MainActivity, private val info: Update.Info
         sv.overScrollMode = View.OVER_SCROLL_NEVER
         val col = Ui.vbox(c)
         col.gravity = Gravity.CENTER_VERTICAL
-        val p = Ui.dp(c, 20)
-        col.setPadding(p, Ui.dp(c, 28), p, Ui.dp(c, 28))
+        val p = Ui.dp(c, 18)
+        col.setPadding(p, Ui.dp(c, 30), p, Ui.dp(c, 28))
 
-        val logo = FrameLayout(c)
-        logo.background = Botao(c, "icoOn", 22)
-        val ic = Ui.icone(c, R.drawable.ic_download, Theme.sobreGrad(), 34)
-        logo.addView(ic, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-        col.addView(logo, LinearLayout.LayoutParams(Ui.dp(c, 76), Ui.dp(c, 76)))
-        col.addView(Ui.gradTexto(c, "ATUALIZAÇÃO", 32f), Ui.lp(top = 16, c = c))
-        col.addView(Ui.text(c, "Obrigatória pra continuar", 14f, Ui.TEXT, true, mono = true), Ui.lp(top = 0, c = c))
-        col.addView(Ui.text(c, "Saiu a versão ${info.tag} e essa aqui (${Update.versaoInstalada(c)}) já ficou pra trás. Baixa e instala pra voltar a usar o NOCRY.", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        col.addView(marca(c, null, R.drawable.ic_download, "Atualização obrigatória"))
+        col.addView(Ui.text(c, "Saiu uma versão nova e essa aqui ficou pra trás. Baixa e instala pra voltar a usar o NOCRY.", 10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
 
         val card = Ui.card(c, forte = true)
         card.addView(Ui.labelIcone(c, R.drawable.ic_sparkle, "versão nova"))
-        card.addView(Ui.text(c, info.tag, 24f, Ui.TEXT, true, mono = true), Ui.lp(top = 4, c = c))
+        card.addView(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_info, "você tem", Update.versaoInstalada(c), Ui.WARN),
+            Ui.infoBox(c, R.drawable.ic_download, "nova", info.tag, Ui.OK)
+        ), Ui.lp(top = 12, c = c))
         if (instalando) {
             val bp = BarraProgresso(c)
             bp.define(percent)
-            card.addView(bp, Ui.lp(top = 12, c = c))
+            card.addView(bp, Ui.lp(top = 16, h = Ui.dp(c, 8), c = c))
+            val pz = percent
+            card.addView(Ui.text(c, if (pz == null) "Preparando..." else "Baixando ${(pz * 100).toInt()}%", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(top = 6, c = c))
         }
-        if (msg.isNotEmpty()) card.addView(Ui.text(c, msg, 12.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        if (msg.isNotEmpty() && !instalando) card.addView(Ui.dica(c, msg, if (falhou) Ui.Dica.AVISO else Ui.Dica.OK), Ui.lp(top = 12, c = c))
         card.addView(Ui.button(c, if (instalando) "baixando..." else "baixar e instalar agora", Ui.Kind.PRIMARY, R.drawable.ic_download) {
             if (!instalando) {
-                instalando = true; percent = null; msg = "Baixando..."; monta()
+                instalando = true; percent = null; msg = ""; falhou = false; monta()
                 Update.baixarEInstalar(c, info,
                     onProgresso = { v -> percent = v; monta() },
-                    onPronto = { instalando = false; msg = "Baixado! Confirme a instalação na tela que abriu — depois volte aqui."; monta() },
-                    onErro = { e -> instalando = false; msg = "Falhou: $e"; monta() }
+                    onPronto = { instalando = false; falhou = false; msg = "Baixado! Confirme a instalação na tela que abriu — depois volte aqui."; monta() },
+                    onErro = { e -> instalando = false; falhou = true; msg = "Falhou: $e"; monta() }
                 )
             }
         }, Ui.lp(top = 14, c = c))
         card.addView(Ui.button(c, "abrir no navegador", Ui.Kind.GHOST, R.drawable.ic_globe) {
             try { c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.pagina))) } catch (_: Exception) {}
         }, Ui.lp(top = 8, c = c))
-        col.addView(card, Ui.lp(top = 22, c = c))
+        col.addView(card, Ui.lp(top = 18, c = c))
+
+        val como = Ui.card(c)
+        como.addView(Ui.label(c, "como instalar"))
+        como.addView(Ui.lista(c, listOf(
+            "Toque em baixar e instalar agora",
+            "Confirme na tela de instalação do Android",
+            "Abra o NOCRY de novo — sua key e seus ajustes continuam"
+        )), Ui.lp(top = 12, c = c))
+        col.addView(como, Ui.lp(top = 12, c = c))
 
         sv.addView(col, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dono.addView(sv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -241,35 +249,44 @@ class OrganizarScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Organizar início", "ESCOLHA A ORDEM DOS MODOS. O OLHO MOSTRA OU ESCONDE CADA UM.")
+        cabecalho("Organizar início", "Escolha a ordem dos modos. O olho mostra ou esconde cada um.")
 
         val lista = Atalhos.ordem()
         val ocultos = lista.filter { Atalhos.escondido(it.id) }.map { it.id }
+        val visiveis = lista.size - ocultos.size
+        add(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_eye, "no início", visiveis.toString(), Ui.OK),
+            Ui.infoBox(c, R.drawable.ic_xcircle, "escondidos", ocultos.size.toString())
+        ), 12)
+        val linhas = ArrayList<View>()
         for ((i, at) in lista.withIndex()) {
             val oculto = at.id in ocultos
             val r = Ui.hbox(c)
-            r.background = Ui.glass(c, ligado = !oculto)
-            val pd = Ui.dp(c, 12)
-            r.setPadding(pd, Ui.dp(c, 10), pd, Ui.dp(c, 10))
-            val ib = Ui.caixaIcone(c, at.ico, !oculto, 40)
-            val ip = LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40))
+            r.setPadding(0, Ui.dp(c, 10), 0, Ui.dp(c, 10))
+            val num = Ui.text(c, (i + 1).toString(), 10f, Ui.MUTED, true, mono = true)
+            num.gravity = Gravity.CENTER
+            r.addView(num, LinearLayout.LayoutParams(Ui.dp(c, 18), ViewGroup.LayoutParams.WRAP_CONTENT))
+            val ib = Ui.caixaIcone(c, at.ico, !oculto, 36)
+            val ip = LinearLayout.LayoutParams(Ui.dp(c, 36), Ui.dp(c, 36))
+            ip.leftMargin = Ui.dp(c, 6)
             ip.rightMargin = Ui.dp(c, 12)
             r.addView(ib, ip)
             val tx = Ui.vbox(c)
-            tx.addView(Ui.text(c, at.nome, 14f, if (oculto) Ui.MUTED else Ui.TEXT, true))
+            tx.addView(Ui.text(c, at.nome, 13f, if (oculto) Ui.MUTED else Ui.TEXT, true))
             tx.addView(Ui.text(c, if (oculto) "escondido" else at.desc, 10.5f, Ui.MUTED), Ui.lp(top = 1, c = c))
             r.addView(tx, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
             fun botao(v: View) {
-                val lp = LinearLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 34))
+                val lp = LinearLayout.LayoutParams(Ui.dp(c, 32), Ui.dp(c, 32))
                 lp.leftMargin = Ui.dp(c, 6)
                 r.addView(v, lp)
             }
             botao(mini(c, R.drawable.ic_up, false, "Subir") { mover(i, -1) })
             botao(mini(c, R.drawable.ic_down, false, "Descer") { mover(i, 1) })
             botao(mini(c, R.drawable.ic_eye, !oculto, if (oculto) "Mostrar" else "Esconder") { alterna(at.id) })
-            add(r, if (i == 0) 14 else 8)
+            linhas.add(r)
         }
+        add(Ui.grupo(c, "modos", linhas), 20)
         add(Ui.button(c, "voltar à ordem padrão", Ui.Kind.GHOST, R.drawable.ic_sparkle) { Atalhos.padrao(); redesenha() }, 18)
     }
 
@@ -361,51 +378,92 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         return hs
     }
 
+    /** aba aberta (fica guardada enquanto a tela existe, inclusive quando o visual e reaplicado) */
+    private var abaEst = 0
+    private val ABAS_EST = listOf(
+        R.drawable.ic_sparkle to "temas",
+        R.drawable.ic_brush to "cores",
+        R.drawable.ic_image to "cartões",
+        R.drawable.ic_video to "fundo",
+        R.drawable.ic_sliders to "texto",
+        R.drawable.ic_bolt to "efeitos",
+        R.drawable.ic_play to "intro"
+    )
+
     override fun render() {
         limpa()
         val c = act
         add(Ui.text(c, "Deixe o NOCRY do seu jeito. Tudo muda na hora e fica salvo.", 10.5f, Ui.MUTED), 0)
-
-        // ---------------- temas prontos ----------------
-        val tm = secao(c, "temas prontos", forte = true, icone = R.drawable.ic_sparkle)
-        val cartas = ArrayList<View>()
-        for (t in Temas.lista) {
-            val sel = Prefs.tema == t.id
-            val box = Ui.vbox(c)
-            val mini = Miniatura.tema(c, t, sel)
-            box.addView(mini, LinearLayout.LayoutParams(Ui.dp(c, 104), Ui.dp(c, 132)))
-            val nome = Ui.text(c, t.nome, 12.5f, if (sel) Ui.RED else Ui.TEXT, true, mono = true)
-            box.addView(nome, Ui.lp(top = 7, c = c))
-            box.addView(Ui.text(c, t.tag, 10f, Ui.MUTED).also { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }, Ui.lp(top = 1, c = c))
-            Ui.clique(box) { Temas.aplica(t); act.reaplica() }
-            val lp = LinearLayout.LayoutParams(Ui.dp(c, 104), ViewGroup.LayoutParams.WRAP_CONTENT)
-            lp.rightMargin = Ui.dp(c, 12)
-            box.layoutParams = lp
-            cartas.add(box)
+        add(Ui.abas(c, ABAS_EST, abaEst) { i -> abaEst = i; redesenha() }, 12)
+        when (abaEst) {
+            0 -> abaTemas(c)
+            1 -> abaCores(c)
+            2 -> abaCartoes(c)
+            3 -> add(secaoFundo(c), 14)
+            4 -> abaTexto(c)
+            5 -> abaEfeitos(c)
+            else -> add(secaoIntro(c), 14)
         }
-        tm.addView(linhaRolavel(c, cartas), Ui.lp(top = 12, c = c))
-        if (Prefs.tema == "custom") tm.addView(Ui.text(c, "Visual personalizado por você.", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(top = 4, c = c))
-        add(tm, 12)
+    }
 
-        // ---------------- cores ----------------
-        val k = secao(c, "cores", icone = R.drawable.ic_brush)
-        val faixa = FaixaGrad(c)
-        k.addView(faixa, Ui.lp(top = 12, h = Ui.dp(c, 18), c = c))
+    // ---------------- temas prontos (grade de 2 colunas) ----------------
+    private fun abaTemas(c: Context) {
+        val lista = Temas.lista
+        var i = 0
+        while (i < lista.size) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.TOP
+            for (k in i until i + 2) {
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                if (k % 2 == 1) lp.leftMargin = Ui.dp(c, 12)
+                if (k < lista.size) linha.addView(cartaTema(c, lista[k]), lp) else linha.addView(View(c), lp)
+            }
+            add(linha, if (i == 0) 14 else 14)
+            i += 2
+        }
+        if (Prefs.tema == "custom") add(Ui.dica(c, "Você está com um visual personalizado. Tocar num tema troca tudo de uma vez.", Ui.Dica.INFO), 16)
+        add(Ui.grupo(c, "outros", listOf(
+            Ui.item(c, "Organizar o início", "ordem e visibilidade dos modos", R.drawable.ic_sliders) { act.abre(OrganizarScreen(act)) },
+            Ui.item(c, "Voltar ao tema Brasa", "cores, fonte, cartões, fundo e efeitos padrão", R.drawable.ic_sparkle) {
+                Ui.dialogConfirma(act, "TEMA PADRÃO", "Cores, fonte, cartões, fundo e efeitos voltam ao tema Brasa. O vídeo ou a imagem que você escolheu continua guardado.", "VOLTAR") {
+                    restaura()
+                }
+            }
+        )), 22)
+    }
 
-        k.addView(Ui.text(c, "Degrades prontos", 12.5f, Ui.TEXT, true), Ui.lp(top = 14, c = c))
+    private fun cartaTema(c: Context, t: Tema): View {
+        val sel = Prefs.tema == t.id
+        val box = Ui.vbox(c)
+        box.addView(Miniatura.tema(c, t, sel), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 118)))
+        box.addView(Ui.text(c, t.nome, 12.5f, if (sel) Ui.RED else Ui.TEXT, true, mono = true), Ui.lp(top = 8, c = c))
+        box.addView(Ui.text(c, t.tag, 10f, Ui.MUTED).also { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }, Ui.lp(top = 2, c = c))
+        Ui.clique(box) { Temas.aplica(t); act.reaplica() }
+        return box
+    }
+
+    // ---------------- cores ----------------
+    private fun abaCores(c: Context) {
+        val k = secao(c, "degradê", forte = true, icone = R.drawable.ic_brush)
+        k.addView(FaixaGrad(c), Ui.lp(top = 12, h = Ui.dp(c, 18), c = c))
+        k.addView(Ui.text(c, "Degradês prontos", 12.5f, Ui.TEXT, true), Ui.lp(top = 16, c = c))
         k.addView(gradientes(c), Ui.lp(top = 10, c = c))
-
-        k.addView(Ui.text(c, "Cor 1", 12.5f, Ui.TEXT, true), Ui.lp(top = 16, c = c))
-        k.addView(Ui.cores(c, Theme.PALETA, Prefs.accent, { v -> Prefs.accent = v; muda() }, { corPropria(1) }), Ui.lp(top = 10, c = c))
-        k.addView(Ui.text(c, "Cor 2", 12.5f, Ui.TEXT, true), Ui.lp(top = 16, c = c))
-        k.addView(Ui.cores(c, Theme.PALETA, Prefs.accent2, { v -> Prefs.accent2 = v; muda() }, { corPropria(2) }), Ui.lp(top = 10, c = c))
         k.addView(Ui.slider(c, "Ângulo do degradê", Prefs.angulo, 0, 360, "°") { x -> Prefs.angulo = x; muda() }, Ui.lp(top = 16, c = c))
-        k.addView(Ui.text(c, "Cor do fundo do app", 12.5f, Ui.TEXT, true), Ui.lp(top = 16, c = c))
-        k.addView(Ui.cores(c, BASES, Prefs.baseCor, { v -> Prefs.baseCor = v; muda() }, { corPropria(3) }), Ui.lp(top = 10, c = c))
-        add(k, 12)
+        add(k, 14)
+        val k1 = secao(c, "cor 1", icone = R.drawable.ic_brush)
+        k1.addView(Ui.cores(c, Theme.PALETA, Prefs.accent, { v -> Prefs.accent = v; muda() }, { corPropria(1) }), Ui.lp(top = 12, c = c))
+        add(k1, 12)
+        val k2 = secao(c, "cor 2", icone = R.drawable.ic_brush)
+        k2.addView(Ui.cores(c, Theme.PALETA, Prefs.accent2, { v -> Prefs.accent2 = v; muda() }, { corPropria(2) }), Ui.lp(top = 12, c = c))
+        add(k2, 12)
+        val k3 = secao(c, "cor do fundo do app", icone = R.drawable.ic_image)
+        k3.addView(Ui.cores(c, BASES, Prefs.baseCor, { v -> Prefs.baseCor = v; muda() }, { corPropria(3) }), Ui.lp(top = 12, c = c))
+        add(k3, 12)
+    }
 
-        // ---------------- cartoes ----------------
-        val v = secao(c, "cartões e botões", icone = R.drawable.ic_image)
+    // ---------------- cartoes e botoes ----------------
+    private fun abaCartoes(c: Context) {
+        val v = secao(c, "estilo dos cartões", forte = true, icone = R.drawable.ic_image)
         val estilos = listOf("vidro", "contorno", "solido", "hud")
         v.addView(Ui.segmento(c, listOf("Vidro", "Contorno", "Sólido", "HUD"), estilos.indexOf(Prefs.cartao).coerceAtLeast(0)) { i ->
             Prefs.cartao = estilos[i]
@@ -417,42 +475,39 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             "solido" -> "Cor cheia, visual de luxo."
             else -> "Cantos cortados, estilo painel de jogo."
         }, 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
-        v.addView(Ui.slider(c, "Brilho neon", Prefs.brilho, 0, 100, "%") { x -> Prefs.brilho = x; muda() }, Ui.lp(top = 14, c = c))
-        v.addView(Ui.slider(c, "Opacidade do vidro", Prefs.vidro, 20, 95, "%") { x -> Prefs.vidro = x; muda() }, Ui.lp(top = 12, c = c))
-        v.addView(Ui.slider(c, "Arredondamento", Prefs.raio, 2, 30, " dp") { x -> Prefs.raio = x; muda() }, Ui.lp(top = 12, c = c))
-        v.addView(Ui.slider(c, "Espessura da borda", Prefs.borda, 1, 4, " dp") { x -> Prefs.borda = x; muda() }, Ui.lp(top = 12, c = c))
-        add(v, 12)
+        add(v, 14)
+        val a = secao(c, "ajustes finos", icone = R.drawable.ic_sliders)
+        a.addView(Ui.slider(c, "Brilho neon", Prefs.brilho, 0, 100, "%") { x -> Prefs.brilho = x; muda() }, Ui.lp(top = 14, c = c))
+        a.addView(Ui.slider(c, "Opacidade do vidro", Prefs.vidro, 20, 95, "%") { x -> Prefs.vidro = x; muda() }, Ui.lp(top = 12, c = c))
+        a.addView(Ui.slider(c, "Arredondamento", Prefs.raio, 2, 30, " dp") { x -> Prefs.raio = x; muda() }, Ui.lp(top = 12, c = c))
+        a.addView(Ui.slider(c, "Espessura da borda", Prefs.borda, 1, 4, " dp") { x -> Prefs.borda = x; muda() }, Ui.lp(top = 12, c = c))
+        add(a, 12)
+    }
 
-        // ---------------- fundo ----------------
-        add(secaoFundo(c), 12)
-
-        // ---------------- fontes ----------------
-        val t = secao(c, "fonte", icone = R.drawable.ic_sliders)
+    // ---------------- texto ----------------
+    private fun abaTexto(c: Context) {
+        val t = secao(c, "fonte", forte = true, icone = R.drawable.ic_sliders)
         t.addView(fontes(c), Ui.lp(top = 12, c = c))
-        t.addView(Ui.toggle(c, "Tudo em maiúsculo", "títulos, botões e textos em CAIXA ALTA", Prefs.maiusc) { x -> Prefs.maiusc = x; muda() }, Ui.lp(top = 14, c = c))
-        t.addView(Ui.slider(c, "Tamanho do texto", Prefs.escala, 85, 130, "%") { x -> Prefs.escala = x; muda() }, Ui.lp(top = 14, c = c))
-        add(t, 12)
+        add(t, 14)
+        add(Ui.grupo(c, "texto", listOf(
+            Ui.itemChave(c, "Tudo em maiúsculo", "títulos, botões e textos em caixa alta", Prefs.maiusc) { x -> Prefs.maiusc = x; muda() }
+        )), 18)
+        val s = Ui.card(c)
+        s.addView(Ui.slider(c, "Tamanho do texto", Prefs.escala, 85, 130, "%") { x -> Prefs.escala = x; muda() })
+        add(s, 10)
+    }
 
-        // ---------------- efeitos ----------------
-        val e = secao(c, "efeitos", icone = R.drawable.ic_bolt)
-        e.addView(Ui.toggle(c, "Animações", "fundo animado, anel e transições", Prefs.anim) { x -> Prefs.anim = x; muda() }, Ui.lp(top = 12, c = c))
-        e.addView(Ui.toggle(c, "Partículas", "brasas, neve, pétalas, chuva de código", Prefs.particulas) { x -> Prefs.particulas = x; muda() }, Ui.lp(top = 8, c = c))
-        e.addView(Ui.toggle(c, "Linhas de scanner", "listras e uma faixa de luz que varre a tela", Prefs.scanner) { x -> Prefs.scanner = x; muda() }, Ui.lp(top = 8, c = c))
-        e.addView(Ui.toggle(c, "Brilho pulsando", "o anel do início respira", Prefs.pulso) { x -> Prefs.pulso = x; muda() }, Ui.lp(top = 8, c = c))
-        e.addView(Ui.toggle(c, "Vibrar ao tocar", "vibração curta nos botões", Prefs.vibrar) { x -> Prefs.vibrar = x; muda() }, Ui.lp(top = 8, c = c))
-        add(e, 12)
-
-        // ---------------- intro de abertura ----------------
-        add(secaoIntro(c), 12)
-
-        // ---------------- inicio ----------------
-        add(Ui.row(c, "Organizar o início", "ordem e visibilidade dos modos", R.drawable.ic_sliders) { act.abre(OrganizarScreen(act)) }, 12)
-
-        add(Ui.button(c, "voltar ao tema Brasa", Ui.Kind.GHOST, R.drawable.ic_sparkle) {
-            Ui.dialogConfirma(act, "TEMA PADRÃO", "Cores, fonte, cartões, fundo e efeitos voltam ao tema Brasa. O vídeo ou a imagem que você escolheu continua guardado.", "VOLTAR") {
-                restaura()
-            }
-        }, 16)
+    // ---------------- efeitos ----------------
+    private fun abaEfeitos(c: Context) {
+        add(Ui.grupo(c, "efeitos visuais", listOf(
+            Ui.itemChave(c, "Animações", "fundo animado, anel e transições", Prefs.anim) { x -> Prefs.anim = x; muda() },
+            Ui.itemChave(c, "Partículas", "brasas, neve, pétalas, chuva de código", Prefs.particulas) { x -> Prefs.particulas = x; muda() },
+            Ui.itemChave(c, "Linhas de scanner", "listras e uma faixa de luz que varre a tela", Prefs.scanner) { x -> Prefs.scanner = x; muda() },
+            Ui.itemChave(c, "Brilho pulsando", "o anel do início respira", Prefs.pulso) { x -> Prefs.pulso = x; muda() }
+        )), 14)
+        add(Ui.grupo(c, "toque", listOf(
+            Ui.itemChave(c, "Vibrar ao tocar", "vibração curta nos botões", Prefs.vibrar) { x -> Prefs.vibrar = x; muda() }
+        )), 18)
     }
 
     // ---------------- intro de abertura ----------------
@@ -471,17 +526,17 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             else -> "Toca sempre que o app abre do zero. Voltar de outro app não repete."
         }, 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
 
-        s.addView(Ui.toggle(c, "Som da intro", "música e efeitos (segue o volume de mídia)", Prefs.introSom) { x ->
+        s.addView(Ui.grupo(c, null, listOf(Ui.itemChave(c, "Som da intro", "música e efeitos (segue o volume de mídia)", Prefs.introSom) { x ->
             Prefs.introSom = x
             redesenha()
-        }, Ui.lp(top = 14, c = c))
+        })), Ui.lp(top = 14, c = c))
 
         val mus = Intro.musica(c)
         if (mus != null) {
             s.addView(Ui.text(c, "música: " + (Prefs.introMusicaNome ?: "escolhida") + " · " + mb(mus), 12.5f, Ui.OK, true, mono = true), Ui.lp(top = 14, c = c))
-            s.addView(Ui.row(c, "Começar em: ${Prefs.introInicio} s", "o trecho da música que toca na intro (0 a 600)") {
+            s.addView(Ui.grupo(c, null, listOf(Ui.item(c, "Começar em", "o trecho da música que toca na intro (0 a 600 s)", R.drawable.ic_play, "${Prefs.introInicio} s") {
                 Ui.dialogNumero(act, "COMEÇAR EM", "segundos", 0, 600, Prefs.introInicio) { v -> Prefs.introInicio = v; redesenha() }
-            }, Ui.lp(top = 8, c = c))
+            })), Ui.lp(top = 8, c = c))
             s.addView(Ui.button(c, if (ocupadoMus) "copiando..." else "trocar a música", Ui.Kind.PRIMARY, R.drawable.ic_volume) {
                 if (!ocupadoMus) escolherMusica()
             }, Ui.lp(top = 8, c = c))
@@ -493,7 +548,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             }, Ui.lp(top = 10, c = c))
         }
         if (msgMus.isNotEmpty()) s.addView(Ui.text(c, msgMus, 12.5f, Ui.WARN, true), Ui.lp(top = 8, c = c))
-        s.addView(Ui.text(c, "A música é copiada para dentro do app e nada é enviado pela internet. Só toca o tempo da intro (uns 8 segundos) e vai baixando no final.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        s.addView(Ui.text(c, "A música é copiada para dentro do app e nada é enviado pela internet. Só toca o tempo da intro (uns 5 segundos) e vai baixando no final.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
 
         s.addView(Ui.button(c, "assistir agora", Ui.Kind.PRIMARY, R.drawable.ic_play) { act.tocaIntro() }, Ui.lp(top = 14, c = c))
         return s
