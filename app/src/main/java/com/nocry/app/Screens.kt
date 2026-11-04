@@ -124,11 +124,20 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         if (papel.isNotEmpty()) cab.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.MUTED, License.isAdmin()))
         add(cab, 0)
 
-        // ---------------- titulo ----------------
+        // ---------------- saudacao ----------------
         val nome = License.label()
-        add(Ui.text(c, if (nome.isNotEmpty()) "Olá, $nome" else "Olá", 12.5f, Ui.MUTED, true, mono = true), 22)
-        add(Ui.text(c, "Painel de", 26f, Ui.TEXT, true), 2)
-        add(Ui.gradTexto(c, "controle", 36f), 0)
+        val hora = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val saud = when {
+            hora < 5 -> "Boa madrugada"
+            hora < 12 -> "Bom dia"
+            hora < 18 -> "Boa tarde"
+            else -> "Boa noite"
+        }
+        val saudTxt = Ui.text(c, saud, 11f, Ui.MUTED, true, mono = true)
+        saudTxt.letterSpacing = 0.16f
+        add(saudTxt, 22)
+        add(Ui.text(c, "Olá,", 26f, Ui.TEXT, true), 3)
+        add(Ui.gradTexto(c, if (nome.isNotEmpty()) nome else "bem-vindo", 34f), 0)
 
         // ---------------- estado geral: anel + 3 passos ----------------
         val adb = Adb.connected
@@ -158,9 +167,11 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         topo.addView(info, ip)
         hero.addView(topo)
 
-        hero.addView(Ui.status(c, "ADB (depuração sem fio)", if (adb) "CONECTADO" else "DESCONECTADO", adb), Ui.lp(top = 14, c = c))
-        hero.addView(Ui.status(c, "PERMISSÃO DO APP", if (perm) "LIBERADA" else "FALTA", perm))
-        hero.addView(Ui.status(c, "ESCUTA DO VOLUME", if (acc) "ACESSIBILIDADE" else "DESLIGADA", if (acc) true else null))
+        hero.addView(Ui.chips(c,
+            Ui.chip(c, "ADB", if (adb) "LIGADO" else "OFF", adb),
+            Ui.chip(c, "PERMISSÃO", if (perm) "OK" else "FALTA", perm),
+            Ui.chip(c, "VOLUME", if (acc) "ATIVO" else "OFF", if (acc) true else null)
+        ), Ui.lp(top = 16, c = c))
         val falta = !adb || !perm
         hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
         add(hero, 18)

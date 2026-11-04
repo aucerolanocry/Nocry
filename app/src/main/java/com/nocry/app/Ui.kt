@@ -208,6 +208,44 @@ object Ui {
         return r
     }
 
+    /** chip curto de status, em grade horizontal (ex.: 3 lado a lado no cartao principal) */
+    fun chip(c: Context, nome: String, valor: String, ok: Boolean?): View {
+        val col = vbox(c)
+        col.gravity = Gravity.CENTER_HORIZONTAL
+        col.background = shape(c, Theme.alpha(Color.WHITE, 0x0A), 14, Theme.alpha(Color.WHITE, 0x1C), 1)
+        val cor = when (ok) { true -> OK; false -> BAD; null -> WARN }
+        val dot = View(c)
+        dot.background = shape(c, cor, 4)
+        val dp2 = LinearLayout.LayoutParams(dp(c, 7), dp(c, 7))
+        dp2.gravity = Gravity.CENTER_HORIZONTAL
+        dp2.bottomMargin = dp(c, 7)
+        col.addView(dot, dp2)
+        val n = text(c, nome, 9f, MUTED, mono = true)
+        n.gravity = Gravity.CENTER
+        n.letterSpacing = 0.06f
+        n.maxLines = 1
+        n.ellipsize = android.text.TextUtils.TruncateAt.END
+        col.addView(n)
+        val v = text(c, valor, 11.5f, cor, true, mono = true)
+        v.gravity = Gravity.CENTER
+        v.maxLines = 1
+        v.ellipsize = android.text.TextUtils.TruncateAt.END
+        col.addView(v, lp(top = 2, c = c))
+        col.setPadding(dp(c, 6), dp(c, 11), dp(c, 6), dp(c, 11))
+        return col
+    }
+
+    /** linha com varios chips repartidos em partes iguais, com espaco entre eles */
+    fun chips(c: Context, vararg itens: View): View {
+        val r = hbox(c)
+        for ((i, v) in itens.withIndex()) {
+            val p = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            if (i > 0) p.leftMargin = dp(c, 8)
+            r.addView(v, p)
+        }
+        return r
+    }
+
     fun button(c: Context, label: String, kind: Kind = Kind.PRIMARY, ico: Int = 0, onClick: () -> Unit): View {
         val corTxt = when (kind) {
             Kind.PRIMARY -> Theme.sobreGrad()
@@ -406,35 +444,42 @@ object Ui {
         return col
     }
 
-    /** quadrado da tela inicial: icone, nome, descricao e estado */
+    /** quadrado da tela inicial: icone, nome, descricao e um selo de estado no canto */
     fun tile(c: Context, ico: Int, titulo: String, desc: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
+        val frame = FrameLayout(c)
         val col = vbox(c)
         col.background = ripple(c, glass(c, ligado = ligado == true), Painel(c, mascara = true))
         val p = dp(c, 14)
         col.setPadding(p, p, p, dp(c, 12))
-        col.minimumHeight = dp(c, 140)
-        col.addView(caixaIcone(c, ico, ligado == true))
-        col.addView(text(c, titulo, 14f, TEXT, true), lp(top = 11, c = c))
+        col.minimumHeight = dp(c, 134)
+        val linhaTopo = hbox(c)
+        linhaTopo.addView(caixaIcone(c, ico, ligado == true))
+        linhaTopo.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
+        // espaco reservado pro selo (que fica por cima, no canto) nao ficar em cima do icone
+        linhaTopo.addView(View(c), LinearLayout.LayoutParams(dp(c, 54), 1))
+        col.addView(linhaTopo)
+        col.addView(text(c, titulo, 13.5f, TEXT, true), lp(top = 11, c = c))
         if (desc.isNotEmpty()) {
-            val d = text(c, desc, 11f, MUTED)
+            val d = text(c, desc, 10.5f, MUTED)
             d.maxLines = 2
             col.addView(d, lp(top = 3, c = c))
         }
-        col.addView(View(c), LinearLayout.LayoutParams(1, 0, 1f))
-        val st = hbox(c)
-        val dot = View(c)
-        dot.background = shape(c, if (ligado == true) RED else Theme.alpha(Color.WHITE, 0x40), 8)
-        st.addView(dot, LinearLayout.LayoutParams(dp(c, 7), dp(c, 7)))
-        val tx = text(c, estado, 10f, if (ligado == true) RED else MUTED, true, mono = true)
-        tx.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
-        tx.maxLines = 1
-        tx.ellipsize = android.text.TextUtils.TruncateAt.END
-        val tp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        tp.leftMargin = dp(c, 7)
-        st.addView(tx, tp)
-        col.addView(st, lp(top = 9, c = c))
+        frame.addView(col, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         clique(col, onClick)
-        return col
+
+        val cor = if (ligado == true) RED else MUTED
+        val selo = text(c, estado, 8.5f, cor, true, mono = true)
+        selo.letterSpacing = if (Prefs.maiusc) 0.08f else 0.02f
+        selo.maxLines = 1
+        selo.ellipsize = android.text.TextUtils.TruncateAt.END
+        selo.background = shape(c, Theme.alpha(cor, if (ligado == true) 0x26 else 0x16), 7)
+        selo.setPadding(dp(c, 7), dp(c, 3), dp(c, 7), dp(c, 3))
+        selo.maxWidth = dp(c, 86)
+        val sp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END)
+        sp.topMargin = dp(c, 14)
+        sp.rightMargin = dp(c, 14)
+        frame.addView(selo, sp)
+        return frame
     }
 
     /** maiusculo o texto quando o modo "tudo maiusculo" esta ligado; usado onde o texto nao passa pelo text() */
