@@ -477,7 +477,7 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         val c = act
         add(Ui.gradTexto(c, "NOCRY", 38f), 0)
         add(Ui.text(c, "versão " + versao(), 13f, Ui.MUTED, true, mono = true), 0)
-        add(Ui.text(c, "Toque via volume e carregador, com monitores de segundo plano direto no celular.", 13f), 12)
+        add(Ui.text(c, "Toque via volume e carregador, com monitores de segundo plano direto no celular.", 12f, Ui.MUTED), 12)
 
         // ---------------- sua key ----------------
         val kc = Ui.card(c, forte = true)
