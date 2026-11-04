@@ -116,8 +116,27 @@ class MainActivity : Activity() {
 
     private val ciclo = object : Runnable {
         override fun run() {
-            if (!gate && !License.valid()) mostraGate() else atual()?.tick()
+            // confere a atualizacao obrigatoria tambem aqui (consulta so o cache local, instantaneo) -
+            // sem isso, quem fica com o app aberto sem sair nunca via o aviso ate minimizar e voltar.
+            val updPendente = if (!gate) Update.pendente(applicationContext) else null
+            if (updPendente != null) mostraUpdateGate(updPendente)
+            else if (!gate && !License.valid()) mostraGate() else if (!gate) atual()?.tick()
             h.postDelayed(this, 1200)
+        }
+    }
+
+    // busca de verdade no github (a cada 1.2s so compara com o cache - isso aqui e quem atualiza o
+    // cache de tempos em tempos pra quem fica com o app aberto sem nunca minimizar tambem perceber)
+    private val cicloUpdate = object : Runnable {
+        override fun run() {
+            if (!gate) {
+                Bg.io {
+                    Update.atualizarCache(applicationContext)
+                    val i = Update.pendente(applicationContext)
+                    if (i != null) Bg.ui { if (!gate) mostraUpdateGate(i) }
+                }
+            }
+            h.postDelayed(this, 30_000)
         }
     }
 
@@ -392,7 +411,9 @@ class MainActivity : Activity() {
         if (!gate) atual()?.aoMostrar()
         h.removeCallbacks(ciclo)
         h.postDelayed(ciclo, 1200)
-        // confere no github de novo (independente do gate, pra pegar uma atualizacao obrigatoria mesmo parado na tela da key)
+        h.removeCallbacks(cicloUpdate)
+        h.postDelayed(cicloUpdate, 30_000)
+        // confere no github de novo agora mesmo (independente do gate, pra pegar uma atualizacao obrigatoria mesmo parado na tela da key)
         Bg.io {
             Update.atualizarCache(applicationContext)
             val i = Update.pendente(applicationContext)
@@ -413,6 +434,7 @@ class MainActivity : Activity() {
     override fun onPause() {
         intro?.acabaJa()
         h.removeCallbacks(ciclo)
+        h.removeCallbacks(cicloUpdate)
         Engine.onChange = null
         bg.pausa()
         super.onPause()

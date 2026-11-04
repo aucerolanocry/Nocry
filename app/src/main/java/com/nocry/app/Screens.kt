@@ -274,7 +274,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         val feitos = listOf(conectadoRes, permRes, accRes, temNotif()).count { it }
         val resumo = Ui.card(c)
         resumo.addView(Ui.hbox(c).also { row ->
-            row.addView(Ui.label(c, "RESUMO"))
+            row.addView(Ui.label(c, "RESUMO"), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 8) })
             row.addView(Ui.text(c, "$feitos de 4 prontos", 12f, if (feitos == 4) Ui.OK else Ui.MUTED, true, mono = true),
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.gravity = Gravity.END })
         })
@@ -287,7 +287,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         // 1
         val c1 = Ui.card(c)
         c1.addView(tituloPasso(c, R.drawable.ic_wifi, "1 · depuração sem fio/wifi"))
-        c1.addView(Ui.text(c, "Ligue em Opções do desenvolvedor → Depuração sem fio. (Se não aparece Opções do desenvolvedor: Sobre o telefone → toque 7 vezes em Número da versão.)", 13f), Ui.lp(top = 6, c = c))
+        c1.addView(Ui.text(c, "Ligue em Opções do desenvolvedor → Depuração sem fio. (Se não aparece Opções do desenvolvedor: Sobre o telefone → toque 7 vezes em Número da versão.)", 12f, Ui.MUTED), Ui.lp(top = 6, c = c))
         c1.addView(Ui.button(c, "abrir opções do desenvolvedor", Ui.Kind.GHOST) {
             abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
         }, Ui.lp(top = 10, c = c))
@@ -300,7 +300,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         if (conectado) {
             c2.addView(Ui.status(c, "PAREAMENTO", "FEITO", true))
         } else {
-            c2.addView(Ui.text(c, "Toque no botão, depois vá em Depuração sem fio → Parear com código de pareamento. Quando a notificação do NOCRY aparecer, toque em DIGITAR CÓDIGO e escreva os 6 números (a tela de pareamento do Android fica aberta).", 13f), Ui.lp(top = 6, c = c))
+            c2.addView(Ui.text(c, "Toque no botão, depois vá em Depuração sem fio → Parear com código de pareamento. Quando a notificação do NOCRY aparecer, toque em DIGITAR CÓDIGO e escreva os 6 números (a tela de pareamento do Android fica aberta).", 12f, Ui.MUTED), Ui.lp(top = 6, c = c))
             c2.addView(Ui.button(c, "parear pela notificação") {
                 if (!temNotif()) { pedeNotif(); Ui.toast(act, "Permita as notificações e toque de novo") }
                 else {
