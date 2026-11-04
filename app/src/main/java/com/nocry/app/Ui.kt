@@ -270,6 +270,122 @@ object Ui {
         return col
     }
 
+    // ------------------------------------------------------------------ pecas de tela (padrao novo)
+    /**
+     * cartao principal de cada modo: icone grande, rotulo, estado grande (verde quando ligado) e uma linha
+     * explicando. Devolve o cartao pra tela poder pendurar chips/infos embaixo.
+     */
+    fun hero(c: Context, ico: Int, rotulo: String, estado: String, ligado: Boolean?, sub: String): LinearLayout {
+        val card = card(c, forte = true, ligado = ligado == true)
+        val topo = hbox(c)
+        topo.addView(caixaIcone(c, ico, ligado == true, 58), LinearLayout.LayoutParams(dp(c, 58), dp(c, 58)))
+        val col = vbox(c)
+        col.addView(label(c, rotulo))
+        val linha = hbox(c)
+        val cor = when (ligado) { true -> OK; false -> Theme.alpha(Color.WHITE, 0x55); null -> WARN }
+        val dot = View(c)
+        dot.background = shape(c, cor, 5)
+        val dlp = LinearLayout.LayoutParams(dp(c, 9), dp(c, 9))
+        dlp.rightMargin = dp(c, 9)
+        linha.addView(dot, dlp)
+        linha.addView(text(c, estado, 21f, if (ligado == true) OK else TEXT, true))
+        col.addView(linha, lp(top = 3, c = c))
+        if (sub.isNotEmpty()) col.addView(text(c, sub, 10.5f, MUTED), lp(top = 3, c = c))
+        val cp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        cp.leftMargin = dp(c, 14)
+        topo.addView(col, cp)
+        card.addView(topo)
+        return card
+    }
+
+    /** linha "quando isso → acontece aquilo" (como o modo funciona) */
+    fun regra(c: Context, quando: String, entao: String): View {
+        val r = hbox(c)
+        r.setPadding(0, dp(c, 10), 0, dp(c, 10))
+        val q = text(c, quando, 10.5f, TEXT, true, mono = true)
+        q.background = shape(c, Theme.alpha(RED, 0x1A), 8, Theme.alpha(RED, 0x55), 1)
+        q.setPadding(dp(c, 9), dp(c, 5), dp(c, 9), dp(c, 5))
+        q.maxLines = 1
+        r.addView(q)
+        val sp = LinearLayout.LayoutParams(dp(c, 14), dp(c, 14))
+        sp.leftMargin = dp(c, 8); sp.rightMargin = dp(c, 8)
+        r.addView(icone(c, R.drawable.ic_chevron, MUTED, 14), sp)
+        r.addView(text(c, entao, 10.5f, TEXT), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        return r
+    }
+
+    /** fundo de toque sem cor (so o brilho do dedo), pra itens que ficam dentro de um cartao */
+    private fun toqueLimpo(): Drawable =
+        RippleDrawable(ColorStateList.valueOf(Theme.alpha(Color.WHITE, 0x22)), null, android.graphics.drawable.ColorDrawable(Color.WHITE))
+
+    /** item de lista sem fundo proprio (vai dentro de grupo()): icone, titulo, descricao, valor em pilula e seta */
+    fun item(c: Context, titulo: String, sub: String = "", ico: Int = 0, valor: String? = null, onClick: (() -> Unit)? = null): View {
+        val r = hbox(c)
+        r.minimumHeight = dp(c, 52)
+        r.setPadding(0, dp(c, 10), 0, dp(c, 10))
+        if (ico != 0) {
+            val ip = LinearLayout.LayoutParams(dp(c, 34), dp(c, 34))
+            ip.rightMargin = dp(c, 12)
+            r.addView(caixaIcone(c, ico, false, 34), ip)
+        }
+        val col = vbox(c)
+        col.addView(text(c, titulo, 13f, TEXT, true))
+        if (sub.isNotEmpty()) col.addView(text(c, sub, 10.5f, MUTED), lp(top = 2, c = c))
+        r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (valor != null) {
+            val v = text(c, valor, 11f, RED, true, mono = true)
+            v.background = shape(c, Theme.alpha(RED, 0x1A), 8)
+            v.setPadding(dp(c, 10), dp(c, 5), dp(c, 10), dp(c, 5))
+            v.maxLines = 1
+            val vp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            vp.leftMargin = dp(c, 8)
+            r.addView(v, vp)
+        }
+        if (onClick != null) {
+            val sp = LinearLayout.LayoutParams(dp(c, 16), dp(c, 16))
+            sp.leftMargin = dp(c, 8)
+            r.addView(icone(c, R.drawable.ic_chevron, MUTED, 16), sp)
+            r.background = toqueLimpo()
+            clique(r, onClick)
+        }
+        return r
+    }
+
+    /** chave liga/desliga sem fundo proprio (vai dentro de grupo()) */
+    fun itemChave(c: Context, titulo: String, sub: String, ligado: Boolean, onChange: (Boolean) -> Unit): View {
+        val r = hbox(c)
+        r.minimumHeight = dp(c, 52)
+        r.setPadding(0, dp(c, 10), 0, dp(c, 10))
+        val col = vbox(c)
+        col.addView(text(c, titulo, 13f, TEXT, true))
+        if (sub.isNotEmpty()) col.addView(text(c, sub, 10.5f, MUTED), lp(top = 2, c = c))
+        r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val ch = interruptor(c, ligado, onChange)
+        val chp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        chp.leftMargin = dp(c, 10)
+        r.addView(ch, chp)
+        return r
+    }
+
+    /** grupo de itens: rotulo em cima e um cartao so, com os itens separados por linhas finas */
+    fun grupo(c: Context, titulo: String?, itens: List<View>): View {
+        val col = vbox(c)
+        if (titulo != null) col.addView(label(c, titulo))
+        val card = vbox(c)
+        card.background = glass(c)
+        card.setPadding(dp(c, 16), dp(c, 2), dp(c, 16), dp(c, 2))
+        for ((i, v) in itens.withIndex()) {
+            if (i > 0) {
+                val d = View(c)
+                d.setBackgroundColor(Theme.alpha(Color.WHITE, 0x14))
+                card.addView(d, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1))
+            }
+            card.addView(v)
+        }
+        col.addView(card, lp(top = if (titulo != null) 8 else 0, c = c))
+        return col
+    }
+
     /** instrucao em passinhos numerados (quadradinho com o numero + texto), em vez de um paragrafo corrido */
     fun lista(c: Context, itens: List<String>): View {
         val col = vbox(c)

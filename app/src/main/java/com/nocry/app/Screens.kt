@@ -484,16 +484,40 @@ class CompScreen(a: MainActivity) : Screen(a) {
         val c = act
         cabecalho("Modo competitivo", "Toque rápido (long = 1 · multi = 0), sem mexer na tela.")
         val on = Comp.ligado()
-        val card = Ui.card(c)
-        card.addView(Ui.labelIcone(c, R.drawable.ic_gamepad, "status"))
-        card.addView(Ui.text(c, if (on) "ATIVO" else "DESATIVADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
-        card.addView(Ui.text(c, "long_press_timeout = ${Sys.getSecure("long_press_timeout") ?: "padrão"}\nmulti_press_timeout = ${Sys.getSecure("multi_press_timeout") ?: "padrão"}", 13f, Ui.MUTED, mono = true), Ui.lp(top = 8, c = c))
-        add(card, 14)
-        if (!Toque.podeMexer()) add(Ui.text(c, "Sem permissão e sem ADB. Faça a CONEXÃO primeiro.", 13f, Ui.WARN, true), 10)
-        add(Ui.button(c, if (ocupado) "aguarde..." else "ativar modo competitivo") { if (!ocupado) roda({ Comp.ativar() }, "MODO COMPETITIVO ATIVO", "O aparelho não aceitou a mudança") }, 14)
-        add(Ui.button(c, "desativar modo competitivo", Ui.Kind.DANGER) { if (!ocupado) roda({ Comp.desativar(true) }, "DESATIVADO — tudo voltou ao normal", "O aparelho não aceitou a mudança") }, 10)
-        add(Ui.dica(c, "Desativar também devolve a tela, se o modo carregador tiver deixado a density alterada.", Ui.Dica.INFO), 12)
+        val hero = Ui.hero(c, R.drawable.ic_gamepad, "modo competitivo", if (on) "Ativo" else "Desativado", on,
+            if (on) "O toque rápido está ligado no aparelho." else "O aparelho está com o toque normal.")
+        hero.addView(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_sliders, "long press", Sys.getSecure("long_press_timeout") ?: "padrão"),
+            Ui.infoBox(c, R.drawable.ic_sliders, "multi press", Sys.getSecure("multi_press_timeout") ?: "padrão")
+        ), Ui.lp(top = 16, c = c))
+        add(hero, 12)
+        if (!Toque.podeMexer()) add(Ui.dica(c, "Sem permissão e sem ADB. Faça a Conexão primeiro.", Ui.Dica.AVISO), 12)
+        if (on) {
+            add(Ui.button(c, if (ocupado) "aguarde..." else "desativar modo competitivo", Ui.Kind.DANGER) {
+                if (!ocupado) roda({ Comp.desativar(true) }, "DESATIVADO — tudo voltou ao normal", "O aparelho não aceitou a mudança")
+            }, 14)
+            add(Ui.button(c, "aplicar de novo", Ui.Kind.GHOST) {
+                if (!ocupado) roda({ Comp.ativar() }, "MODO COMPETITIVO ATIVO", "O aparelho não aceitou a mudança")
+            }, 10)
+        } else {
+            add(Ui.button(c, if (ocupado) "aguarde..." else "ativar modo competitivo") {
+                if (!ocupado) roda({ Comp.ativar() }, "MODO COMPETITIVO ATIVO", "O aparelho não aceitou a mudança")
+            }, 14)
+        }
+        add(Ui.dica(c, "Desativar também devolve a tela, se o modo carregador tiver deixado a density alterada.", Ui.Dica.INFO), 14)
     }
+}
+
+/** "Ajustes do toque", "Testar agora" e o log de cada modo, num grupo so no fim da tela */
+private fun maisOpcoes(act: MainActivity, logTag: String, comAjustes: Boolean = true): View {
+    val c = act
+    val itens = ArrayList<View>()
+    if (comAjustes) {
+        itens.add(Ui.item(c, "Ajustes do toque", "valores 1–600 e quantos apertos", R.drawable.ic_sliders) { act.abre(AjustesScreen(act)) })
+        itens.add(Ui.item(c, "Testar agora", "liga e volta ao normal, mostrando o que o aparelho leu", R.drawable.ic_check) { act.abre(TestarScreen(act)) })
+    }
+    itens.add(Ui.item(c, "Ver log", "o que o monitor percebeu e fez", R.drawable.ic_log) { act.abre(LogScreen(act, logTag)) })
+    return Ui.grupo(c, "mais opções", itens)
 }
 
 // =====================================================================================
@@ -510,15 +534,21 @@ class VolScreen(a: MainActivity) : Screen(a) {
         val c = act
         cabecalho("Toque via volume", "Só mexe em long press e multi press, sem density e sem abrir o app.")
         val on = Prefs.volAtivo
-        val card = Ui.card(c)
-        card.addView(Ui.labelIcone(c, R.drawable.ic_volume, "monitor"))
-        card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
-        card.addView(Ui.text(c, "VOL+ ${Prefs.clicksUp}x rápido → LIGADO (long ${Prefs.longOn} · multi ${Prefs.multiOn})\nVOL− ${Prefs.clicksDown}x rápido → NORMAL (${Prefs.normal})", 13f, Ui.TEXT, mono = true), Ui.lp(top = 8, c = c))
-        val escuta = if (KeyService.ativo) "acessibilidade" else if (Adb.connected) "ADB (getevent)" else "NENHUMA — faça a CONEXÃO"
-        card.addView(Ui.status(c, "ESCUTA", escuta, KeyService.ativo || Adb.connected), Ui.lp(top = 8, c = c))
-        card.addView(Ui.status(c, "TOQUE AGORA", if (Prefs.markVol) "LIGADO POR AQUI" else "NORMAL", null))
-        add(card, 14)
+        val escutaOk = KeyService.ativo || Adb.connected
+        val hero = Ui.hero(c, R.drawable.ic_volume, "monitor de volume", if (on) "Ligado" else "Parado", on,
+            if (on) "Esperando os apertos de volume." else "Ligue pra usar os botões de volume.")
+        hero.addView(Ui.chips(c,
+            Ui.chip(c, "ESCUTA", if (KeyService.ativo) "ACESSIB." else if (Adb.connected) "ADB" else "NENHUMA", if (escutaOk) true else false),
+            Ui.chip(c, "TOQUE AGORA", if (Prefs.markVol) "RÁPIDO" else "NORMAL", if (Prefs.markVol) true else null)
+        ), Ui.lp(top = 16, c = c))
+        add(hero, 12)
+
+        add(Ui.grupo(c, "como funciona", listOf(
+            Ui.regra(c, "VOL+ ${Prefs.clicksUp}x", "toque rápido · long ${Prefs.longOn} · multi ${Prefs.multiOn}"),
+            Ui.regra(c, "VOL− ${Prefs.clicksDown}x", "volta ao normal · ${Prefs.normal}")
+        )), 18)
         add(Ui.dica(c, "Aperte o mesmo botão de volume rápido (até 0,9 s entre os apertos).", Ui.Dica.INFO), 12)
+        if (!escutaOk) add(Ui.dica(c, "Sem escuta: ligue a acessibilidade ou conecte o ADB na Conexão.", Ui.Dica.AVISO), 10)
 
         if (on) add(Ui.button(c, if (ocupado) "aguarde..." else "parar monitor", Ui.Kind.DANGER) {
             if (!ocupado) {
@@ -529,16 +559,14 @@ class VolScreen(a: MainActivity) : Screen(a) {
                     redesenha()
                 }
             }
-        }, 14)
+        }, 16)
         else add(Ui.button(c, "ligar monitor") {
             if (!KeyService.ativo && !Adb.connected) Ui.toast(act, "Sem escuta: ligue a acessibilidade ou conecte o ADB (CONEXÃO)")
             else if (!Toque.podeMexer()) Ui.toast(act, "Sem permissão para mudar o toque (CONEXÃO)")
             else { Engine.iniciarVol(); Ui.toast(act, "MONITOR DE VOLUME LIGADO"); redesenha() }
-        }, 14)
+        }, 16)
 
-        add(Ui.row(c, "Ajustes do toque", "valores 1–600 e quantos apertos") { act.abre(AjustesScreen(act)) }, 14)
-        add(Ui.row(c, "Testar agora", "liga e volta ao normal, mostrando o que o aparelho leu") { act.abre(TestarScreen(act)) })
-        add(Ui.row(c, "Ver log", "o que o monitor percebeu e fez") { act.abre(LogScreen(act, "volume")) })
+        add(maisOpcoes(act, "volume"), 22)
     }
 }
 
@@ -558,17 +586,23 @@ class CargaScreen(a: MainActivity) : Screen(a) {
         val c = act
         cabecalho("Toque via carregador", "Só reage quando o carregador muda.")
         val on = Prefs.cargaAtivo
-        val card = Ui.card(c)
-        card.addView(Ui.labelIcone(c, R.drawable.ic_plug, "monitor"))
-        card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
+        val plug = Power.plugged(c)
+        val hero = Ui.hero(c, R.drawable.ic_bolt, "monitor do carregador", if (on) "Ligado" else "Parado", on,
+            if (on) "Esperando você ${if (Prefs.cargaGatilho == "tirou") "tirar" else "colocar"} o carregador." else "Escolha quando ligar e toque em ligar.")
+        hero.addView(Ui.chips(c,
+            Ui.chip(c, "CARREGADOR", if (plug) "LIGADO" else "FORA", null),
+            Ui.chip(c, "REPETIÇÕES", if (on) Prefs.cargaRep.toString() else "—", null),
+            Ui.chip(c, "TOQUE", if (Prefs.markCarga) "RÁPIDO" else "NORMAL", if (Prefs.markCarga) true else null)
+        ), Ui.lp(top = 16, c = c))
+        add(hero, 12)
+
         val g = if (on) Prefs.cargaGatilho else gatilho
-        val txt = if (g == "tirou") "TIROU o carregador → LIGADO (long ${Prefs.longOn} · multi ${Prefs.multiOn})\nCOLOCOU o carregador → NORMAL (${Prefs.normal})"
-        else "COLOCOU o carregador → LIGADO (long ${Prefs.longOn} · multi ${Prefs.multiOn})\nTIROU o carregador → NORMAL (${Prefs.normal})"
-        card.addView(Ui.text(c, txt, 13f, Ui.TEXT, mono = true), Ui.lp(top = 8, c = c))
-        card.addView(Ui.status(c, "CARREGADOR AGORA", if (Power.plugged(c)) "LIGADO" else "DESLIGADO", null), Ui.lp(top = 8, c = c))
-        if (on) card.addView(Ui.status(c, "REPETIÇÕES RESTANTES", Prefs.cargaRep.toString(), null))
-        card.addView(Ui.status(c, "TOQUE AGORA", if (Prefs.markCarga) "LIGADO POR AQUI" else "NORMAL", null))
-        add(card, 14)
+        val liga = if (g == "tirou") "TIROU" else "COLOCOU"
+        val volta = if (g == "tirou") "COLOCOU" else "TIROU"
+        add(Ui.grupo(c, "como funciona", listOf(
+            Ui.regra(c, liga, "toque rápido · long ${Prefs.longOn} · multi ${Prefs.multiOn}"),
+            Ui.regra(c, volta, "volta ao normal · ${Prefs.normal}")
+        )), 18)
         add(Ui.dica(c, "Cada repetição = liga e volta ao normal; ao acabar, o monitor para sozinho.", Ui.Dica.INFO), 12)
 
         if (on) {
@@ -581,22 +615,20 @@ class CargaScreen(a: MainActivity) : Screen(a) {
                         redesenha()
                     }
                 }
-            }, 14)
+            }, 16)
         } else {
-            add(Ui.label(c, "quando ligar o toque?"), 14)
+            add(Ui.label(c, "quando ligar o toque?"), 18)
             add(Ui.segmento(c, listOf("tirou o carregador", "colocou o carregador"), if (gatilho == "tirou") 0 else 1) { i ->
                 gatilho = if (i == 0) "tirou" else "colocou"; redesenha()
             }, 8)
-            add(Ui.label(c, "quantas repetições?"), 14)
+            add(Ui.label(c, "quantas repetições?"), 16)
             add(Ui.segmento(c, listOf("1 vez", "2 vezes", "3 vezes"), rep - 1) { i -> rep = i + 1; redesenha() }, 8)
             add(Ui.button(c, "ligar monitor") {
                 if (!Toque.podeMexer()) Ui.toast(act, "Sem permissão para mudar o toque (CONEXÃO)")
                 else { Engine.iniciarCarga(gatilho, rep); Ui.toast(act, "MONITOR LIGADO — agora troque o carregador"); redesenha() }
-            }, 14)
+            }, 16)
         }
-        add(Ui.row(c, "Ajustes do toque", "valores 1–600") { act.abre(AjustesScreen(act)) }, 14)
-        add(Ui.row(c, "Testar agora", "liga e volta ao normal, mostrando o que o aparelho leu") { act.abre(TestarScreen(act)) })
-        add(Ui.row(c, "Ver log", "o que o monitor percebeu e fez") { act.abre(LogScreen(act, "toque-carga")) })
+        add(maisOpcoes(act, "toque-carga"), 22)
     }
 }
 
@@ -617,19 +649,25 @@ class McScreen(a: MainActivity) : Screen(a) {
         val c = act
         cabecalho("Modo carregador", "Precisa do ADB conectado.")
         val on = Prefs.mcAtivo
-        val card = Ui.card(c)
-        card.addView(Ui.labelIcone(c, R.drawable.ic_plug, "monitor"))
-        card.addView(Ui.text(c, if (on) "LIGADO" else "PARADO", 26f, if (on) Ui.OK else Ui.BAD, true, mono = true), Ui.lp(top = 4, c = c))
-        val nome = if ((if (on) Prefs.mcFf else ff) == "normal") "FF NORMAL" else "FF MAX"
-        card.addView(Ui.text(c, "LIGOU o carregador → density ${if (on) Prefs.mcDens else dens} + abre o $nome\nTIROU o carregador → a density volta ao que era", 13f, Ui.TEXT, mono = true), Ui.lp(top = 8, c = c))
-        card.addView(Ui.status(c, "ADB", if (Adb.connected) "CONECTADO" else "DESCONECTADO", Adb.connected), Ui.lp(top = 8, c = c))
-        card.addView(Ui.status(c, "CARREGADOR AGORA", if (Power.plugged(c)) "LIGADO" else "DESLIGADO", null))
-        if (on) card.addView(Ui.status(c, "REPETIÇÕES RESTANTES", Prefs.mcCycles.toString(), null))
-        card.addView(Ui.status(c, "TELA", if (Prefs.densOrig != null) "DENSITY ALTERADA" else "NORMAL", if (Prefs.densOrig != null) false else true))
-        add(card, 14)
+        val alterada = Prefs.densOrig != null
+        val hero = Ui.hero(c, R.drawable.ic_plug, "modo carregador", if (on) "Ligado" else "Parado", on,
+            if (on) "Ligue o carregador pra mudar a tela e abrir o jogo." else "Configure abaixo e toque em ligar.")
+        hero.addView(Ui.chips(c,
+            Ui.chip(c, "ADB", if (Adb.connected) "OK" else "OFF", Adb.connected),
+            Ui.chip(c, "CARREGADOR", if (Power.plugged(c)) "LIGADO" else "FORA", null),
+            Ui.chip(c, "TELA", if (alterada) "ALTERADA" else "NORMAL", if (alterada) false else true)
+        ), Ui.lp(top = 16, c = c))
+        if (on) hero.addView(Ui.text(c, "Repetições restantes: ${Prefs.mcCycles}", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        add(hero, 12)
+
+        val nome = if ((if (on) Prefs.mcFf else ff) == "normal") "FF normal" else "FF MAX"
+        add(Ui.grupo(c, "como funciona", listOf(
+            Ui.regra(c, "LIGOU", "density ${if (on) Prefs.mcDens else dens} + abre o $nome"),
+            Ui.regra(c, "TIROU", "a density volta ao que era")
+        )), 18)
         add(Ui.dica(c, "Pra parar sem abrir o app: VOL+ VOL− VOL+ VOL− rápido (só vale com a density alterada).", Ui.Dica.AVISO), 12)
 
-        if (Prefs.densOrig != null) {
+        if (alterada) {
             add(Ui.button(c, if (ocupado) "aguarde..." else "restaurar a tela agora", Ui.Kind.PRIMARY) {
                 if (!ocupado) {
                     ocupado = true; redesenha()
@@ -639,7 +677,7 @@ class McScreen(a: MainActivity) : Screen(a) {
                         redesenha()
                     }
                 }
-            }, 14)
+            }, 16)
         }
 
         if (on) {
@@ -652,22 +690,23 @@ class McScreen(a: MainActivity) : Screen(a) {
                         redesenha()
                     }
                 }
-            }, 10)
+            }, if (alterada) 10 else 16)
         } else {
-            add(Ui.label(c, "qual Free Fire abrir?"), 14)
+            add(Ui.label(c, "qual Free Fire abrir?"), 18)
             add(Ui.segmento(c, listOf("FF MAX", "FF NORMAL"), if (ff == "max") 0 else 1) { i -> ff = if (i == 0) "max" else "normal"; redesenha() }, 8)
-            add(Ui.label(c, "density ao ligar o carregador"), 14)
-            add(Ui.row(c, "$dens", "toque para mudar (200 a 9999)") {
-                Ui.dialogNumero(act, "DENSITY", "200 a 9999", 200, 9999, dens) { v -> dens = v; redesenha() }
-            }, 8)
-            add(Ui.label(c, "quantas vezes?"), 14)
+            add(Ui.grupo(c, "configuração", listOf(
+                Ui.item(c, "Density ao ligar o carregador", "toque para mudar (200 a 9999)", R.drawable.ic_sliders, dens.toString()) {
+                    Ui.dialogNumero(act, "DENSITY", "200 a 9999", 200, 9999, dens) { v -> dens = v; redesenha() }
+                }
+            )), 16)
+            add(Ui.label(c, "quantas vezes?"), 16)
             add(Ui.segmento(c, listOf("1 vez", "2 vezes", "3 vezes"), rep - 1) { i -> rep = i + 1; redesenha() }, 8)
             add(Ui.button(c, "ligar monitor") {
                 if (!Adb.connected) Ui.toast(act, "Conecte o ADB primeiro (CONEXÃO)")
                 else { Engine.iniciarMc(ff, dens, rep); Ui.toast(act, "MODO CARREGADOR LIGADO — ligue o carregador"); redesenha() }
-            }, 14)
+            }, 16)
         }
-        add(Ui.row(c, "Ver log", "o que o monitor percebeu e fez") { act.abre(LogScreen(act, "carregador")) }, 14)
+        add(maisOpcoes(act, "carregador", comAjustes = false), 22)
     }
 }
 
@@ -683,30 +722,38 @@ class AjustesScreen(a: MainActivity) : Screen(a) {
         limpa()
         val c = act
         cabecalho("Ajustes do toque", "Valores em milissegundos (1 a 600), valem na hora pros monitores de volume e carregador.")
-        add(Ui.labelIcone(c, R.drawable.ic_sliders, "toque LIGADO"), 14)
-        add(Ui.row(c, "Long press: ${Prefs.longOn}", "toque para mudar (1 a 600)") {
-            Ui.dialogNumero(act, "LONG PRESS LIGADO", "1 a 600", 1, 600, Prefs.longOn) { v -> Prefs.longOn = v; redesenha() }
-        }, 8)
-        add(Ui.row(c, "Multi press: ${Prefs.multiOn}", "toque para mudar (1 a 600)") {
-            Ui.dialogNumero(act, "MULTI PRESS LIGADO", "1 a 600", 1, 600, Prefs.multiOn) { v -> Prefs.multiOn = v; redesenha() }
-        })
-        add(Ui.row(c, "Igualar os dois", "multi press = long press (${Prefs.longOn})") {
-            Prefs.multiOn = Prefs.longOn; redesenha()
-        })
-        add(Ui.labelIcone(c, R.drawable.ic_sliders, "toque NORMAL"), 14)
-        add(Ui.row(c, "Valor normal: ${Prefs.normal}", "usado nos dois quando volta ao normal (1 a 600)") {
-            Ui.dialogNumero(act, "VALOR NORMAL", "1 a 600", 1, 600, Prefs.normal) { v -> Prefs.normal = v; redesenha() }
-        }, 8)
-        add(Ui.labelIcone(c, R.drawable.ic_volume, "toque via volume · quantos apertos"), 14)
-        add(Ui.row(c, "VOL+ : ${Prefs.clicksUp} apertos", "liga o toque rápido (2 a 9)") {
-            Ui.dialogNumero(act, "APERTOS DO VOL+", "2 a 9", 2, 9, Prefs.clicksUp) { v -> Prefs.clicksUp = v; redesenha() }
-        }, 8)
-        add(Ui.row(c, "VOL− : ${Prefs.clicksDown} apertos", "volta ao normal (2 a 9)") {
-            Ui.dialogNumero(act, "APERTOS DO VOL−", "2 a 9", 2, 9, Prefs.clicksDown) { v -> Prefs.clicksDown = v; redesenha() }
-        })
+        add(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_bolt, "rápido", "${Prefs.longOn} · ${Prefs.multiOn}", Ui.RED),
+            Ui.infoBox(c, R.drawable.ic_sliders, "normal", Prefs.normal.toString()),
+            Ui.infoBox(c, R.drawable.ic_volume, "apertos", "${Prefs.clicksUp}x · ${Prefs.clicksDown}x")
+        ), 12)
+        add(Ui.grupo(c, "toque ligado (rápido)", listOf(
+            Ui.item(c, "Long press", "1 a 600 ms", R.drawable.ic_sliders, Prefs.longOn.toString()) {
+                Ui.dialogNumero(act, "LONG PRESS LIGADO", "1 a 600", 1, 600, Prefs.longOn) { v -> Prefs.longOn = v; redesenha() }
+            },
+            Ui.item(c, "Multi press", "1 a 600 ms", R.drawable.ic_sliders, Prefs.multiOn.toString()) {
+                Ui.dialogNumero(act, "MULTI PRESS LIGADO", "1 a 600", 1, 600, Prefs.multiOn) { v -> Prefs.multiOn = v; redesenha() }
+            },
+            Ui.item(c, "Igualar os dois", "multi press = long press (${Prefs.longOn})", R.drawable.ic_check) {
+                Prefs.multiOn = Prefs.longOn; redesenha()
+            }
+        )), 20)
+        add(Ui.grupo(c, "toque normal", listOf(
+            Ui.item(c, "Valor normal", "usado nos dois quando volta ao normal", R.drawable.ic_sliders, Prefs.normal.toString()) {
+                Ui.dialogNumero(act, "VALOR NORMAL", "1 a 600", 1, 600, Prefs.normal) { v -> Prefs.normal = v; redesenha() }
+            }
+        )), 20)
+        add(Ui.grupo(c, "toque via volume · quantos apertos", listOf(
+            Ui.item(c, "VOL+", "liga o toque rápido (2 a 9)", R.drawable.ic_up, "${Prefs.clicksUp}x") {
+                Ui.dialogNumero(act, "APERTOS DO VOL+", "2 a 9", 2, 9, Prefs.clicksUp) { v -> Prefs.clicksUp = v; redesenha() }
+            },
+            Ui.item(c, "VOL−", "volta ao normal (2 a 9)", R.drawable.ic_down, "${Prefs.clicksDown}x") {
+                Ui.dialogNumero(act, "APERTOS DO VOL−", "2 a 9", 2, 9, Prefs.clicksDown) { v -> Prefs.clicksDown = v; redesenha() }
+            }
+        )), 20)
         add(Ui.button(c, "voltar ao padrão (1 · 1 · 100 · 2x · 2x)", Ui.Kind.GHOST) {
             Prefs.longOn = 1; Prefs.multiOn = 1; Prefs.normal = 100; Prefs.clicksUp = 2; Prefs.clicksDown = 2; redesenha()
-        }, 16)
+        }, 20)
     }
 }
 
@@ -715,10 +762,11 @@ class AjustesScreen(a: MainActivity) : Screen(a) {
 // =====================================================================================
 class TestarScreen(a: MainActivity) : Screen(a) {
     override val titulo = "Testar agora"
-    private var saida = "Toque em um botão para testar. O app mexe no toque de verdade e mostra o que o aparelho leu de volta."
+    private class Resultado(val status: String, val ok: Boolean?, val pedido: String, val lido: String, val perm: Boolean, val adb: Boolean)
+    private var res: Resultado? = null
     private var ocupado = false
 
-    override fun key(): String = saida + ocupado
+    override fun key(): String = listOf(res?.status, res?.lido, ocupado).joinToString("|")
 
     private fun testa(modo: String) {
         if (ocupado) return
@@ -726,10 +774,12 @@ class TestarScreen(a: MainActivity) : Screen(a) {
         redesenha()
         Bg.run({
             val rc = Toque.aplica(modo, null)
-            val txt = when (rc) { 0 -> "MUDOU"; 2 -> "JÁ ESTAVA ASSIM"; else -> "O APARELHO NÃO ACEITOU" }
-            "$txt\nPedido: ${if (modo == "rapido") Toque.txtLigado() else "normal " + Toque.txtNormal()}\nAparelho leu: ${Toque.lido()}\nPermissão própria: ${if (Sys.hasWriteSecure()) "sim" else "não"} · ADB: ${if (Adb.connected) "conectado" else "desconectado"}"
+            val st = when (rc) { 0 -> "Mudou"; 2 -> "Já estava assim"; else -> "O aparelho não aceitou" }
+            Resultado(st, when (rc) { 0 -> true; 2 -> null; else -> false },
+                if (modo == "rapido") Toque.txtLigado() else "normal " + Toque.txtNormal(),
+                Toque.lido(), Sys.hasWriteSecure(), Adb.connected)
         }) { r ->
-            saida = r
+            res = r
             ocupado = false
             redesenha()
         }
@@ -738,11 +788,19 @@ class TestarScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Testar agora", "MEXE NO TOQUE DE VERDADE E MOSTRA O QUE O APARELHO LEU DE VOLTA.")
-        val card = Ui.card(c)
-        card.addView(Ui.labelIcone(c, R.drawable.ic_check, "resultado"))
-        card.addView(Ui.text(c, saida, 13f, Ui.TEXT, mono = true), Ui.lp(top = 6, c = c))
-        add(card, 14)
+        cabecalho("Testar agora", "Mexe no toque de verdade e mostra o que o aparelho leu de volta.")
+        val r = res
+        val hero = Ui.hero(c, R.drawable.ic_check, "resultado",
+            if (ocupado) "Testando..." else r?.status ?: "Nada testado ainda", if (ocupado) null else r?.ok,
+            if (r == null) "Toque num botão abaixo pra testar." else "Pedido: ${r.pedido}")
+        if (r != null) {
+            hero.addView(Ui.chips(c,
+                Ui.chip(c, "PERMISSÃO", if (r.perm) "SIM" else "NÃO", r.perm),
+                Ui.chip(c, "ADB", if (r.adb) "OK" else "OFF", r.adb)
+            ), Ui.lp(top = 16, c = c))
+            hero.addView(Ui.infoBox(c, R.drawable.ic_eye, "o aparelho leu", r.lido), Ui.lp(top = 8, c = c))
+        }
+        add(hero, 12)
         add(Ui.button(c, "testar: ligar o toque rápido") { testa("rapido") }, 16)
         add(Ui.button(c, "testar: voltar ao normal", Ui.Kind.GHOST) { testa("normal") }, 10)
     }
