@@ -266,163 +266,166 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    private fun tituloPasso(c: android.content.Context, iconRes: Int, texto: String): View {
-        val r = Ui.hbox(c)
-        r.addView(Ui.caixaIcone(c, iconRes, false, 28), LinearLayout.LayoutParams(Ui.dp(c, 28), Ui.dp(c, 28)).also { it.rightMargin = Ui.dp(c, 10) })
-        r.addView(Ui.label(c, texto))
-        return r
-    }
-
     override fun render() {
         campoCodigo?.let { codigoTxt = it.text.toString() }
         campoPorta?.let { portaTxt = it.text.toString() }
         limpa()
         val c = act
-        add(Ui.gradTexto(c, "CONEXÃO", 28f), 0)
-        add(Ui.text(c, "Siga os passos abaixo uma vez, no wi-fi, pra ligar o NOCRY no celular.", 10.5f, Ui.MUTED), 4)
+        add(Ui.text(c, "Siga a linha abaixo uma vez, no wi-fi, pra ligar o NOCRY no celular.", 10.5f, Ui.MUTED), 0)
 
-        // resumo rapido do que ja esta pronto, antes de entrar nos passos um por um
-        val conectadoRes = Adb.connected
-        val permRes = Sys.hasWriteSecure()
-        val accRes = Sys.acessibilidadeLigada()
-        val feitos = listOf(conectadoRes, permRes, accRes, temNotif()).count { it }
-        val resumo = Ui.card(c)
-        resumo.addView(Ui.hbox(c).also { row ->
-            row.addView(Ui.label(c, "RESUMO"), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 8) })
-            row.addView(Ui.text(c, "$feitos de 4 prontos", 12f, if (feitos == 4) Ui.OK else Ui.MUTED, true, mono = true),
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.gravity = Gravity.END })
-        })
-        val barraRes = BarraProgresso(c)
-        barraRes.define(feitos / 4f)
-        resumo.addView(barraRes, Ui.lp(top = 10, h = Ui.dp(c, 8), c = c))
-        resumo.addView(Ui.status(c, "ADB", if (conectadoRes) "CONECTADO" else "DESCONECTADO", conectadoRes), Ui.lp(top = 12, c = c))
-        resumo.addView(Ui.status(c, "PERMISSÃO", if (permRes) "LIBERADA" else "FALTA", permRes))
-        resumo.addView(Ui.status(c, "ACESSIBILIDADE", if (accRes) "LIGADA" else "DESLIGADA", accRes))
-        resumo.addView(Ui.status(c, "NOTIFICAÇÕES", if (temNotif()) "PERMITIDAS" else "BLOQUEADAS", temNotif()))
-        add(resumo, 14)
-
-        // 1
-        val c1 = Ui.card(c)
-        c1.addView(tituloPasso(c, R.drawable.ic_wifi, "1 · depuração sem fio/wifi"))
-        c1.addView(Ui.text(c, "Ligue em Opções do desenvolvedor → Depuração sem fio. (Se não aparece Opções do desenvolvedor: Sobre o telefone → toque 7 vezes em Número da versão.)", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
-        c1.addView(Ui.button(c, "abrir opções do desenvolvedor", Ui.Kind.GHOST) {
-            abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-        }, Ui.lp(top = 10, c = c))
-        add(c1, 14)
-
-        // 2
-        val c2 = Ui.card(c)
         val conectado = Adb.connected
-        c2.addView(tituloPasso(c, R.drawable.ic_key, "2 · parear (só na primeira vez)"))
-        if (conectado) {
-            c2.addView(Ui.status(c, "PAREAMENTO", "FEITO", true))
-        } else {
-            c2.addView(Ui.text(c, "Toque no botão, depois vá em Depuração sem fio → Parear com código de pareamento. Quando a notificação do NOCRY aparecer, toque em DIGITAR CÓDIGO e escreva os 6 números (a tela de pareamento do Android fica aberta).", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
-            c2.addView(Ui.button(c, "parear pela notificação") {
-                if (!temNotif()) { pedeNotif(); Ui.toast(act, "Permita as notificações e toque de novo") }
-                else {
-                    Pairing.iniciar(act)
-                    Ui.toast(act, "Agora abra: Depuração sem fio → Parear com código")
-                    abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
-                }
-            }, Ui.lp(top = 10, c = c))
-            c2.addView(Ui.text(c, "Ou digite aqui (porta e código da tela de pareamento):", 10.5f, Ui.MUTED), Ui.lp(top = 12, c = c))
-            val fp = Ui.field(c, "porta (ex.: 37155)", true)
-            fp.setText(if (portaTxt.isNotEmpty()) portaTxt else if (Pairing.porta > 0) Pairing.porta.toString() else "")
-            campoPorta = fp
-            c2.addView(fp, Ui.lp(top = 6, c = c))
-            val fc = Ui.field(c, "código de 6 números", true)
-            fc.setText(codigoTxt)
-            campoCodigo = fc
-            c2.addView(fc, Ui.lp(top = 6, c = c))
-            c2.addView(Ui.button(c, if (ocupado) "aguarde..." else "parear agora", Ui.Kind.GHOST) {
-                if (ocupado) return@button
-                val porta = fp.text.toString().trim().toIntOrNull() ?: Pairing.porta
-                val cod = fc.text.toString().trim()
-                if (porta <= 0 || cod.length != 6) Ui.toast(act, "Preencha a porta e o código de 6 números")
-                else roda("Pareando...") {
-                    val ok = Adb.pair(act.applicationContext, porta, cod)
-                    if (ok) {
-                        Adb.connect(act.applicationContext, 8000)
-                        Sys.darPermissoes()
-                        Sys.ligarAcessibilidade()
-                        "PAREADO!"
-                    } else "Não pareou: " + Adb.lastError
-                }
-            }, Ui.lp(top = 8, c = c))
-        }
-        add(c2, 12)
-
-        // 3
-        if (conectado && !reaberto.contains(3)) {
-            add(Ui.row(c, "3 · conectar", "ADB CONECTADO", R.drawable.ic_plug) { reaberto.add(3); redesenha() }, 12)
-        } else {
-            val c3 = Ui.card(c)
-            c3.addView(tituloPasso(c, R.drawable.ic_plug, "3 · conectar"))
-            c3.addView(Ui.status(c, "ADB", if (conectado) "CONECTADO" else "DESCONECTADO", conectado), Ui.lp(top = 4, c = c))
-            if (!conectado && Adb.lastError.isNotEmpty()) c3.addView(Ui.text(c, "Motivo: " + Adb.lastError, 12f, Ui.WARN))
-            c3.addView(Ui.button(c, if (conectado) "reconectar" else "conectar agora", Ui.Kind.GHOST) {
-                if (!ocupado) roda("Conectando...") {
-                    Adb.disconnect()
-                    if (Adb.connect(act.applicationContext, 9000)) "CONECTADO" else "Não conectou: " + Adb.lastError
-                }
-            }, Ui.lp(top = 8, c = c))
-            c3.addView(Ui.text(c, "Se a depuração sem fio desligar (trocou de Wi-Fi ou reiniciou o celular), ligue de novo e toque aqui. Não precisa parear de novo.", 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
-            add(c3, 12)
-        }
-
-        // 4
         val perm = Sys.hasWriteSecure()
-        if (perm && !reaberto.contains(4)) {
-            add(Ui.row(c, "4 · liberar o app", "PERMISSÃO LIBERADA", R.drawable.ic_lock) { reaberto.add(4); redesenha() }, 12)
-        } else {
-            val c4 = Ui.card(c)
-            c4.addView(tituloPasso(c, R.drawable.ic_lock, "4 · liberar o app"))
-            c4.addView(Ui.status(c, "PERMISSÃO DE AJUSTES", if (perm) "LIBERADA" else "FALTA", perm), Ui.lp(top = 4, c = c))
-            c4.addView(Ui.text(c, "O app se dá a permissão de mudar o toque e se tira da economia de bateria. Depois disso o toque via volume e via carregador funciona até sem ADB.", 10.5f, Ui.MUTED))
-            c4.addView(Ui.button(c, if (perm) "liberar de novo" else "liberar permissões", Ui.Kind.GHOST) {
-                if (!Adb.connected) Ui.toast(act, "Conecte o ADB primeiro (passos 2 e 3)")
-                else if (!ocupado) roda("Liberando...") { if (Sys.darPermissoes()) "LIBERADO" else "O celular não aceitou" }
-            }, Ui.lp(top = 8, c = c))
-            add(c4, 12)
-        }
-
-        // 5
         val acc = Sys.acessibilidadeLigada()
-        if (acc && !reaberto.contains(5)) {
-            add(Ui.row(c, "5 · escuta do volume", "ACESSIBILIDADE LIGADA", R.drawable.ic_volume) { reaberto.add(5); redesenha() }, 12)
-        } else {
-            val c5 = Ui.card(c)
-            c5.addView(tituloPasso(c, R.drawable.ic_volume, "5 · escuta do volume"))
-            c5.addView(Ui.status(c, "ACESSIBILIDADE", if (acc) "LIGADA" else "DESLIGADA", acc), Ui.lp(top = 4, c = c))
-            c5.addView(Ui.text(c, "É assim que o app percebe VOL+ e VOL−. O NOCRY só olha o aperto das teclas de volume e não lê sua tela.", 10.5f, Ui.MUTED))
-            c5.addView(Ui.button(c, if (acc) "desligar" else "ligar", Ui.Kind.GHOST) {
-                if (acc) { Sys.desligarAcessibilidade(); redesenha() }
-                else if (Sys.ligarAcessibilidade()) { Ui.toast(act, "LIGADA"); redesenha() }
-                else {
-                    Ui.toast(act, "Ligue o NOCRY na lista de acessibilidade")
-                    abreConfig(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                }
-            }, Ui.lp(top = 8, c = c))
-            c5.addView(Ui.text(c, "Se o Android bloquear (\"configuração restrita\"): Informações do app → ⋮ → Permitir configurações restritas. Depois do passo 4 o app liga sozinho.", 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
-            c5.addView(Ui.button(c, "informações do app", Ui.Kind.GHOST) {
-                try {
-                    act.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + Const.PKG)))
-                } catch (_: Exception) {}
-            }, Ui.lp(top = 8, c = c))
-            add(c5, 12)
-        }
+        val notif = temNotif()
+        val feitos = listOf(conectado, perm, acc, notif).count { it }
 
-        // 6
-        val c6 = Ui.card(c)
-        c6.addView(tituloPasso(c, R.drawable.ic_bolt, "6 · avisos e bateria"))
-        c6.addView(Ui.status(c, "NOTIFICAÇÕES", if (temNotif()) "PERMITIDAS" else "BLOQUEADAS", temNotif()), Ui.lp(top = 4, c = c))
-        if (!temNotif()) c6.addView(Ui.button(c, "permitir notificações", Ui.Kind.GHOST) { pedeNotif() }, Ui.lp(top = 8, c = c))
-        c6.addView(Ui.button(c, "tirar da economia de bateria", Ui.Kind.GHOST) {
-            abreConfig(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-        }, Ui.lp(top = 8, c = c))
-        c6.addView(Ui.text(c, "Escolha \"Todos os apps\", ache o NOCRY e marque \"Sem restrição\". Sem isso o Android pode fechar os monitores.", 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
-        add(c6, 12)
+        // ---------------- resumo: anel de progresso + 4 chips ----------------
+        val resumo = Ui.card(c, forte = true, ligado = feitos == 4)
+        val topo = Ui.hbox(c)
+        val tam = Ui.dp(c, 76)
+        val rw = FrameLayout(c)
+        val ring = RingView(c)
+        rw.addView(ring, FrameLayout.LayoutParams(tam, tam))
+        val num = Ui.text(c, "$feitos/4", 15f, Ui.TEXT, true, mono = true)
+        num.gravity = Gravity.CENTER
+        rw.addView(num, FrameLayout.LayoutParams(tam, tam))
+        topo.addView(rw, LinearLayout.LayoutParams(tam, tam))
+        ring.define(feitos / 4f)
+        val info = Ui.vbox(c)
+        info.addView(Ui.label(c, "status da conexão"))
+        val tit = when (feitos) {
+            4 -> "Tudo pronto"
+            0 -> "Vamos começar"
+            3 -> "Falta 1 passo"
+            else -> "Faltam ${4 - feitos} passos"
+        }
+        info.addView(if (feitos == 4) Ui.gradTexto(c, tit, 20f) else Ui.text(c, tit, 20f, Ui.TEXT, true), Ui.lp(top = 3, c = c))
+        info.addView(Ui.text(c, if (feitos == 4) "O NOCRY já funciona sozinho." else "Comece pelo passo destacado.", 10.5f, Ui.MUTED), Ui.lp(top = 2, c = c))
+        val ip = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        ip.leftMargin = Ui.dp(c, 14)
+        topo.addView(info, ip)
+        resumo.addView(topo)
+        resumo.addView(Ui.chips(c,
+            Ui.chip(c, "ADB", if (conectado) "OK" else "OFF", conectado),
+            Ui.chip(c, "PERMISSÃO", if (perm) "OK" else "FALTA", perm),
+            Ui.chip(c, "VOLUME", if (acc) "OK" else "OFF", acc),
+            Ui.chip(c, "AVISOS", if (notif) "OK" else "OFF", notif)
+        ), Ui.lp(top = 14, c = c))
+        add(resumo, 12)
+
+        // ---------------- linha do tempo ----------------
+        add(Ui.label(c, "passo a passo"), 22)
+        // 1 a 3 dependem da conexao: se o ADB conectou, a depuracao e o pareamento ja foram feitos
+        val feito = booleanArrayOf(conectado, conectado, conectado, perm, acc, notif)
+        val atual = feito.indexOfFirst { !it }
+        val nomes = listOf("Depuração sem fio", "Parear (só na 1ª vez)", "Conectar", "Liberar o app", "Escuta do volume", "Avisos e bateria")
+        for (i in 0 until 6) {
+            val estado = if (feito[i]) 0 else if (i == atual) 1 else 2
+            // o passo 4 so funciona com o ADB conectado: enquanto nao conecta, fica recolhido como "depois"
+            val bloqueado = i == 3 && !conectado
+            val aberto = if (feito[i] || bloqueado) reaberto.contains(i + 1) else true
+            val toque: (() -> Unit)? = if (feito[i] || bloqueado) {
+                { if (!reaberto.remove(i + 1)) reaberto.add(i + 1); redesenha() }
+            } else null
+            val conteudo = if (aberto) conteudoPasso(c, i, conectado, perm, acc, notif, estado == 1) else null
+            add(Ui.passo(c, i + 1, nomes[i], estado, conteudo, i == 5, toque), if (i == 0) 12 else 0)
+        }
+    }
+
+    /** o que aparece dentro de cada passo aberto; destaque = e o proximo passo a fazer (botao principal em degrade) */
+    private fun conteudoPasso(c: android.content.Context, i: Int, conectado: Boolean, perm: Boolean, acc: Boolean, notif: Boolean, destaque: Boolean): View {
+        val v = Ui.vbox(c)
+        val forte = if (destaque) Ui.Kind.PRIMARY else Ui.Kind.GHOST
+        when (i) {
+            0 -> {
+                v.addView(Ui.text(c, "Ligue em Opções do desenvolvedor → Depuração sem fio. (Se não aparece Opções do desenvolvedor: Sobre o telefone → toque 7 vezes em Número da versão.)", 10.5f, Ui.MUTED))
+                v.addView(Ui.button(c, "abrir opções do desenvolvedor", forte) {
+                    abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                }, Ui.lp(top = 12, c = c))
+            }
+            1 -> {
+                if (conectado) {
+                    v.addView(Ui.status(c, "PAREAMENTO", "FEITO", true))
+                } else {
+                    v.addView(Ui.text(c, "Toque no botão, depois vá em Depuração sem fio → Parear com código de pareamento. Quando a notificação do NOCRY aparecer, toque em DIGITAR CÓDIGO e escreva os 6 números (a tela de pareamento do Android fica aberta).", 10.5f, Ui.MUTED))
+                    v.addView(Ui.button(c, "parear pela notificação") {
+                        if (!temNotif()) { pedeNotif(); Ui.toast(act, "Permita as notificações e toque de novo") }
+                        else {
+                            Pairing.iniciar(act)
+                            Ui.toast(act, "Agora abra: Depuração sem fio → Parear com código")
+                            abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                        }
+                    }, Ui.lp(top = 12, c = c))
+                    v.addView(Ui.text(c, "Ou digite aqui (porta e código da tela de pareamento):", 10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
+                    val fp = Ui.field(c, "porta (ex.: 37155)", true)
+                    fp.setText(if (portaTxt.isNotEmpty()) portaTxt else if (Pairing.porta > 0) Pairing.porta.toString() else "")
+                    campoPorta = fp
+                    v.addView(fp, Ui.lp(top = 8, c = c))
+                    val fc = Ui.field(c, "código de 6 números", true)
+                    fc.setText(codigoTxt)
+                    campoCodigo = fc
+                    v.addView(fc, Ui.lp(top = 6, c = c))
+                    v.addView(Ui.button(c, if (ocupado) "aguarde..." else "parear agora", Ui.Kind.GHOST) {
+                        if (ocupado) return@button
+                        val porta = fp.text.toString().trim().toIntOrNull() ?: Pairing.porta
+                        val cod = fc.text.toString().trim()
+                        if (porta <= 0 || cod.length != 6) Ui.toast(act, "Preencha a porta e o código de 6 números")
+                        else roda("Pareando...") {
+                            val ok = Adb.pair(act.applicationContext, porta, cod)
+                            if (ok) {
+                                Adb.connect(act.applicationContext, 8000)
+                                Sys.darPermissoes()
+                                Sys.ligarAcessibilidade()
+                                "PAREADO!"
+                            } else "Não pareou: " + Adb.lastError
+                        }
+                    }, Ui.lp(top = 8, c = c))
+                }
+            }
+            2 -> {
+                v.addView(Ui.status(c, "ADB", if (conectado) "CONECTADO" else "DESCONECTADO", conectado))
+                if (!conectado && Adb.lastError.isNotEmpty()) v.addView(Ui.text(c, "Motivo: " + Adb.lastError, 10.5f, Ui.WARN), Ui.lp(top = 4, c = c))
+                v.addView(Ui.button(c, if (conectado) "reconectar" else "conectar agora", if (conectado) Ui.Kind.GHOST else forte) {
+                    if (!ocupado) roda("Conectando...") {
+                        Adb.disconnect()
+                        if (Adb.connect(act.applicationContext, 9000)) "CONECTADO" else "Não conectou: " + Adb.lastError
+                    }
+                }, Ui.lp(top = 10, c = c))
+                v.addView(Ui.text(c, "Se a depuração sem fio desligar (trocou de Wi-Fi ou reiniciou o celular), ligue de novo e toque aqui. Não precisa parear de novo.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+            }
+            3 -> {
+                v.addView(Ui.text(c, "O app se dá a permissão de mudar o toque e se tira da economia de bateria. Depois disso o toque via volume e via carregador funciona até sem ADB.", 10.5f, Ui.MUTED))
+                v.addView(Ui.button(c, if (perm) "liberar de novo" else "liberar permissões", if (perm) Ui.Kind.GHOST else forte) {
+                    if (!Adb.connected) Ui.toast(act, "Conecte o ADB primeiro (passos 2 e 3)")
+                    else if (!ocupado) roda("Liberando...") { if (Sys.darPermissoes()) "LIBERADO" else "O celular não aceitou" }
+                }, Ui.lp(top = 12, c = c))
+            }
+            4 -> {
+                v.addView(Ui.text(c, "É assim que o app percebe VOL+ e VOL−. O NOCRY só olha o aperto das teclas de volume e não lê sua tela.", 10.5f, Ui.MUTED))
+                v.addView(Ui.button(c, if (acc) "desligar" else "ligar", if (acc) Ui.Kind.GHOST else forte) {
+                    if (acc) { Sys.desligarAcessibilidade(); redesenha() }
+                    else if (Sys.ligarAcessibilidade()) { Ui.toast(act, "LIGADA"); redesenha() }
+                    else {
+                        Ui.toast(act, "Ligue o NOCRY na lista de acessibilidade")
+                        abreConfig(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                    }
+                }, Ui.lp(top = 12, c = c))
+                v.addView(Ui.text(c, "Se o Android bloquear (\"configuração restrita\"): Informações do app → ⋮ → Permitir configurações restritas. Depois do passo 4 o app liga sozinho.", 10.5f, Ui.MUTED), Ui.lp(top = 12, c = c))
+                v.addView(Ui.button(c, "informações do app", Ui.Kind.GHOST) {
+                    try {
+                        act.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + Const.PKG)))
+                    } catch (_: Exception) {}
+                }, Ui.lp(top = 8, c = c))
+            }
+            else -> {
+                if (!notif) v.addView(Ui.button(c, "permitir notificações", forte) { pedeNotif() })
+                v.addView(Ui.button(c, "tirar da economia de bateria", Ui.Kind.GHOST) {
+                    abreConfig(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                }, Ui.lp(top = if (notif) 0 else 8, c = c))
+                v.addView(Ui.text(c, "Escolha \"Todos os apps\", ache o NOCRY e marque \"Sem restrição\". Sem isso o Android pode fechar os monitores.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+            }
+        }
+        return v
     }
 
     private fun pedeNotif() {

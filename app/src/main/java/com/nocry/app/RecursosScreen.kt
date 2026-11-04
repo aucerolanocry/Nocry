@@ -10,7 +10,7 @@ import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
 
 class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) {
-    override val titulo = "INSTALAR RECURSOS"
+    override val titulo = "Instalar recursos"
 
     private var ff = ffInicial
     private var log = ""
@@ -23,8 +23,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
         limpa()
         val c = act
 
-        add(Ui.gradTexto(c, "INSTALAR RECURSOS", 28f), 0)
-        add(Ui.text(c, "Instala a pasta suja (usada pelo bypass) e a pasta limpa (pra restaurar depois), direto pelo app.", 10.5f, Ui.MUTED), 4)
+        add(Ui.text(c, "Instala a pasta suja (usada pelo bypass) e a pasta limpa (pra restaurar depois), direto pelo app.", 10.5f, Ui.MUTED), 0)
 
         val temPermissao = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()

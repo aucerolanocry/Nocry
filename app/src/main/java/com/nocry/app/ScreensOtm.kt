@@ -6,7 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.graphics.Color
+import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import org.json.JSONObject
@@ -318,28 +322,144 @@ class OtmMaisScreen(a: MainActivity) : Screen(a) {
 class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
     override val titulo = if (tag == null) "Logs" else "Log · " + tag
     override val aba = if (tag == null) 3 else -1
+    /** tipo escolhido nos filtros de cima (null = tudo) */
+    private var filtro: String? = null
 
-    override fun key(): String = NLog.text(tag).hashCode().toString()
+    override fun key(): String = NLog.text(tag).hashCode().toString() + "|" + filtro
+
+    private class Item(val dia: String, val hora: String, val tipo: String, val msg: String)
+
+    companion object {
+        /** formato gravado pelo NLog: "dd/MM HH:mm:ss [tipo] mensagem" */
+        private val RX = Regex("""^(\d\d/\d\d) (\d\d:\d\d:\d\d) \[([^\]]+)\] (.*)$""")
+        private const val MAX_ITENS = 100
+
+        /** cor de cada tipo de registro (erros em vermelho, modos na cor do tema, setup em verde...) */
+        fun corTipo(t: String): Int = when {
+            t.contains("erro") -> Ui.BAD
+            t == "volume" || t == "toque-carga" || t == "carregador" || t == "comp" || t.startsWith("bypass") -> Ui.RED
+            t.startsWith("otm") || t == "otimizacao" -> Ui.ACC2
+            t == "key" || t == "setup" || t == "pareamento" || t == "acessibilidade" -> Ui.OK
+            t == "download" -> 0xFF7FC8FF.toInt()
+            else -> 0xFF9AA3B5.toInt()
+        }
+    }
+
+    private fun le(): List<Item> {
+        val bruto = NLog.text(tag)
+        if (bruto.startsWith("(sem registros")) return emptyList()
+        val l = ArrayList<Item>()
+        for (linha in bruto.split('\n')) {
+            val m = RX.matchEntire(linha)
+            if (m != null) l.add(Item(m.groupValues[1], m.groupValues[2], m.groupValues[3], m.groupValues[4]))
+            else if (linha.isNotBlank()) l.add(Item("", "", "app", linha))
+        }
+        l.reverse()
+        return l
+    }
 
     override fun render() {
         limpa()
         val c = act
-        add(Ui.gradTexto(c, if (tag == null) "LOGS" else tag.uppercase(), 28f), 0)
-        add(Ui.text(c, "Registro do que o NOCRY fez, do mais antigo pro mais novo.", 10.5f, Ui.MUTED), 4)
+        add(Ui.text(c, "Tudo o que o NOCRY fez, do mais novo pro mais antigo.", 10.5f, Ui.MUTED), 0)
 
+        val todos = le()
+        val erros = todos.count { it.tipo.contains("erro") }
+
+        // ---------------- numeros ----------------
+        add(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_log, "registros", todos.size.toString()),
+            Ui.infoBox(c, R.drawable.ic_stat, "último", todos.firstOrNull()?.hora?.take(5)?.ifEmpty { "—" } ?: "—"),
+            Ui.infoBox(c, R.drawable.ic_warn, "erros", erros.toString(), if (erros > 0) Ui.BAD else Ui.OK)
+        ), 12)
+
+        // ---------------- filtros por tipo ----------------
+        if (tag == null && todos.isNotEmpty()) {
+            val tipos = todos.groupingBy { it.tipo }.eachCount().entries.sortedByDescending { it.value }.take(6).map { it.key }
+            val f = filtro
+            if (f != null && f !in tipos) filtro = null
+            add(filtros(c, tipos), 16)
+        }
+        val lista = (if (filtro == null) todos else todos.filter { it.tipo == filtro }).take(MAX_ITENS)
+
+        // ---------------- registros, agrupados por dia ----------------
         val card = Ui.card(c)
-        card.addView(Ui.label(c, "ÚLTIMOS REGISTROS"))
-        val t = Ui.text(c, NLog.text(tag), 11.5f, Ui.TEXT, code = true)
-        t.setTextIsSelectable(true)
-        card.addView(t, Ui.lp(top = 8, c = c))
-        add(card, 14)
+        if (lista.isEmpty()) {
+            card.addView(Ui.text(c, "Nada registrado ainda.", 11f, Ui.MUTED))
+        } else {
+            val hoje = java.text.SimpleDateFormat("dd/MM", java.util.Locale.US).format(java.util.Date())
+            var dia = "\u0000"
+            for ((k, item) in lista.withIndex()) {
+                if (item.dia != dia) {
+                    dia = item.dia
+                    val rot = when { item.dia.isEmpty() -> "antes"; item.dia == hoje -> "hoje"; else -> item.dia }
+                    card.addView(Ui.label(c, rot), Ui.lp(top = if (k == 0) 0 else 16, c = c))
+                }
+                card.addView(itemLog(c, item), Ui.lp(top = 10, c = c))
+            }
+        }
+        add(card, 12)
 
-        add(Ui.button(c, "copiar", Ui.Kind.GHOST) {
-            val cm = act.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("NOCRY log", NLog.text(tag)))
-            Ui.toast(act, "COPIADO")
-        }, 14)
-        add(Ui.button(c, "limpar", Ui.Kind.DANGER) { NLog.clear(); redesenha() }, 10)
+        add(Ui.chips(c,
+            Ui.button(c, "copiar", Ui.Kind.GHOST) {
+                val cm = act.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("NOCRY log", NLog.text(tag)))
+                Ui.toast(act, "COPIADO")
+            },
+            Ui.button(c, "limpar", Ui.Kind.DANGER) { NLog.clear(); redesenha() }
+        ), 14)
+    }
+
+    /** pilulas de filtro roláveis na horizontal: "tudo" + os tipos que mais aparecem */
+    private fun filtros(c: Context, tipos: List<String>): View {
+        val hs = android.widget.HorizontalScrollView(c)
+        hs.isHorizontalScrollBarEnabled = false
+        hs.overScrollMode = View.OVER_SCROLL_NEVER
+        val l = Ui.hbox(c)
+        val opcoes = listOf<String?>(null) + tipos
+        for ((i, o) in opcoes.withIndex()) {
+            val sel = o == filtro
+            val t = Ui.text(c, o ?: "tudo", 10f, if (sel) Theme.sobreGrad() else Ui.MUTED, true, mono = true)
+            t.background = if (sel) Botao(c, "grad", 12) else Ui.shape(c, Theme.alpha(Color.WHITE, 0x0A), 12, Theme.alpha(Color.WHITE, 0x22), 1)
+            t.setPadding(Ui.dp(c, 13), Ui.dp(c, 8), Ui.dp(c, 13), Ui.dp(c, 8))
+            Ui.clique(t) { filtro = o; redesenha() }
+            val p = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            if (i > 0) p.leftMargin = Ui.dp(c, 6)
+            l.addView(t, p)
+        }
+        hs.addView(l)
+        return hs
+    }
+
+    /** um registro: barrinha colorida do tipo, horario + etiqueta do tipo e a mensagem */
+    private fun itemLog(c: Context, e: Item): View {
+        val r = Ui.hbox(c)
+        r.gravity = Gravity.TOP
+        val cor = corTipo(e.tipo)
+        val barra = View(c)
+        barra.background = Ui.shape(c, cor, 2)
+        r.addView(barra, LinearLayout.LayoutParams(Ui.dp(c, 3), ViewGroup.LayoutParams.MATCH_PARENT))
+        val col = Ui.vbox(c)
+        val topo = Ui.hbox(c)
+        if (e.hora.isNotEmpty()) {
+            val h = Ui.text(c, e.hora, 9.5f, Ui.MUTED, code = true)
+            val hp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            hp.rightMargin = Ui.dp(c, 8)
+            topo.addView(h, hp)
+        }
+        val tg = Ui.text(c, e.tipo, 8.5f, cor, true, mono = true)
+        tg.background = Ui.shape(c, Theme.alpha(cor, 0x1E), 6)
+        tg.setPadding(Ui.dp(c, 6), Ui.dp(c, 2), Ui.dp(c, 6), Ui.dp(c, 2))
+        topo.addView(tg)
+        col.addView(topo)
+        val m = Ui.text(c, e.msg, 10.5f, Ui.TEXT, code = true)
+        m.maxLines = 4
+        m.ellipsize = android.text.TextUtils.TruncateAt.END
+        col.addView(m, Ui.lp(top = 4, c = c))
+        val cp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        cp.leftMargin = Ui.dp(c, 10)
+        r.addView(col, cp)
+        return r
     }
 }
 
@@ -475,47 +595,78 @@ class SobreScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        add(Ui.gradTexto(c, "NOCRY", 38f), 0)
-        add(Ui.text(c, "versão " + versao(), 13f, Ui.MUTED, true, mono = true), 0)
+
+        // ---------------- marca ----------------
+        val marca = Ui.hbox(c)
+        val logo = FrameLayout(c)
+        logo.background = Botao(c, "icoOn", 14)
+        val n = Ui.text(c, "N", 22f, Theme.sobreGrad(), true, mono = true)
+        n.gravity = Gravity.CENTER
+        logo.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val lg = LinearLayout.LayoutParams(Ui.dp(c, 48), Ui.dp(c, 48))
+        lg.rightMargin = Ui.dp(c, 12)
+        marca.addView(logo, lg)
+        val mc = Ui.vbox(c)
+        mc.addView(Ui.gradTexto(c, "NOCRY", 24f))
+        mc.addView(Ui.text(c, "versão " + versao(), 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 2, c = c))
+        marca.addView(mc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        add(marca, 4)
         add(Ui.text(c, "Toque via volume e carregador, com monitores de segundo plano direto no celular.", 10.5f, Ui.MUTED), 12)
 
-        // ---------------- sua key ----------------
+        // ---------------- sua conta: avatar, nome, cargo e grade de informacoes ----------------
         val kc = Ui.card(c, forte = true)
-        kc.addView(Ui.label(c, "sua key"))
-        val linhaKey = Ui.hbox(c)
-        val papel = License.roleNome()
-        if (papel.isNotEmpty()) linhaKey.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.MUTED, License.isAdmin()))
+        kc.addView(Ui.label(c, "sua conta"))
+        val perfil = Ui.hbox(c)
         val nome = License.label()
-        if (nome.isNotEmpty()) {
-            val tn = Ui.text(c, nome, 15f, Ui.TEXT, true)
-            val tp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            tp.leftMargin = Ui.dp(c, 10)
-            linhaKey.addView(tn, tp)
+        val av = FrameLayout(c)
+        av.background = Botao(c, "grad", 26)
+        val ini = Ui.text(c, (nome.trim().firstOrNull() ?: 'N').uppercaseChar().toString(), 19f, Theme.sobreGrad(), true, mono = true)
+        ini.gravity = Gravity.CENTER
+        av.addView(ini, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val ap = LinearLayout.LayoutParams(Ui.dp(c, 52), Ui.dp(c, 52))
+        ap.rightMargin = Ui.dp(c, 12)
+        perfil.addView(av, ap)
+        val pc = Ui.vbox(c)
+        pc.addView(Ui.text(c, if (nome.isNotEmpty()) nome else "Usuário", 16f, Ui.TEXT, true))
+        val papel = License.roleNome()
+        if (papel.isNotEmpty()) {
+            val sp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            sp.topMargin = Ui.dp(c, 6)
+            pc.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.MUTED, License.isAdmin()), sp)
         }
-        kc.addView(linhaKey, Ui.lp(top = 8, c = c))
-        val fmt = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+        perfil.addView(pc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        kc.addView(perfil, Ui.lp(top = 12, c = c))
+
+        val fmt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
         val e = License.expira()
-        kc.addView(Ui.status(c, "VALIDADE", if (e == 0L) "SEM VENCIMENTO" else "ATÉ " + fmt.format(java.util.Date(e)), true), Ui.lp(top = 8, c = c))
-        val resta = License.restaOffline()
-        val horas = (resta / 3600000L).coerceAtLeast(0)
-        kc.addView(Ui.status(c, "SEM INTERNET VALE MAIS", if (horas >= 48) "${horas / 24} DIAS" else "$horas H", if (horas >= 12) true else null))
-        kc.addView(Ui.text(c, "aparelho " + License.devId(c).take(8) + " · confirmada com o servidor a cada poucas horas, quando há internet.", 10.5f, Ui.MUTED, mono = true), Ui.lp(top = 6, c = c))
+        val horas = (License.restaOffline() / 3600000L).coerceAtLeast(0)
+        kc.addView(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_key, "validade", if (e == 0L) "Sem vencimento" else fmt.format(java.util.Date(e)), Ui.OK),
+            Ui.infoBox(c, R.drawable.ic_globe, "sem internet", if (horas >= 48) "${horas / 24} dias" else "$horas h", if (horas >= 12) Ui.OK else Ui.WARN)
+        ), Ui.lp(top = 16, c = c))
+        kc.addView(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_chip, "aparelho", License.devId(c).take(8)),
+            Ui.infoBox(c, R.drawable.ic_info, "versão", versao())
+        ), Ui.lp(top = 8, c = c))
+        kc.addView(Ui.text(c, "A key é confirmada com o servidor a cada poucas horas, quando há internet.", 10f, Ui.MUTED), Ui.lp(top = 12, c = c))
         if (License.isAdmin() && BuildConfig.API_URL.isNotBlank()) {
             kc.addView(Ui.button(c, "abrir painel de keys", Ui.Kind.PRIMARY, R.drawable.ic_globe) {
                 abre(BuildConfig.API_URL.trimEnd('/') + "/admin")
-            }, Ui.lp(top = 12, c = c))
-            kc.addView(Ui.text(c, "No painel, entre com a sua própria key.", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+            }, Ui.lp(top = 14, c = c))
+            kc.addView(Ui.text(c, "No painel, entre com a sua própria key.", 10f, Ui.MUTED), Ui.lp(top = 6, c = c))
         }
         kc.addView(Ui.button(c, "sair da key", Ui.Kind.GHOST, R.drawable.ic_logout) {
             Ui.dialogConfirma(act, "SAIR DA KEY", "O app volta para a tela da key e os monitores param (o toque e a tela voltam ao normal).", "SAIR") {
                 License.sair("você saiu")
             }
-        }, Ui.lp(top = 10, c = c))
-        add(kc, 14)
+        }, Ui.lp(top = 12, c = c))
+        add(kc, 16)
 
+        // ---------------- atualizacao ----------------
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_download, "atualização"))
-        card.addView(Ui.text(c, if (msg.isEmpty()) "Toque em verificar para ver se há versão nova." else msg, 13f, if (msg.contains("Falhou") || msg.contains("Não consegui")) Ui.WARN else Ui.TEXT), Ui.lp(top = 6, c = c))
+        val erroMsg = msg.contains("Falhou") || msg.contains("Não consegui")
+        card.addView(Ui.text(c, if (msg.isEmpty()) "Toque em verificar para ver se há versão nova." else msg, 11f, if (erroMsg) Ui.WARN else Ui.TEXT), Ui.lp(top = 10, c = c))
         if (instalando) {
             val bp = BarraProgresso(c)
             bp.define(percent)
@@ -533,7 +684,7 @@ class SobreScreen(a: MainActivity) : Screen(a) {
                     redesenha()
                 }
             }
-        }, Ui.lp(top = 10, c = c))
+        }, Ui.lp(top = 12, c = c))
         val inf = info
         if (inf != null) {
             card.addView(Ui.button(c, if (instalando) "baixando..." else "baixar e instalar agora", Ui.Kind.PRIMARY, R.drawable.ic_download) {
@@ -547,21 +698,21 @@ class SobreScreen(a: MainActivity) : Screen(a) {
                 }
             }, Ui.lp(top = 8, c = c))
         }
-        add(card, 14)
+        add(card, 12)
 
-        val card2 = Ui.card(c)
-        card2.addView(Ui.label(c, "compartilhar"))
-        card2.addView(Ui.text(c, "Qualquer pessoa pode baixar o app por este link:\nhttps://github.com/" + Const.REPO + "/releases/latest", 12.5f, Ui.TEXT, code = true), Ui.lp(top = 6, c = c))
-        card2.addView(Ui.button(c, "compartilhar link", Ui.Kind.GHOST) {
+        // ---------------- links ----------------
+        add(Ui.label(c, "links"), 22)
+        val link = "https://github.com/" + Const.REPO + "/releases/latest"
+        add(Ui.row(c, "Compartilhar o app", "manda o link de download pra alguém", R.drawable.ic_globe) {
             val i = Intent(Intent.ACTION_SEND)
             i.type = "text/plain"
-            i.putExtra(Intent.EXTRA_TEXT, "Baixe o NOCRY: https://github.com/" + Const.REPO + "/releases/latest")
+            i.putExtra(Intent.EXTRA_TEXT, "Baixe o NOCRY: $link")
             try { act.startActivity(Intent.createChooser(i, "Compartilhar")) } catch (_: Exception) {}
-        }, Ui.lp(top = 10, c = c))
-        card2.addView(Ui.button(c, "abrir página de download", Ui.Kind.GHOST) { abre("https://github.com/" + Const.REPO + "/releases/latest") }, Ui.lp(top = 8, c = c))
-        add(card2, 12)
+        }, 8)
+        add(Ui.row(c, "Página de download", "github.com/" + Const.REPO, R.drawable.ic_download) { abre(link) }, 8)
 
-        add(Ui.text(c, "ADB embutido: libadb-android (Muntashir Al-Islam), licença Apache-2.0.", 10.5f, Ui.MUTED), 14)
-        add(Ui.text(c, "Fontes: Big Shoulders, Tektur, Outfit, Bricolage Grotesque, Gloock, Work Sans, Instrument Sans, Pixelify Sans, Red Hat Mono, Space Grotesk, JetBrains Mono (licença SIL OFL) e Poppins (licença OFL).", 10.5f, Ui.MUTED), 6)
+        // ---------------- creditos ----------------
+        add(Ui.text(c, "App desenvolvido por Aucerola · ADB embutido: libadb-android (Muntashir Al-Islam), licença Apache-2.0.", 9.5f, Ui.MUTED), 22)
+        add(Ui.text(c, "Fontes: Big Shoulders, Tektur, Outfit, Bricolage Grotesque, Gloock, Work Sans, Instrument Sans, Pixelify Sans, Red Hat Mono, Space Grotesk, JetBrains Mono (licença SIL OFL) e Poppins (licença OFL).", 9.5f, Ui.MUTED), 6)
     }
 }

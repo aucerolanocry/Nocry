@@ -246,6 +246,100 @@ object Ui {
         return r
     }
 
+    /** caixinha de informacao: icone + rotulo pequeno em cima, valor embaixo (usada em grade 2x2) */
+    fun infoBox(c: Context, ico: Int, rotulo: String, valor: String, cor: Int = TEXT): View {
+        val col = vbox(c)
+        col.background = shape(c, Theme.alpha(Color.WHITE, 0x0A), 14, Theme.alpha(Color.WHITE, 0x1C), 1)
+        col.setPadding(dp(c, 12), dp(c, 11), dp(c, 12), dp(c, 12))
+        val topo = hbox(c)
+        topo.addView(icone(c, ico, MUTED, 13))
+        val r = text(c, rotulo, 8.5f, MUTED, true, mono = true)
+        r.maxLines = 1
+        r.ellipsize = android.text.TextUtils.TruncateAt.END
+        val rp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        rp.leftMargin = dp(c, 6)
+        topo.addView(r, rp)
+        col.addView(topo)
+        val v = text(c, valor, 12f, cor, true)
+        v.maxLines = 1
+        v.ellipsize = android.text.TextUtils.TruncateAt.END
+        col.addView(v, lp(top = 7, c = c))
+        return col
+    }
+
+    /**
+     * item da linha do tempo (passo a passo): bolinha numerada (vira um check quando feito) com uma
+     * linha ligando ao proximo passo, titulo + etiqueta de estado e, quando aberto, o conteudo num cartao.
+     * estado: 0 = feito, 1 = atual (o proximo a fazer), 2 = depois.
+     * onToque != null deixa o cabecalho tocavel (abre/fecha o passo).
+     */
+    fun passo(c: Context, numero: Int, titulo: String, estado: Int, conteudo: View?, ultimo: Boolean, onToque: (() -> Unit)? = null): View {
+        val r = LinearLayout(c)
+        r.orientation = LinearLayout.HORIZONTAL
+        val corEstado = when (estado) { 0 -> OK; 1 -> RED; else -> MUTED }
+
+        // coluna da esquerda: bolinha + linha ate o proximo passo
+        val esq = vbox(c)
+        esq.gravity = Gravity.CENTER_HORIZONTAL
+        val bola = FrameLayout(c)
+        bola.background = when (estado) {
+            0 -> shape(c, Theme.alpha(OK, 0x24), 14, Theme.alpha(OK, 0x99), 1)
+            1 -> Botao(c, "grad", 14)
+            else -> shape(c, Theme.alpha(Color.WHITE, 0x08), 14, LINE, 1)
+        }
+        if (estado == 0) {
+            bola.addView(icone(c, R.drawable.ic_check, OK, 14), FrameLayout.LayoutParams(dp(c, 14), dp(c, 14), Gravity.CENTER))
+        } else {
+            val n = text(c, numero.toString(), 11.5f, if (estado == 1) Theme.sobreGrad() else MUTED, true, mono = true)
+            n.gravity = Gravity.CENTER
+            bola.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        }
+        esq.addView(bola, LinearLayout.LayoutParams(dp(c, 28), dp(c, 28)))
+        if (!ultimo) {
+            val linha = View(c)
+            linha.background = shape(c, if (estado == 0) Theme.alpha(OK, 0x55) else LINE, 1)
+            val lpl = LinearLayout.LayoutParams(dp(c, 2), 0, 1f)
+            lpl.topMargin = dp(c, 4)
+            esq.addView(linha, lpl)
+        }
+        // altura MATCH_PARENT: a linha estica ate o fim do conteudo do passo (o LinearLayout iguala a altura)
+        r.addView(esq, LinearLayout.LayoutParams(dp(c, 28), ViewGroup.LayoutParams.MATCH_PARENT))
+
+        // coluna da direita: titulo + estado (+ seta) e o conteudo
+        val dir = vbox(c)
+        val cab = hbox(c)
+        cab.minimumHeight = dp(c, 28)
+        val t = text(c, titulo, 13f, if (estado == 2) MUTED else TEXT, true)
+        t.maxLines = 1
+        t.ellipsize = android.text.TextUtils.TruncateAt.END
+        cab.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val selo = text(c, when (estado) { 0 -> "feito"; 1 -> "agora"; else -> "depois" }, 8.5f, corEstado, true, mono = true)
+        selo.background = shape(c, Theme.alpha(corEstado, 0x1E), 7)
+        selo.setPadding(dp(c, 7), dp(c, 3), dp(c, 7), dp(c, 3))
+        val slp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        slp.leftMargin = dp(c, 8)
+        cab.addView(selo, slp)
+        if (onToque != null) {
+            val seta = icone(c, R.drawable.ic_chevron, MUTED, 16)
+            seta.rotation = if (conteudo != null) 90f else 0f
+            val sl = LinearLayout.LayoutParams(dp(c, 16), dp(c, 16))
+            sl.leftMargin = dp(c, 6)
+            cab.addView(seta, sl)
+            clique(cab, onToque)
+        }
+        dir.addView(cab)
+        if (conteudo != null) {
+            val cartao = card(c, forte = estado == 1)
+            cartao.addView(conteudo)
+            dir.addView(cartao, lp(top = 8, c = c))
+        }
+        if (!ultimo) dir.setPadding(0, 0, 0, dp(c, 18))
+        val dlp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        dlp.leftMargin = dp(c, 12)
+        r.addView(dir, dlp)
+        return r
+    }
+
     fun button(c: Context, label: String, kind: Kind = Kind.PRIMARY, ico: Int = 0, onClick: () -> Unit): View {
         val corTxt = when (kind) {
             Kind.PRIMARY -> Theme.sobreGrad()
@@ -444,7 +538,7 @@ object Ui {
         return col
     }
 
-    /** quadrado da tela inicial: icone, nome, descricao e um selo de estado no canto */
+    /** quadrado da tela inicial: icone, nome, descricao e um selo de estado no rodape */
     fun tile(c: Context, ico: Int, titulo: String, desc: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
         val col = vbox(c)
         col.background = ripple(c, glass(c, ligado = ligado == true), Painel(c, mascara = true))

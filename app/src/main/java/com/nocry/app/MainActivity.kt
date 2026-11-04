@@ -76,10 +76,13 @@ abstract class Screen(val act: MainActivity) {
     protected fun add(v: View, top: Int = 10) { root.addView(v, Ui.lp(top = top, c = act)) }
     protected fun limpa() { root.removeAllViews() }
 
-    /** titulo grande em degrade + subtitulo, no mesmo padrao usado em todas as telas */
+    /**
+     * subtitulo da tela. O titulo ja aparece na barra de cima (em degrade) - repetir ele gigante aqui
+     * embaixo deixava toda tela com o nome duplicado; o parametro fica so pra nao mexer nas chamadas.
+     */
+    @Suppress("UNUSED_PARAMETER")
     protected fun cabecalho(titulo: String, subtitulo: String) {
-        add(Ui.gradTexto(act, titulo, 28f), 0)
-        add(Ui.text(act, subtitulo, 10.5f, Ui.MUTED), 4)
+        add(Ui.text(act, subtitulo, 10.5f, Ui.MUTED), 0)
     }
 }
 
@@ -356,6 +359,10 @@ class MainActivity : Activity() {
         }
         val s = pilha.last()
         barra.text = s.titulo
+        val str = if (Prefs.maiusc) s.titulo.uppercase() else s.titulo
+        val w = barra.paint.measureText(str)
+        barra.paint.shader = android.graphics.LinearGradient(0f, 0f, maxOf(w, 1f), 0f, Theme.accent, Theme.accent2, android.graphics.Shader.TileMode.CLAMP)
+        barra.invalidate()
         voltar.visibility = if (pilha.size > 1) View.VISIBLE else View.GONE
         marcaTopo.visibility = if (pilha.size > 1) View.GONE else View.VISIBLE
         topo.visibility = if (s.semBarra && pilha.size == 1) View.GONE else View.VISIBLE

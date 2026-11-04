@@ -7,7 +7,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 
 class BypassScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "BYPASS"
+    override val titulo = "Bypass"
 
     override fun key(): String = listOf(
         Prefs.bypassAtivo, Prefs.bypassGatilho, Prefs.bypassFf, Prefs.bypassTipo,
@@ -18,8 +18,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         limpa()
         val c = act
 
-        add(Ui.gradTexto(c, "BYPASS", 28f), 0)
-        add(Ui.text(c, "Ativa pelo volume, não perturbe, bluetooth ou carregador — e aplica a pasta suja no Free Fire escolhido.", 10.5f, Ui.MUTED), 4)
+        add(Ui.text(c, "Ativa pelo volume, não perturbe, bluetooth ou carregador — e aplica a pasta suja no Free Fire escolhido.", 10.5f, Ui.MUTED), 0)
 
         val ativo = Prefs.bypassAtivo || Prefs.bypassVolAtivo
         val card = Ui.card(c, forte = true, ligado = ativo)
