@@ -114,7 +114,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
             }, 10)
         }
 
-        add(Ui.text(c, "O app fica em segundo plano escutando o gatilho. Para parar, toque em desativar.", 10.5f, Ui.MUTED), 18)
+        add(Ui.dica(c, "O app fica em segundo plano escutando o gatilho. Para parar, toque em desativar.", Ui.Dica.INFO), 18)
     }
 
     private fun cardGatilho(iconRes: Int, nome: String, desc: String, id: String) {

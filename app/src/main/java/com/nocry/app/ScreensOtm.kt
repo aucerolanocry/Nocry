@@ -81,7 +81,7 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         card.addView(Ui.status(c, "ADB", if (Adb.connected) "CONECTADO" else "DESCONECTADO", Adb.connected), Ui.lp(top = 8, c = c))
         card.addView(Ui.status(c, "AUTOMÁTICO AO ABRIR O FF", if (Prefs.otmAuto) "LIGADO" else "DESLIGADO", null))
         add(card, 14)
-        add(Ui.text(c, "Os protegidos ficam de fora. DESATIVAR devolve tudo como estava.", 10.5f, Ui.MUTED), 10)
+        add(Ui.dica(c, "Os protegidos ficam de fora. Desativar devolve tudo como estava.", Ui.Dica.INFO), 12)
 
         add(Ui.button(c, "ativar otimização", Ui.Kind.PRIMARY, R.drawable.ic_check) { act.abre(RunScreen(act, "OTIMIZANDO") { log -> Otm.ativar(log) }) }, 14)
         add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "DESATIVANDO") { log -> Otm.desativar(log) }) }, 10)

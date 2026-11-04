@@ -338,7 +338,11 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         val forte = if (destaque) Ui.Kind.PRIMARY else Ui.Kind.GHOST
         when (i) {
             0 -> {
-                v.addView(Ui.text(c, "Ligue em Opções do desenvolvedor → Depuração sem fio. (Se não aparece Opções do desenvolvedor: Sobre o telefone → toque 7 vezes em Número da versão.)", 10.5f, Ui.MUTED))
+                v.addView(Ui.lista(c, listOf(
+                    "Abra Opções do desenvolvedor",
+                    "Ligue Depuração sem fio"
+                )))
+                v.addView(Ui.dica(c, "Não aparece Opções do desenvolvedor? Vá em Sobre o telefone e toque 7 vezes em Número da versão.", Ui.Dica.AVISO), Ui.lp(top = 12, c = c))
                 v.addView(Ui.button(c, "abrir opções do desenvolvedor", forte) {
                     abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
                 }, Ui.lp(top = 12, c = c))
@@ -347,7 +351,12 @@ class SetupScreen(a: MainActivity) : Screen(a) {
                 if (conectado) {
                     v.addView(Ui.status(c, "PAREAMENTO", "FEITO", true))
                 } else {
-                    v.addView(Ui.text(c, "Toque no botão, depois vá em Depuração sem fio → Parear com código de pareamento. Quando a notificação do NOCRY aparecer, toque em DIGITAR CÓDIGO e escreva os 6 números (a tela de pareamento do Android fica aberta).", 10.5f, Ui.MUTED))
+                    v.addView(Ui.lista(c, listOf(
+                        "Toque em parear pela notificação",
+                        "No Android: Depuração sem fio → Parear com código de pareamento",
+                        "Na notificação do NOCRY, toque em Digitar código e escreva os 6 números"
+                    )))
+                    v.addView(Ui.dica(c, "Deixe a tela de pareamento do Android aberta enquanto digita o código.", Ui.Dica.INFO), Ui.lp(top = 12, c = c))
                     v.addView(Ui.button(c, "parear pela notificação") {
                         if (!temNotif()) { pedeNotif(); Ui.toast(act, "Permita as notificações e toque de novo") }
                         else {
@@ -356,7 +365,8 @@ class SetupScreen(a: MainActivity) : Screen(a) {
                             abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
                         }
                     }, Ui.lp(top = 12, c = c))
-                    v.addView(Ui.text(c, "Ou digite aqui (porta e código da tela de pareamento):", 10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
+                    v.addView(Ui.label(c, "ou digite aqui"), Ui.lp(top = 18, c = c))
+                    v.addView(Ui.text(c, "Porta e código que aparecem na tela de pareamento.", 10.5f, Ui.MUTED), Ui.lp(top = 4, c = c))
                     val fp = Ui.field(c, "porta (ex.: 37155)", true)
                     fp.setText(if (portaTxt.isNotEmpty()) portaTxt else if (Pairing.porta > 0) Pairing.porta.toString() else "")
                     campoPorta = fp
@@ -384,24 +394,26 @@ class SetupScreen(a: MainActivity) : Screen(a) {
             }
             2 -> {
                 v.addView(Ui.status(c, "ADB", if (conectado) "CONECTADO" else "DESCONECTADO", conectado))
-                if (!conectado && Adb.lastError.isNotEmpty()) v.addView(Ui.text(c, "Motivo: " + Adb.lastError, 10.5f, Ui.WARN), Ui.lp(top = 4, c = c))
+                if (!conectado && Adb.lastError.isNotEmpty()) v.addView(Ui.dica(c, "Motivo: " + Adb.lastError, Ui.Dica.AVISO), Ui.lp(top = 8, c = c))
                 v.addView(Ui.button(c, if (conectado) "reconectar" else "conectar agora", if (conectado) Ui.Kind.GHOST else forte) {
                     if (!ocupado) roda("Conectando...") {
                         Adb.disconnect()
                         if (Adb.connect(act.applicationContext, 9000)) "CONECTADO" else "Não conectou: " + Adb.lastError
                     }
-                }, Ui.lp(top = 10, c = c))
-                v.addView(Ui.text(c, "Se a depuração sem fio desligar (trocou de Wi-Fi ou reiniciou o celular), ligue de novo e toque aqui. Não precisa parear de novo.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+                }, Ui.lp(top = 12, c = c))
+                v.addView(Ui.dica(c, "Trocou de Wi-Fi ou reiniciou o celular? Ligue a depuração sem fio de novo e toque aqui. Não precisa parear de novo.", Ui.Dica.INFO), Ui.lp(top = 12, c = c))
             }
             3 -> {
-                v.addView(Ui.text(c, "O app se dá a permissão de mudar o toque e se tira da economia de bateria. Depois disso o toque via volume e via carregador funciona até sem ADB.", 10.5f, Ui.MUTED))
+                v.addView(Ui.text(c, "O app se dá a permissão de mudar o toque e se tira da economia de bateria.", 10.5f, Ui.TEXT))
+                v.addView(Ui.dica(c, "Depois disso o toque via volume e via carregador funciona até sem ADB.", Ui.Dica.OK), Ui.lp(top = 12, c = c))
                 v.addView(Ui.button(c, if (perm) "liberar de novo" else "liberar permissões", if (perm) Ui.Kind.GHOST else forte) {
                     if (!Adb.connected) Ui.toast(act, "Conecte o ADB primeiro (passos 2 e 3)")
                     else if (!ocupado) roda("Liberando...") { if (Sys.darPermissoes()) "LIBERADO" else "O celular não aceitou" }
                 }, Ui.lp(top = 12, c = c))
             }
             4 -> {
-                v.addView(Ui.text(c, "É assim que o app percebe VOL+ e VOL−. O NOCRY só olha o aperto das teclas de volume e não lê sua tela.", 10.5f, Ui.MUTED))
+                v.addView(Ui.text(c, "É assim que o app percebe VOL+ e VOL−.", 10.5f, Ui.TEXT))
+                v.addView(Ui.dica(c, "O NOCRY só olha o aperto das teclas de volume e não lê sua tela.", Ui.Dica.OK), Ui.lp(top = 12, c = c))
                 v.addView(Ui.button(c, if (acc) "desligar" else "ligar", if (acc) Ui.Kind.GHOST else forte) {
                     if (acc) { Sys.desligarAcessibilidade(); redesenha() }
                     else if (Sys.ligarAcessibilidade()) { Ui.toast(act, "LIGADA"); redesenha() }
@@ -410,19 +422,34 @@ class SetupScreen(a: MainActivity) : Screen(a) {
                         abreConfig(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                     }
                 }, Ui.lp(top = 12, c = c))
-                v.addView(Ui.text(c, "Se o Android bloquear (\"configuração restrita\"): Informações do app → ⋮ → Permitir configurações restritas. Depois do passo 4 o app liga sozinho.", 10.5f, Ui.MUTED), Ui.lp(top = 12, c = c))
+                v.addView(Ui.label(c, "se o android bloquear"), Ui.lp(top = 18, c = c))
+                v.addView(Ui.lista(c, listOf(
+                    "Abra Informações do app",
+                    "Toque em ⋮ (canto de cima)",
+                    "Toque em Permitir configurações restritas"
+                )), Ui.lp(top = 8, c = c))
+                v.addView(Ui.dica(c, "Depois do passo 4 o app liga a escuta sozinho.", Ui.Dica.INFO), Ui.lp(top = 12, c = c))
                 v.addView(Ui.button(c, "informações do app", Ui.Kind.GHOST) {
                     try {
                         act.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + Const.PKG)))
                     } catch (_: Exception) {}
-                }, Ui.lp(top = 8, c = c))
+                }, Ui.lp(top = 12, c = c))
             }
             else -> {
-                if (!notif) v.addView(Ui.button(c, "permitir notificações", forte) { pedeNotif() })
+                if (!notif) {
+                    v.addView(Ui.text(c, "Sem notificações o NOCRY não mostra o campo do código no pareamento nem avisa quando sai versão nova.", 10.5f, Ui.TEXT))
+                    v.addView(Ui.button(c, "permitir notificações", forte) { pedeNotif() }, Ui.lp(top = 12, c = c))
+                }
+                v.addView(Ui.label(c, "economia de bateria"), Ui.lp(top = if (notif) 0 else 18, c = c))
+                v.addView(Ui.lista(c, listOf(
+                    "Toque no botão abaixo",
+                    "Escolha Todos os apps",
+                    "Ache o NOCRY e marque Sem restrição"
+                )), Ui.lp(top = 8, c = c))
+                v.addView(Ui.dica(c, "Sem isso o Android pode fechar os monitores em segundo plano.", Ui.Dica.AVISO), Ui.lp(top = 12, c = c))
                 v.addView(Ui.button(c, "tirar da economia de bateria", Ui.Kind.GHOST) {
                     abreConfig(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                }, Ui.lp(top = if (notif) 0 else 8, c = c))
-                v.addView(Ui.text(c, "Escolha \"Todos os apps\", ache o NOCRY e marque \"Sem restrição\". Sem isso o Android pode fechar os monitores.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+                }, Ui.lp(top = 12, c = c))
             }
         }
         return v
@@ -465,7 +492,7 @@ class CompScreen(a: MainActivity) : Screen(a) {
         if (!Toque.podeMexer()) add(Ui.text(c, "Sem permissão e sem ADB. Faça a CONEXÃO primeiro.", 13f, Ui.WARN, true), 10)
         add(Ui.button(c, if (ocupado) "aguarde..." else "ativar modo competitivo") { if (!ocupado) roda({ Comp.ativar() }, "MODO COMPETITIVO ATIVO", "O aparelho não aceitou a mudança") }, 14)
         add(Ui.button(c, "desativar modo competitivo", Ui.Kind.DANGER) { if (!ocupado) roda({ Comp.desativar(true) }, "DESATIVADO — tudo voltou ao normal", "O aparelho não aceitou a mudança") }, 10)
-        add(Ui.text(c, "DESATIVAR também devolve a tela, se o MODO CARREGADOR tiver deixado a density alterada.", 10.5f, Ui.MUTED), 10)
+        add(Ui.dica(c, "Desativar também devolve a tela, se o modo carregador tiver deixado a density alterada.", Ui.Dica.INFO), 12)
     }
 }
 
@@ -491,7 +518,7 @@ class VolScreen(a: MainActivity) : Screen(a) {
         card.addView(Ui.status(c, "ESCUTA", escuta, KeyService.ativo || Adb.connected), Ui.lp(top = 8, c = c))
         card.addView(Ui.status(c, "TOQUE AGORA", if (Prefs.markVol) "LIGADO POR AQUI" else "NORMAL", null))
         add(card, 14)
-        add(Ui.text(c, "Aperte o mesmo botão de volume rápido (até 0,9 s entre os apertos).", 10.5f, Ui.MUTED), 10)
+        add(Ui.dica(c, "Aperte o mesmo botão de volume rápido (até 0,9 s entre os apertos).", Ui.Dica.INFO), 12)
 
         if (on) add(Ui.button(c, if (ocupado) "aguarde..." else "parar monitor", Ui.Kind.DANGER) {
             if (!ocupado) {
@@ -542,7 +569,7 @@ class CargaScreen(a: MainActivity) : Screen(a) {
         if (on) card.addView(Ui.status(c, "REPETIÇÕES RESTANTES", Prefs.cargaRep.toString(), null))
         card.addView(Ui.status(c, "TOQUE AGORA", if (Prefs.markCarga) "LIGADO POR AQUI" else "NORMAL", null))
         add(card, 14)
-        add(Ui.text(c, "Cada repetição = liga e volta ao normal; ao acabar, o monitor para sozinho.", 10.5f, Ui.MUTED), 10)
+        add(Ui.dica(c, "Cada repetição = liga e volta ao normal; ao acabar, o monitor para sozinho.", Ui.Dica.INFO), 12)
 
         if (on) {
             add(Ui.button(c, if (ocupado) "aguarde..." else "parar monitor", Ui.Kind.DANGER) {
@@ -600,7 +627,7 @@ class McScreen(a: MainActivity) : Screen(a) {
         if (on) card.addView(Ui.status(c, "REPETIÇÕES RESTANTES", Prefs.mcCycles.toString(), null))
         card.addView(Ui.status(c, "TELA", if (Prefs.densOrig != null) "DENSITY ALTERADA" else "NORMAL", if (Prefs.densOrig != null) false else true))
         add(card, 14)
-        add(Ui.text(c, "Pra parar sem abrir o app: VOL+ VOL− VOL+ VOL− rápido (só vale com a density alterada).", 10.5f, Ui.MUTED), 10)
+        add(Ui.dica(c, "Pra parar sem abrir o app: VOL+ VOL− VOL+ VOL− rápido (só vale com a density alterada).", Ui.Dica.AVISO), 12)
 
         if (Prefs.densOrig != null) {
             add(Ui.button(c, if (ocupado) "aguarde..." else "restaurar a tela agora", Ui.Kind.PRIMARY) {

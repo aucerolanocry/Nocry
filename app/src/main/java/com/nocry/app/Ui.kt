@@ -83,12 +83,15 @@ object Ui {
         t.text = s
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp * Theme.escalaTexto() * (if (code) 0.95f else 1f))
         t.setTextColor(color)
-        t.setLineSpacing(0f, 1.12f)
         val display = bold || mono
+        // texto corrido (explicacoes) ganha mais entrelinha: em paragrafo, linha colada cansa a leitura
+        t.setLineSpacing(0f, if (display || code) 1.12f else 1.3f)
         t.typeface = if (code) Theme.codigo(c) else Theme.fonte(c, display, bold)
         if (!code && Prefs.maiusc) {
             t.setAllCaps(true)
-            if (display) t.letterSpacing = Theme.pack().esp
+            // caixa alta sem espaco entre as letras fica apertada; titulo usa o espacamento do pacote,
+            // texto corrido um pouco menos (senao o paragrafo fica largo demais)
+            t.letterSpacing = if (display) Theme.pack().esp else 0.03f
         }
         if (Theme.temMidiaDeFundo()) t.setShadowLayer(dp(c, 3).toFloat(), 0f, dp(c, 1).toFloat(), 0x99000000.toInt())
         return t
@@ -265,6 +268,41 @@ object Ui {
         v.ellipsize = android.text.TextUtils.TruncateAt.END
         col.addView(v, lp(top = 7, c = c))
         return col
+    }
+
+    /** instrucao em passinhos numerados (quadradinho com o numero + texto), em vez de um paragrafo corrido */
+    fun lista(c: Context, itens: List<String>): View {
+        val col = vbox(c)
+        for ((i, s) in itens.withIndex()) {
+            val r = hbox(c)
+            r.gravity = Gravity.TOP
+            val n = text(c, (i + 1).toString(), 9.5f, Theme.sobreGrad(), true, mono = true)
+            n.gravity = Gravity.CENTER
+            n.background = Botao(c, "grad", 5)
+            val np = LinearLayout.LayoutParams(dp(c, 17), dp(c, 17))
+            np.rightMargin = dp(c, 10)
+            r.addView(n, np)
+            r.addView(text(c, s, 10.5f, TEXT), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            col.addView(r, lp(top = if (i == 0) 0 else 8, c = c))
+        }
+        return col
+    }
+
+    enum class Dica { INFO, AVISO, OK }
+
+    /** caixinha de dica/aviso: fundo e borda na cor do tipo, icone e o texto */
+    fun dica(c: Context, s: String, tipo: Dica = Dica.INFO): View {
+        val cor = when (tipo) { Dica.INFO -> 0xFF7FC8FF.toInt(); Dica.AVISO -> WARN; Dica.OK -> OK }
+        val ico = when (tipo) { Dica.INFO -> R.drawable.ic_info; Dica.AVISO -> R.drawable.ic_warn; Dica.OK -> R.drawable.ic_check }
+        val r = hbox(c)
+        r.gravity = Gravity.TOP
+        r.background = shape(c, Theme.alpha(cor, 0x18), 12, Theme.alpha(cor, 0x4D), 1)
+        r.setPadding(dp(c, 11), dp(c, 10), dp(c, 12), dp(c, 10))
+        val ip = LinearLayout.LayoutParams(dp(c, 15), dp(c, 15))
+        ip.rightMargin = dp(c, 9)
+        r.addView(icone(c, ico, cor, 15), ip)
+        r.addView(text(c, s, 10.5f, Theme.mix(TEXT, cor, 0.18f)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        return r
     }
 
     /**

@@ -26,12 +26,10 @@ object Packs {
         Pack("gloock", "Gloock", "Gloock-Regular.ttf", "Gloock-Regular.ttf", "WorkSans-Regular.ttf", "WorkSans-Bold.ttf", 1.0f, 0.06f),
         Pack("poppins", "Poppins", "Poppins-Regular.ttf", "Poppins-Bold.ttf", "Poppins-Regular.ttf", "Poppins-Bold.ttf", 0.98f, 0.04f),
         Pack("instrument", "Instrument", "InstrumentSans-Regular.ttf", "InstrumentSans-Bold.ttf", "InstrumentSans-Regular.ttf", "InstrumentSans-Bold.ttf", 1.02f, 0.06f),
-        // corpo trocado de Red Hat Mono pra Outfit: com "tudo maiusculo" ligado (padrao do app),
-        // um paragrafo inteiro de explicacao em mono+caixa alta fica pesado/dificil de ler; a
-        // Outfit e uma sans mais limpa e compacta em caixa alta, mantendo a Pixelify só nos titulos.
-        // escala em 0.88 pra reduzir TUDO (titulos, botoes, cards, explicacoes) de uma vez, nao so
-        // os paragrafos individualmente - combinado com os tamanhos ja cortados ponto a ponto.
-        Pack("pixelify", "Pixelify", "PixelifySans-Medium.ttf", "PixelifySans-Medium.ttf", "Outfit-Regular.ttf", "Outfit-Bold.ttf", 0.88f, 0.06f),
+        // titulos na Pixelify; corpo (explicacoes, descricoes) na Instrument Sans - em caixa alta e
+        // tamanho pequeno ela fica mais limpa e legivel que a Red Hat Mono (pesada) e a Outfit
+        // (geometrica demais, letras apertadas). Escala 0.88 reduz o app todo de uma vez.
+        Pack("pixelify", "Pixelify", "PixelifySans-Medium.ttf", "PixelifySans-Medium.ttf", "InstrumentSans-Regular.ttf", "InstrumentSans-Bold.ttf", 0.88f, 0.06f),
         Pack("grotesk", "Space Grotesk", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", 1.0f, 0.06f, variavel = true),
         Pack("mono", "JetBrains Mono", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", 0.96f, 0.04f, variavel = true),
         Pack("sistema", "Sistema", "", "", "", "", 1.0f, 0.04f, sistema = true)
