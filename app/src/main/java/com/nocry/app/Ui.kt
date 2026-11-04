@@ -126,8 +126,15 @@ object Ui {
     fun card(c: Context, forte: Boolean = false, ligado: Boolean = false): LinearLayout {
         val l = vbox(c)
         l.background = glass(c, forte = forte, ligado = ligado)
-        val p = dp(c, 16)
+        val p = dp(c, 18)
         l.setPadding(p, p, p, p)
+        // sombra suave por baixo do cartao - sem isso todo cartao fica "colado" no fundo, sem
+        // profundidade nenhuma; esse detalhe sozinho muda bastante a sensacao de acabamento/qualidade.
+        if (Build.VERSION.SDK_INT >= 28) {
+            l.elevation = dp(c, if (forte) 10 else 6).toFloat()
+            l.outlineAmbientShadowColor = Color.BLACK
+            l.outlineSpotShadowColor = Color.BLACK
+        }
         return l
     }
 
@@ -185,16 +192,23 @@ object Ui {
         return t
     }
 
-    /** bolinha + texto de estado: "ADB · CONECTADO" */
+    /** bolinha (com um halo suave) + texto de estado: "ADB · CONECTADO" */
     fun status(c: Context, nome: String, valor: String, ok: Boolean?): View {
         val r = hbox(c)
         val cor = when (ok) { true -> OK; false -> BAD; null -> WARN }
+        // "LED" com halo: um aro translucido por baixo do ponto solido, da sensacao de luz acesa
+        // em vez de so uma bolinha chapada - detalhe pequeno, mas usado em todo app profissional.
+        val ledBox = FrameLayout(c)
+        val halo = View(c)
+        halo.background = shape(c, Theme.alpha(cor, 0x33), 7)
+        ledBox.addView(halo, FrameLayout.LayoutParams(dp(c, 14), dp(c, 14), Gravity.CENTER))
         val dot = View(c)
-        dot.background = shape(c, cor, 8)
-        r.addView(dot, LinearLayout.LayoutParams(dp(c, 8), dp(c, 8)))
+        dot.background = shape(c, cor, 4)
+        ledBox.addView(dot, FrameLayout.LayoutParams(dp(c, 8), dp(c, 8), Gravity.CENTER))
+        r.addView(ledBox, LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)))
         val n = text(c, nome, 12.5f, MUTED, mono = true)
         val np = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-        np.leftMargin = dp(c, 10)
+        np.leftMargin = dp(c, 9)
         r.addView(n, np)
         r.addView(text(c, valor, 12.5f, cor, true, mono = true))
         r.setPadding(0, dp(c, 5), 0, dp(c, 5))
@@ -237,6 +251,11 @@ object Ui {
         r.background = ripple(c, glass(c), Painel(c, mascara = true))
         val p = dp(c, 14)
         r.setPadding(p, dp(c, 12), p, dp(c, 12))
+        if (Build.VERSION.SDK_INT >= 28) {
+            r.elevation = dp(c, 4).toFloat()
+            r.outlineAmbientShadowColor = Color.BLACK
+            r.outlineSpotShadowColor = Color.BLACK
+        }
         if (ico != 0) {
             val ib = caixaIcone(c, ico)
             val ip = LinearLayout.LayoutParams(dp(c, 40), dp(c, 40))
@@ -406,6 +425,11 @@ object Ui {
         val p = dp(c, 14)
         col.setPadding(p, p, p, dp(c, 12))
         col.minimumHeight = dp(c, 140)
+        if (Build.VERSION.SDK_INT >= 28) {
+            col.elevation = dp(c, if (ligado == true) 8 else 5).toFloat()
+            col.outlineAmbientShadowColor = Color.BLACK
+            col.outlineSpotShadowColor = Color.BLACK
+        }
         col.addView(caixaIcone(c, ico, ligado == true))
         col.addView(text(c, titulo, 14f, TEXT, true), lp(top = 11, c = c))
         if (desc.isNotEmpty()) {
