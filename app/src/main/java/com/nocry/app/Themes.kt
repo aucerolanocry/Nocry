@@ -26,7 +26,10 @@ object Packs {
         Pack("gloock", "Gloock", "Gloock-Regular.ttf", "Gloock-Regular.ttf", "WorkSans-Regular.ttf", "WorkSans-Bold.ttf", 1.0f, 0.06f),
         Pack("poppins", "Poppins", "Poppins-Regular.ttf", "Poppins-Bold.ttf", "Poppins-Regular.ttf", "Poppins-Bold.ttf", 0.98f, 0.04f),
         Pack("instrument", "Instrument", "InstrumentSans-Regular.ttf", "InstrumentSans-Bold.ttf", "InstrumentSans-Regular.ttf", "InstrumentSans-Bold.ttf", 1.02f, 0.06f),
-        Pack("pixelify", "Pixelify", "PixelifySans-Medium.ttf", "PixelifySans-Medium.ttf", "RedHatMono-Regular.ttf", "RedHatMono-Bold.ttf", 1.08f, 0.06f),
+        // escala baixada de 1.08 pra 0.96: o corpo desse pacote (Red Hat Mono) e monoespacado,
+        // ja fica largo/grande por natureza - o +8% pensado pra fontes estreitas so piorava, deixando
+        // o texto corrido (instrucoes, explicacoes) grande e pesado demais no tema padrao do app.
+        Pack("pixelify", "Pixelify", "PixelifySans-Medium.ttf", "PixelifySans-Medium.ttf", "RedHatMono-Regular.ttf", "RedHatMono-Bold.ttf", 0.96f, 0.06f),
         Pack("grotesk", "Space Grotesk", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", 1.0f, 0.06f, variavel = true),
         Pack("mono", "JetBrains Mono", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", 0.96f, 0.04f, variavel = true),
         Pack("sistema", "Sistema", "", "", "", "", 1.0f, 0.04f, sistema = true)
@@ -77,7 +80,9 @@ object Temas {
         Tema("ouro", "Ouro", "Luxo escuro", 0xFFF6D27A.toInt(), 0xFFC8872B.toInt(), 0xFF0B0805.toInt(), "solido", "gloock", 14, 1, 35, 92, "ouro"),
         Tema("matrix", "Matrix", "Terminal hacker", 0xFF3DFF7A.toInt(), 0xFF0FA64A.toInt(), 0xFF020A04.toInt(), "contorno", "pixelify", 2, 1, 60, 70, "chuva", true),
         Tema("sakura", "Sakura", "Suave e arredondado", 0xFFFF8FC7.toInt(), 0xFFB48CFF.toInt(), 0xFF110A18.toInt(), "vidro", "poppins", 30, 1, 50, 55, "petalas"),
-        Tema("gelo", "Gelo", "Minimal prata", 0xFFE8F1FF.toInt(), 0xFF7FC8FF.toInt(), 0xFF070A0F.toInt(), "vidro", "instrument", 20, 1, 40, 55, "neve")
+        Tema("gelo", "Gelo", "Minimal prata", 0xFFE8F1FF.toInt(), 0xFF7FC8FF.toInt(), 0xFF070A0F.toInt(), "vidro", "instrument", 20, 1, 40, 55, "neve"),
+        Tema("grafite", "Grafite", "Corporativo, clean", 0xFF9FB4C7.toInt(), 0xFF3E6FA8.toInt(), 0xFF0A0C10.toInt(), "contorno", "instrument", 16, 1, 35, 45, "noite"),
+        Tema("platina", "Platina", "Executivo, elegante", 0xFFE4E4EC.toInt(), 0xFF7B6CFF.toInt(), 0xFF08090D.toInt(), "vidro", "outfit", 20, 1, 30, 45, "grade")
     )
 
     fun get(id: String): Tema = lista.firstOrNull { it.id == id } ?: lista[0]
