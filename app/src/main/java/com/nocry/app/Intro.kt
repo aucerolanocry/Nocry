@@ -8,22 +8,16 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
 import android.view.Surface
 import android.view.TextureView
-import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.TextView
 import java.io.File
 
 /** Regras de quando a intro de abertura toca. */
@@ -50,19 +44,12 @@ object Intro {
 /**
  * A intro: toca o video de abertura (res/raw/intro_nocry: a catedral na nevoa, as torres e o NOCRY
  * entrando no ritmo da musica) por cima do app, em tela cheia.
- * Toque na tela pula. Se o usuario escolheu uma musica propria, o som do video fica mudo
+ * Nao da pra pular. Se o usuario escolheu uma musica propria, o som do video fica mudo
  * e a musica toca no lugar (se ela falhar, volta o som original).
  */
 class IntroView(private val act: Activity, private val aoFim: () -> Unit) : FrameLayout(act) {
-    private companion object {
-        /** prata quente, a mesma da legenda da intro */
-        const val PRATA = 0xFFCFC9BF.toInt()
-    }
     private val h = Handler(Looper.getMainLooper())
     private val tv = TextureView(act)
-    private val dica: View
-    private val dicaTexto: TextView
-    private var dicaPulso: ValueAnimator? = null
     private var superficie: Surface? = null
     private var video: MediaPlayer? = null
     private var musica: MediaPlayer? = null
@@ -73,7 +60,6 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
     private var comecou = false
     private var faltam = 0
     private var musicaContada = false
-    private var dicaSumiu = false
     private var volMusica = 1f
     private var foco: AudioFocusRequest? = null
     private val som = Prefs.introSom
@@ -81,43 +67,14 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
 
     init {
         setBackgroundColor(Color.BLACK)
-        isClickable = true                                          // engole os toques: nada por baixo reage
+        isClickable = true                                          // engole os toques: nada por baixo reage (e nao pula)
         addView(tv, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        // "toque para pular" no mesmo estilo da intro: letra Italiana, prata, com tracinhos dos lados
-        dicaTexto = TextView(act)
-        dicaTexto.text = "TOQUE PARA PULAR"
-        dicaTexto.setTextColor(PRATA)
-        dicaTexto.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
-        dicaTexto.letterSpacing = 0.42f
-        dicaTexto.typeface = try { Typeface.createFromAsset(act.assets, "fonts/Italiana-Regular.ttf") } catch (_: Throwable) { Typeface.SERIF }
-        dicaTexto.setShadowLayer(Ui.dp(act, 6).toFloat(), 0f, 0f, 0xCC000000.toInt())
-        val linha = LinearLayout(act)
-        linha.orientation = LinearLayout.HORIZONTAL
-        linha.gravity = Gravity.CENTER_VERTICAL
-        linha.addView(tracinho(true), LinearLayout.LayoutParams(Ui.dp(act, 26), Ui.dp(act, 1)).also { it.rightMargin = Ui.dp(act, 12) })
-        linha.addView(dicaTexto)
-        linha.addView(tracinho(false), LinearLayout.LayoutParams(Ui.dp(act, 26), Ui.dp(act, 1)).also { it.leftMargin = Ui.dp(act, 4) })
-        dica = linha
-        dica.alpha = 0f
-        val lp = LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
-        lp.bottomMargin = Ui.dp(act, 44)
-        addView(dica, lp)
-        setOnClickListener { pula() }
         tv.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, hh: Int) { prepara(Surface(st)) }
             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, hh: Int) { ajusta() }
             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean { acabaJa(); return true }
             override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
         }
-    }
-
-    /** tracinho que some pra fora (o da esquerda clareia da ponta pro texto, o da direita ao contrario) */
-    private fun tracinho(esquerda: Boolean): View {
-        val v = View(act)
-        val forte = (PRATA and 0x00FFFFFF) or 0xCC000000.toInt()
-        val fraco = PRATA and 0x00FFFFFF
-        v.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, if (esquerda) intArrayOf(fraco, forte) else intArrayOf(forte, fraco))
-        return v
     }
 
     private fun atributos(): AudioAttributes = AudioAttributes.Builder()
@@ -213,18 +170,10 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
         }
         try { musica?.start() } catch (_: Throwable) { usaOriginal() }
         Intro.marcaVista(act)
-        dica.animate().alpha(1f).setStartDelay(1500).setDuration(600).start()
-        val pz = ValueAnimator.ofFloat(0.45f, 0.9f)
-        pz.duration = 1100
-        pz.repeatMode = ValueAnimator.REVERSE
-        pz.repeatCount = ValueAnimator.INFINITE
-        pz.addUpdateListener { dicaTexto.alpha = it.animatedValue as Float }
-        pz.start()
-        dicaPulso = pz
         h.postDelayed(ticker, 50)
     }
 
-    /** a cada 50 ms: baixa a musica do usuario nos ultimos 0,9 s e esconde a dica perto do fim */
+    /** a cada 50 ms: baixa a musica do usuario nos ultimos 0,9 s */
     private val ticker = object : Runnable {
         override fun run() {
             if (fim) return
@@ -235,11 +184,6 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
                     if (resta in 0..900) {
                         volMusica = resta / 900f
                         musica?.setVolume(volMusica, volMusica)
-                    }
-                    if (resta < 1500 && !dicaSumiu) {
-                        dicaSumiu = true
-                        dica.animate().cancel()
-                        dica.animate().alpha(0f).setStartDelay(0).setDuration(200).start()
                     }
                 } catch (_: Throwable) {}
             }
@@ -266,14 +210,10 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
     }
 
     // ------------------------------------------------------------------ saida
-    fun pula() { sai(260) }
-
     /** some com suavidade (e baixa o som junto) e entrega o app */
     private fun sai(ms: Long) {
         if (fim || saindo) return
         saindo = true
-        dica.animate().cancel()
-        dica.alpha = 0f
         val a = ValueAnimator.ofFloat(1f, 0f)
         a.duration = ms
         a.addUpdateListener { x ->
@@ -295,8 +235,6 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
         if (fim) return
         fim = true
         h.removeCallbacks(ticker)
-        dicaPulso?.cancel()
-        dicaPulso = null
         for (m in listOf(video, musica)) {
             try { m?.release() } catch (_: Throwable) {}
         }

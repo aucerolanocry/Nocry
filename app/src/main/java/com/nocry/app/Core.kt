@@ -453,14 +453,13 @@ object Notif {
     fun atualizacaoDisponivel(c: Context, tag: String, url: String) {
         try {
             val nm = c.getSystemService(NotificationManager::class.java) ?: return
-            val pi = PendingIntent.getActivity(
-                c, 0, Intent(Intent.ACTION_VIEW, Uri.parse(url)),
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-            )
+            // abre o app (la a tela de atualizacao obrigatoria ja aparece e baixa/instala); 'url' fica de reserva
+            val abre = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            val pi = PendingIntent.getActivity(c, 3, abre, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             val n = Notification.Builder(c, CH_ALERT)
                 .setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle("NOCRY $tag disponível")
-                .setContentText("Toque para baixar a versão nova.")
+                .setContentText("Atualização obrigatória. Toque para instalar agora.")
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .build()

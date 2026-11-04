@@ -82,6 +82,12 @@
             android:name=".PairReceiver"
             android:exported="false" />
 
+        <!-- confere versao nova em segundo plano (a cada ~15 min) pra avisar da atualizacao obrigatoria -->
+        <service
+            android:name=".UpdateJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <!-- da acesso ao APK baixado (pasta Downloads do app) pro instalador do sistema -->
         <provider
             android:name="androidx.core.content.FileProvider"

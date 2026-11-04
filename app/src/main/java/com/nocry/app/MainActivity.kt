@@ -121,9 +121,11 @@ class MainActivity : Activity() {
         override fun run() {
             // confere a atualizacao obrigatoria tambem aqui (consulta so o cache local, instantaneo) -
             // sem isso, quem fica com o app aberto sem sair nunca via o aviso ate minimizar e voltar.
-            val updPendente = if (!gate) Update.pendente(applicationContext) else null
+            // vale tambem com a tela da key aberta (a atualizacao tem prioridade sobre ela)
+            val updPendente = if (gateAtualizacaoTag == null) Update.pendente(applicationContext) else null
             if (updPendente != null) mostraUpdateGate(updPendente)
-            else if (!gate && !License.valid()) mostraGate() else if (!gate) atual()?.tick()
+            // durante a intro nao abre a key por baixo (ela so aparece quando a intro termina)
+            else if (intro == null && !gate && !License.valid()) mostraGate() else if (!gate) atual()?.tick()
             h.postDelayed(this, 1200)
         }
     }
@@ -132,14 +134,14 @@ class MainActivity : Activity() {
     // cache de tempos em tempos pra quem fica com o app aberto sem nunca minimizar tambem perceber)
     private val cicloUpdate = object : Runnable {
         override fun run() {
-            if (!gate) {
+            if (gateAtualizacaoTag == null) {
                 Bg.io {
                     Update.atualizarCache(applicationContext)
                     val i = Update.pendente(applicationContext)
-                    if (i != null) Bg.ui { if (!gate) mostraUpdateGate(i) }
+                    if (i != null) Bg.ui { mostraUpdateGate(i) }
                 }
             }
-            h.postDelayed(this, 30_000)
+            h.postDelayed(this, 20_000)
         }
     }
 
@@ -173,28 +175,37 @@ class MainActivity : Activity() {
 
         License.saiu = { mostraGate() }
         montaChrome()
+        UpdateJob.agenda(applicationContext)
         val updJaConhecida = Update.pendente(applicationContext)
+        // intro de abertura: so quando o app abre do zero (nunca ao recriar a tela) e nunca no lugar do
+        // bloqueio de atualizacao. A key (ou o inicio) so aparece DEPOIS que a intro termina.
+        val comIntro = savedInstanceState == null && updJaConhecida == null && Intro.deveTocar(this)
         if (updJaConhecida != null) mostraUpdateGate(updJaConhecida)
-        else if (License.valid()) abre(HomeScreen(this)) else mostraGate()
+        else if (comIntro) tocaIntro { abreInicial() }
+        else abreInicial()
 
-        // intro de abertura (so quando o app abre do zero, nunca ao recriar a tela, e nunca por cima do bloqueio de atualizacao)
-        if (savedInstanceState == null && updJaConhecida == null && Intro.deveTocar(this)) tocaIntro()
-
-        // confere no github se ha versao mais nova (cache local e, no maximo a cada 20 min, uma busca de verdade)
+        // confere no github agora mesmo se saiu versao nova
         Bg.io {
-            Update.atualizarCache(applicationContext)
+            Update.atualizarCache(applicationContext, forcar = true)
             val i = Update.pendente(applicationContext)
             if (i != null) Bg.ui { mostraUpdateGate(i) }
         }
     }
 
+    /** primeira tela depois da abertura: o inicio, ou a tela da key se nao tiver key valida */
+    private fun abreInicial() {
+        if (gate || pilha.isNotEmpty()) return
+        if (License.valid()) abre(HomeScreen(this)) else mostraGate()
+    }
+
     // ------------------------------------------------------------------ intro
-    /** toca a intro por cima do app, em tela cheia (toque pula). Tambem usada pelo botao "assistir agora". */
-    fun tocaIntro() {
+    /** toca a intro por cima do app, em tela cheia (nao da pra pular). Tambem usada pelo botao "assistir agora". */
+    fun tocaIntro(depois: (() -> Unit)? = null) {
         if (intro != null) return
         val v = IntroView(this) {
             intro = null
             mostraBarras()
+            depois?.invoke()
         }
         intro = v
         escondeBarras()
@@ -394,7 +405,7 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
         when {
-            intro != null -> intro?.pula()
+            intro != null -> {}              // a intro nao da pra pular
             gate -> super.onBackPressed()
             pilha.size > 1 -> fecha()
             (pilha.firstOrNull()?.aba ?: 0) != 0 -> irAba(0)
@@ -413,16 +424,17 @@ class MainActivity : Activity() {
         bg.retoma()
         val updPendente = Update.pendente(applicationContext)
         if (updPendente != null) mostraUpdateGate(updPendente)
-        else if (!gate && !License.valid()) mostraGate()
+        else if (intro == null && !gate && !License.valid()) mostraGate()
         Engine.onChange = { if (!gate) atual()?.tick() }
         if (!gate) atual()?.aoMostrar()
         h.removeCallbacks(ciclo)
         h.postDelayed(ciclo, 1200)
         h.removeCallbacks(cicloUpdate)
         h.postDelayed(cicloUpdate, 30_000)
-        // confere no github de novo agora mesmo (independente do gate, pra pegar uma atualizacao obrigatoria mesmo parado na tela da key)
+        // voltou pro app (estava em segundo plano): confere no github agora mesmo, sem esperar o intervalo,
+        // pra atualizacao obrigatoria aparecer na hora - vale ate parado na tela da key
         Bg.io {
-            Update.atualizarCache(applicationContext)
+            Update.atualizarCache(applicationContext, forcar = true)
             val i = Update.pendente(applicationContext)
             if (i != null) Bg.ui { mostraUpdateGate(i) }
         }

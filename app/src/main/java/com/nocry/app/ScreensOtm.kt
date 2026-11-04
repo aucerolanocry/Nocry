@@ -469,8 +469,45 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
 object Update {
     class Info(val tag: String, val pagina: String, val apk: String?)
 
-    /** a cada quanto tempo, no maximo, confere de novo no github (nao precisa ser instantaneo) */
-    private const val INTERVALO_CHECAGEM = 20 * 60 * 1000L
+    /**
+     * de quanto em quanto tempo confere de novo. A checagem rapida (buscarRapido) nao usa a API do
+     * GitHub, entao nao tem o limite de 60 consultas/hora - da pra olhar a cada poucos segundos e o
+     * aviso obrigatorio aparecer quase na hora em que a versao nova sai.
+     */
+    private const val INTERVALO_CHECAGEM = 40 * 1000L
+    /** mesmo forcando (ao voltar pro app), nao repete se acabou de olhar */
+    private const val INTERVALO_MINIMO = 6 * 1000L
+
+    /**
+     * versao mais nova sem gastar a API do GitHub: o link /releases/latest so redireciona pra
+     * /releases/tag/vX.Y.Z, entao basta ler o cabecalho Location (segue no maximo 3 redirecionamentos,
+     * por causa de repositorio renomeado). O APK de cada release sempre se chama Nocry.apk.
+     */
+    fun buscarRapido(): Info? {
+        return try {
+            var url = "https://github.com/" + Const.REPO + "/releases/latest"
+            repeat(3) {
+                val cx = URL(url).openConnection() as HttpURLConnection
+                cx.instanceFollowRedirects = false
+                cx.requestMethod = "HEAD"
+                cx.connectTimeout = 7000
+                cx.readTimeout = 7000
+                cx.setRequestProperty("User-Agent", "NOCRY-app")
+                val code = cx.responseCode
+                val loc = cx.getHeaderField("Location")
+                cx.disconnect()
+                if (code !in 300..399 || loc.isNullOrEmpty()) return null
+                val abs = URL(URL(url), loc).toString()
+                val tag = abs.substringAfter("/releases/tag/", "").substringBefore('?').substringBefore('#').trim('/')
+                if (tag.isNotEmpty()) {
+                    val base = abs.substringBefore("/releases/tag/")
+                    return Info(java.net.URLDecoder.decode(tag, "UTF-8"), "$base/releases/tag/$tag", "$base/releases/download/$tag/Nocry.apk")
+                }
+                url = abs
+            }
+            null
+        } catch (_: Throwable) { null }
+    }
 
     fun versaoInstalada(c: Context): String =
         try { c.packageManager.getPackageInfo(Const.PKG, 0).versionName ?: "?" } catch (_: Exception) { "?" }
@@ -520,11 +557,13 @@ object Update {
     }
 
     /** busca no github (no maximo a cada 20 min), atualiza o cache local e avisa (notificacao) na primeira vez que ve cada versao nova */
-    fun atualizarCache(c: Context) {
+    /** forcar = olhar agora mesmo (ao abrir/voltar pro app ou na tarefa de fundo), sem esperar o intervalo */
+    fun atualizarCache(c: Context, forcar: Boolean = false) {
         val agora = System.currentTimeMillis()
-        if (agora - Prefs.updateUltimaChecagem < INTERVALO_CHECAGEM) return
+        val passou = agora - Prefs.updateUltimaChecagem
+        if (passou in 0 until (if (forcar) INTERVALO_MINIMO else INTERVALO_CHECAGEM)) return
         Prefs.updateUltimaChecagem = agora
-        val i = buscar() ?: return
+        val i = buscarRapido() ?: buscar() ?: return
         Prefs.updateTagConhecida = i.tag
         Prefs.updatePaginaConhecida = i.pagina
         Prefs.updateApkConhecida = i.apk ?: ""

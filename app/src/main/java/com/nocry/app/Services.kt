@@ -245,6 +245,8 @@ class NocryService : Service() {
                         val r = Engine.resumo()
                         if (r != ultimo) { ultimo = r; atualizaNotificacao(r) }
                     }
+                    // versao nova saiu com o app em segundo plano: avisa logo (a cada 2 min)
+                    if (n % 120 == 30) Bg.io { Update.atualizarCache(applicationContext) }
                 } catch (t: Throwable) {
                     NLog.add("servico", "ciclo: $t")
                 }
