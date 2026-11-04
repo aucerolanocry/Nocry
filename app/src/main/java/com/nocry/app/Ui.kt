@@ -128,13 +128,6 @@ object Ui {
         l.background = glass(c, forte = forte, ligado = ligado)
         val p = dp(c, 18)
         l.setPadding(p, p, p, p)
-        // sombra suave por baixo do cartao - sem isso todo cartao fica "colado" no fundo, sem
-        // profundidade nenhuma; esse detalhe sozinho muda bastante a sensacao de acabamento/qualidade.
-        if (Build.VERSION.SDK_INT >= 28) {
-            l.elevation = dp(c, if (forte) 10 else 6).toFloat()
-            l.outlineAmbientShadowColor = Color.BLACK
-            l.outlineSpotShadowColor = Color.BLACK
-        }
         return l
     }
 
@@ -251,11 +244,6 @@ object Ui {
         r.background = ripple(c, glass(c), Painel(c, mascara = true))
         val p = dp(c, 14)
         r.setPadding(p, dp(c, 12), p, dp(c, 12))
-        if (Build.VERSION.SDK_INT >= 28) {
-            r.elevation = dp(c, 4).toFloat()
-            r.outlineAmbientShadowColor = Color.BLACK
-            r.outlineSpotShadowColor = Color.BLACK
-        }
         if (ico != 0) {
             val ib = caixaIcone(c, ico)
             val ip = LinearLayout.LayoutParams(dp(c, 40), dp(c, 40))
@@ -425,11 +413,6 @@ object Ui {
         val p = dp(c, 14)
         col.setPadding(p, p, p, dp(c, 12))
         col.minimumHeight = dp(c, 140)
-        if (Build.VERSION.SDK_INT >= 28) {
-            col.elevation = dp(c, if (ligado == true) 8 else 5).toFloat()
-            col.outlineAmbientShadowColor = Color.BLACK
-            col.outlineSpotShadowColor = Color.BLACK
-        }
         col.addView(caixaIcone(c, ico, ligado == true))
         col.addView(text(c, titulo, 14f, TEXT, true), lp(top = 11, c = c))
         if (desc.isNotEmpty()) {

@@ -110,11 +110,6 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val cab = Ui.hbox(c)
         val logo = FrameLayout(c)
         logo.background = Botao(c, "icoOn", 14)
-        if (Build.VERSION.SDK_INT >= 28) {
-            logo.elevation = Ui.dp(c, 6).toFloat()
-            logo.outlineAmbientShadowColor = Theme.accent
-            logo.outlineSpotShadowColor = Theme.accent
-        }
         val n = Ui.text(c, "N", 24f, Theme.sobreGrad(), true, mono = true)
         n.gravity = Gravity.CENTER
         logo.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
