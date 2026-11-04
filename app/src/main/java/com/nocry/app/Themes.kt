@@ -26,10 +26,10 @@ object Packs {
         Pack("gloock", "Gloock", "Gloock-Regular.ttf", "Gloock-Regular.ttf", "WorkSans-Regular.ttf", "WorkSans-Bold.ttf", 1.0f, 0.06f),
         Pack("poppins", "Poppins", "Poppins-Regular.ttf", "Poppins-Bold.ttf", "Poppins-Regular.ttf", "Poppins-Bold.ttf", 0.98f, 0.04f),
         Pack("instrument", "Instrument", "InstrumentSans-Regular.ttf", "InstrumentSans-Bold.ttf", "InstrumentSans-Regular.ttf", "InstrumentSans-Bold.ttf", 1.02f, 0.06f),
-        // escala baixada de 1.08 pra 0.96: o corpo desse pacote (Red Hat Mono) e monoespacado,
-        // ja fica largo/grande por natureza - o +8% pensado pra fontes estreitas so piorava, deixando
-        // o texto corrido (instrucoes, explicacoes) grande e pesado demais no tema padrao do app.
-        Pack("pixelify", "Pixelify", "PixelifySans-Medium.ttf", "PixelifySans-Medium.ttf", "RedHatMono-Regular.ttf", "RedHatMono-Bold.ttf", 0.96f, 0.06f),
+        // corpo trocado de Red Hat Mono pra Outfit: com "tudo maiusculo" ligado (padrao do app),
+        // um paragrafo inteiro de explicacao em mono+caixa alta fica pesado/dificil de ler; a
+        // Outfit e uma sans mais limpa e compacta em caixa alta, mantendo a Pixelify só nos titulos.
+        Pack("pixelify", "Pixelify", "PixelifySans-Medium.ttf", "PixelifySans-Medium.ttf", "Outfit-Regular.ttf", "Outfit-Bold.ttf", 1.0f, 0.06f),
         Pack("grotesk", "Space Grotesk", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", 1.0f, 0.06f, variavel = true),
         Pack("mono", "JetBrains Mono", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", 0.96f, 0.04f, variavel = true),
         Pack("sistema", "Sistema", "", "", "", "", 1.0f, 0.04f, sistema = true)

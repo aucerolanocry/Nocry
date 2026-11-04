@@ -79,7 +79,7 @@ abstract class Screen(val act: MainActivity) {
     /** titulo grande em degrade + subtitulo, no mesmo padrao usado em todas as telas */
     protected fun cabecalho(titulo: String, subtitulo: String) {
         add(Ui.gradTexto(act, titulo, 28f), 0)
-        add(Ui.text(act, subtitulo, 13f, Ui.MUTED), 4)
+        add(Ui.text(act, subtitulo, 11.5f, Ui.MUTED), 4)
     }
 }
 

@@ -279,7 +279,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         limpa()
         val c = act
         add(Ui.gradTexto(c, "CONEXÃO", 28f), 0)
-        add(Ui.text(c, "SIGA OS PASSOS ABAIXO UMA VEZ, NO WI-FI, PRA LIGAR O NOCRY NO CELULAR.", 13f, Ui.MUTED), 4)
+        add(Ui.text(c, "Siga os passos abaixo uma vez, no wi-fi, pra ligar o NOCRY no celular.", 11.5f, Ui.MUTED), 4)
 
         // resumo rapido do que ja esta pronto, antes de entrar nos passos um por um
         val conectadoRes = Adb.connected
@@ -304,7 +304,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         // 1
         val c1 = Ui.card(c)
         c1.addView(tituloPasso(c, R.drawable.ic_wifi, "1 · depuração sem fio/wifi"))
-        c1.addView(Ui.text(c, "Ligue em Opções do desenvolvedor → Depuração sem fio. (Se não aparece Opções do desenvolvedor: Sobre o telefone → toque 7 vezes em Número da versão.)", 12f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        c1.addView(Ui.text(c, "Ligue em Opções do desenvolvedor → Depuração sem fio. (Se não aparece Opções do desenvolvedor: Sobre o telefone → toque 7 vezes em Número da versão.)", 11f, Ui.MUTED), Ui.lp(top = 6, c = c))
         c1.addView(Ui.button(c, "abrir opções do desenvolvedor", Ui.Kind.GHOST) {
             abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
         }, Ui.lp(top = 10, c = c))
@@ -317,7 +317,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         if (conectado) {
             c2.addView(Ui.status(c, "PAREAMENTO", "FEITO", true))
         } else {
-            c2.addView(Ui.text(c, "Toque no botão, depois vá em Depuração sem fio → Parear com código de pareamento. Quando a notificação do NOCRY aparecer, toque em DIGITAR CÓDIGO e escreva os 6 números (a tela de pareamento do Android fica aberta).", 12f, Ui.MUTED), Ui.lp(top = 6, c = c))
+            c2.addView(Ui.text(c, "Toque no botão, depois vá em Depuração sem fio → Parear com código de pareamento. Quando a notificação do NOCRY aparecer, toque em DIGITAR CÓDIGO e escreva os 6 números (a tela de pareamento do Android fica aberta).", 11f, Ui.MUTED), Ui.lp(top = 6, c = c))
             c2.addView(Ui.button(c, "parear pela notificação") {
                 if (!temNotif()) { pedeNotif(); Ui.toast(act, "Permita as notificações e toque de novo") }
                 else {
@@ -326,7 +326,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
                     abreConfig(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
                 }
             }, Ui.lp(top = 10, c = c))
-            c2.addView(Ui.text(c, "Ou digite aqui (porta e código da tela de pareamento):", 12f, Ui.MUTED), Ui.lp(top = 12, c = c))
+            c2.addView(Ui.text(c, "Ou digite aqui (porta e código da tela de pareamento):", 11f, Ui.MUTED), Ui.lp(top = 12, c = c))
             val fp = Ui.field(c, "porta (ex.: 37155)", true)
             fp.setText(if (portaTxt.isNotEmpty()) portaTxt else if (Pairing.porta > 0) Pairing.porta.toString() else "")
             campoPorta = fp
@@ -367,7 +367,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
                     if (Adb.connect(act.applicationContext, 9000)) "CONECTADO" else "Não conectou: " + Adb.lastError
                 }
             }, Ui.lp(top = 8, c = c))
-            c3.addView(Ui.text(c, "Se a depuração sem fio desligar (trocou de Wi-Fi ou reiniciou o celular), ligue de novo e toque aqui. Não precisa parear de novo.", 12f, Ui.MUTED), Ui.lp(top = 8, c = c))
+            c3.addView(Ui.text(c, "Se a depuração sem fio desligar (trocou de Wi-Fi ou reiniciou o celular), ligue de novo e toque aqui. Não precisa parear de novo.", 11f, Ui.MUTED), Ui.lp(top = 8, c = c))
             add(c3, 12)
         }
 
@@ -379,7 +379,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
             val c4 = Ui.card(c)
             c4.addView(tituloPasso(c, R.drawable.ic_lock, "4 · liberar o app"))
             c4.addView(Ui.status(c, "PERMISSÃO DE AJUSTES", if (perm) "LIBERADA" else "FALTA", perm), Ui.lp(top = 4, c = c))
-            c4.addView(Ui.text(c, "O app se dá a permissão de mudar o toque e se tira da economia de bateria. Depois disso o toque via volume e via carregador funciona até sem ADB.", 12f, Ui.MUTED))
+            c4.addView(Ui.text(c, "O app se dá a permissão de mudar o toque e se tira da economia de bateria. Depois disso o toque via volume e via carregador funciona até sem ADB.", 11f, Ui.MUTED))
             c4.addView(Ui.button(c, if (perm) "liberar de novo" else "liberar permissões", Ui.Kind.GHOST) {
                 if (!Adb.connected) Ui.toast(act, "Conecte o ADB primeiro (passos 2 e 3)")
                 else if (!ocupado) roda("Liberando...") { if (Sys.darPermissoes()) "LIBERADO" else "O celular não aceitou" }
@@ -395,7 +395,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
             val c5 = Ui.card(c)
             c5.addView(tituloPasso(c, R.drawable.ic_volume, "5 · escuta do volume"))
             c5.addView(Ui.status(c, "ACESSIBILIDADE", if (acc) "LIGADA" else "DESLIGADA", acc), Ui.lp(top = 4, c = c))
-            c5.addView(Ui.text(c, "É assim que o app percebe VOL+ e VOL−. O NOCRY só olha o aperto das teclas de volume e não lê sua tela.", 12f, Ui.MUTED))
+            c5.addView(Ui.text(c, "É assim que o app percebe VOL+ e VOL−. O NOCRY só olha o aperto das teclas de volume e não lê sua tela.", 11f, Ui.MUTED))
             c5.addView(Ui.button(c, if (acc) "desligar" else "ligar", Ui.Kind.GHOST) {
                 if (acc) { Sys.desligarAcessibilidade(); redesenha() }
                 else if (Sys.ligarAcessibilidade()) { Ui.toast(act, "LIGADA"); redesenha() }
@@ -404,7 +404,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
                     abreConfig(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                 }
             }, Ui.lp(top = 8, c = c))
-            c5.addView(Ui.text(c, "Se o Android bloquear (\"configuração restrita\"): Informações do app → ⋮ → Permitir configurações restritas. Depois do passo 4 o app liga sozinho.", 12f, Ui.MUTED), Ui.lp(top = 8, c = c))
+            c5.addView(Ui.text(c, "Se o Android bloquear (\"configuração restrita\"): Informações do app → ⋮ → Permitir configurações restritas. Depois do passo 4 o app liga sozinho.", 11f, Ui.MUTED), Ui.lp(top = 8, c = c))
             c5.addView(Ui.button(c, "informações do app", Ui.Kind.GHOST) {
                 try {
                     act.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + Const.PKG)))
@@ -421,7 +421,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         c6.addView(Ui.button(c, "tirar da economia de bateria", Ui.Kind.GHOST) {
             abreConfig(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
         }, Ui.lp(top = 8, c = c))
-        c6.addView(Ui.text(c, "Escolha \"Todos os apps\", ache o NOCRY e marque \"Sem restrição\". Sem isso o Android pode fechar os monitores.", 12f, Ui.MUTED), Ui.lp(top = 8, c = c))
+        c6.addView(Ui.text(c, "Escolha \"Todos os apps\", ache o NOCRY e marque \"Sem restrição\". Sem isso o Android pode fechar os monitores.", 11f, Ui.MUTED), Ui.lp(top = 8, c = c))
         add(c6, 12)
     }
 
@@ -452,7 +452,7 @@ class CompScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Modo competitivo", "TOQUE RÁPIDO (LONG = 1 · MULTI = 0), SEM MEXER NA TELA.")
+        cabecalho("Modo competitivo", "Toque rápido (long = 1 · multi = 0), sem mexer na tela.")
         val on = Comp.ligado()
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_gamepad, "status"))
@@ -462,7 +462,7 @@ class CompScreen(a: MainActivity) : Screen(a) {
         if (!Toque.podeMexer()) add(Ui.text(c, "Sem permissão e sem ADB. Faça a CONEXÃO primeiro.", 13f, Ui.WARN, true), 10)
         add(Ui.button(c, if (ocupado) "aguarde..." else "ativar modo competitivo") { if (!ocupado) roda({ Comp.ativar() }, "MODO COMPETITIVO ATIVO", "O aparelho não aceitou a mudança") }, 14)
         add(Ui.button(c, "desativar modo competitivo", Ui.Kind.DANGER) { if (!ocupado) roda({ Comp.desativar(true) }, "DESATIVADO — tudo voltou ao normal", "O aparelho não aceitou a mudança") }, 10)
-        add(Ui.text(c, "DESATIVAR também devolve a tela, se o MODO CARREGADOR tiver deixado a density alterada.", 12f, Ui.MUTED), 10)
+        add(Ui.text(c, "DESATIVAR também devolve a tela, se o MODO CARREGADOR tiver deixado a density alterada.", 11f, Ui.MUTED), 10)
     }
 }
 
@@ -478,7 +478,7 @@ class VolScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Toque via volume", "SÓ MEXE EM LONG PRESS E MULTI PRESS, SEM DENSITY E SEM ABRIR O APP.")
+        cabecalho("Toque via volume", "Só mexe em long press e multi press, sem density e sem abrir o app.")
         val on = Prefs.volAtivo
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_volume, "monitor"))
@@ -488,7 +488,7 @@ class VolScreen(a: MainActivity) : Screen(a) {
         card.addView(Ui.status(c, "ESCUTA", escuta, KeyService.ativo || Adb.connected), Ui.lp(top = 8, c = c))
         card.addView(Ui.status(c, "TOQUE AGORA", if (Prefs.markVol) "LIGADO POR AQUI" else "NORMAL", null))
         add(card, 14)
-        add(Ui.text(c, "Aperte o mesmo botão de volume rápido (até 0,9 s entre os apertos).", 12f, Ui.MUTED), 10)
+        add(Ui.text(c, "Aperte o mesmo botão de volume rápido (até 0,9 s entre os apertos).", 11f, Ui.MUTED), 10)
 
         if (on) add(Ui.button(c, if (ocupado) "aguarde..." else "parar monitor", Ui.Kind.DANGER) {
             if (!ocupado) {
@@ -526,7 +526,7 @@ class CargaScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Toque via carregador", "SÓ REAGE QUANDO O CARREGADOR MUDA.")
+        cabecalho("Toque via carregador", "Só reage quando o carregador muda.")
         val on = Prefs.cargaAtivo
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_plug, "monitor"))
@@ -539,7 +539,7 @@ class CargaScreen(a: MainActivity) : Screen(a) {
         if (on) card.addView(Ui.status(c, "REPETIÇÕES RESTANTES", Prefs.cargaRep.toString(), null))
         card.addView(Ui.status(c, "TOQUE AGORA", if (Prefs.markCarga) "LIGADO POR AQUI" else "NORMAL", null))
         add(card, 14)
-        add(Ui.text(c, "Cada repetição = liga e volta ao normal; ao acabar, o monitor para sozinho.", 12f, Ui.MUTED), 10)
+        add(Ui.text(c, "Cada repetição = liga e volta ao normal; ao acabar, o monitor para sozinho.", 11f, Ui.MUTED), 10)
 
         if (on) {
             add(Ui.button(c, if (ocupado) "aguarde..." else "parar monitor", Ui.Kind.DANGER) {
@@ -585,7 +585,7 @@ class McScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Modo carregador", "PRECISA DO ADB CONECTADO.")
+        cabecalho("Modo carregador", "Precisa do ADB conectado.")
         val on = Prefs.mcAtivo
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_plug, "monitor"))
@@ -597,7 +597,7 @@ class McScreen(a: MainActivity) : Screen(a) {
         if (on) card.addView(Ui.status(c, "REPETIÇÕES RESTANTES", Prefs.mcCycles.toString(), null))
         card.addView(Ui.status(c, "TELA", if (Prefs.densOrig != null) "DENSITY ALTERADA" else "NORMAL", if (Prefs.densOrig != null) false else true))
         add(card, 14)
-        add(Ui.text(c, "Pra parar sem abrir o app: VOL+ VOL− VOL+ VOL− rápido (só vale com a density alterada).", 12f, Ui.MUTED), 10)
+        add(Ui.text(c, "Pra parar sem abrir o app: VOL+ VOL− VOL+ VOL− rápido (só vale com a density alterada).", 11f, Ui.MUTED), 10)
 
         if (Prefs.densOrig != null) {
             add(Ui.button(c, if (ocupado) "aguarde..." else "restaurar a tela agora", Ui.Kind.PRIMARY) {
@@ -652,7 +652,7 @@ class AjustesScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Ajustes do toque", "VALORES EM MILISSEGUNDOS (1 A 600), VALEM NA HORA PROS MONITORES DE VOLUME E CARREGADOR.")
+        cabecalho("Ajustes do toque", "Valores em milissegundos (1 a 600), valem na hora pros monitores de volume e carregador.")
         add(Ui.labelIcone(c, R.drawable.ic_sliders, "toque LIGADO"), 14)
         add(Ui.row(c, "Long press: ${Prefs.longOn}", "toque para mudar (1 a 600)") {
             Ui.dialogNumero(act, "LONG PRESS LIGADO", "1 a 600", 1, 600, Prefs.longOn) { v -> Prefs.longOn = v; redesenha() }

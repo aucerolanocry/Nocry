@@ -77,7 +77,7 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         card.addView(Ui.status(c, "ADB", if (Adb.connected) "CONECTADO" else "DESCONECTADO", Adb.connected), Ui.lp(top = 8, c = c))
         card.addView(Ui.status(c, "AUTOMÁTICO AO ABRIR O FF", if (Prefs.otmAuto) "LIGADO" else "DESLIGADO", null))
         add(card, 14)
-        add(Ui.text(c, "Os protegidos ficam de fora. DESATIVAR devolve tudo como estava.", 12f, Ui.MUTED), 10)
+        add(Ui.text(c, "Os protegidos ficam de fora. DESATIVAR devolve tudo como estava.", 11f, Ui.MUTED), 10)
 
         add(Ui.button(c, "ativar otimização", Ui.Kind.PRIMARY, R.drawable.ic_check) { act.abre(RunScreen(act, "OTIMIZANDO") { log -> Otm.ativar(log) }) }, 14)
         add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "DESATIVANDO") { log -> Otm.desativar(log) }) }, 10)
@@ -157,7 +157,7 @@ class OtmVerScreen(a: MainActivity) : Screen(a) {
             return
         }
         add(Ui.text(c, p.perfil(), 13f, Ui.TEXT, true, mono = true), 0)
-        add(Ui.text(c, "RAM LIVRE: ${Otm.gb(p.memAvail)} GB · ${p.nivel()}", 12f, Ui.MUTED, mono = true), 4)
+        add(Ui.text(c, "RAM LIVRE: ${Otm.gb(p.memAvail)} GB · ${p.nivel()}", 11f, Ui.MUTED, mono = true), 4)
         if (p.setFail) add(Ui.text(c, "O celular não deixou ler as configurações: ATIVAR não fecha nada até resolver — reinicie o celular.", 12f, Ui.WARN, true), 10)
 
         val tot = p.c.sumOf { it.kb }
@@ -225,7 +225,7 @@ class OtmProtegerScreen(a: MainActivity) : Screen(a) {
             add(Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() }, 14)
             return
         }
-        add(Ui.text(c, "Toque num app para alternar. Sem escudo = FECHA na otimização · com escudo = nunca fecha. Só dá para mudar o que você protegeu e as mensagens.", 12f, Ui.MUTED), 0)
+        add(Ui.text(c, "Toque num app para alternar. Sem escudo = FECHA na otimização · com escudo = nunca fecha. Só dá para mudar o que você protegeu e as mensagens.", 11f, Ui.MUTED), 0)
         add(Ui.label(c, "vão fechar"), 14)
         if (p.c.isEmpty()) add(Ui.text(c, "nenhum app em segundo plano", 13f, Ui.MUTED), 6)
         for (a2 in p.c) {
@@ -288,7 +288,7 @@ class OtmMaisScreen(a: MainActivity) : Screen(a) {
             add(Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() }, 14)
             return
         }
-        add(Ui.text(c, "Toque num app do sistema para fechar junto na otimização. Toque de novo para tirar. Só aparece o que NÃO é essencial (Telefone, Configurações, Play Services, teclado... ficam de fora).", 12f, Ui.MUTED), 0)
+        add(Ui.text(c, "Toque num app do sistema para fechar junto na otimização. Toque de novo para tirar. Só aparece o que NÃO é essencial (Telefone, Configurações, Play Services, teclado... ficam de fora).", 11f, Ui.MUTED), 0)
         val mostrados = HashSet<String>()
         add(Ui.label(c, "escolhidos por você"), 14)
         var algum = false
@@ -325,7 +325,7 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
         limpa()
         val c = act
         add(Ui.gradTexto(c, if (tag == null) "LOGS" else tag.uppercase(), 28f), 0)
-        add(Ui.text(c, "REGISTRO DO QUE O NOCRY FEZ, DO MAIS ANTIGO PRO MAIS NOVO.", 13f, Ui.MUTED), 4)
+        add(Ui.text(c, "Registro do que o NOCRY fez, do mais antigo pro mais novo.", 11.5f, Ui.MUTED), 4)
 
         val card = Ui.card(c)
         card.addView(Ui.label(c, "ÚLTIMOS REGISTROS"))
@@ -477,7 +477,7 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         val c = act
         add(Ui.gradTexto(c, "NOCRY", 38f), 0)
         add(Ui.text(c, "versão " + versao(), 13f, Ui.MUTED, true, mono = true), 0)
-        add(Ui.text(c, "Toque via volume e carregador, com monitores de segundo plano direto no celular.", 12f, Ui.MUTED), 12)
+        add(Ui.text(c, "Toque via volume e carregador, com monitores de segundo plano direto no celular.", 11f, Ui.MUTED), 12)
 
         // ---------------- sua key ----------------
         val kc = Ui.card(c, forte = true)
