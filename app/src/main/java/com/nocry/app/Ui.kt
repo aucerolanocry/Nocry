@@ -446,40 +446,33 @@ object Ui {
 
     /** quadrado da tela inicial: icone, nome, descricao e um selo de estado no canto */
     fun tile(c: Context, ico: Int, titulo: String, desc: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
-        val frame = FrameLayout(c)
         val col = vbox(c)
         col.background = ripple(c, glass(c, ligado = ligado == true), Painel(c, mascara = true))
         val p = dp(c, 14)
         col.setPadding(p, p, p, dp(c, 12))
         col.minimumHeight = dp(c, 134)
-        val linhaTopo = hbox(c)
-        linhaTopo.addView(caixaIcone(c, ico, ligado == true))
-        linhaTopo.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
-        // espaco reservado pro selo (que fica por cima, no canto) nao ficar em cima do icone
-        linhaTopo.addView(View(c), LinearLayout.LayoutParams(dp(c, 54), 1))
-        col.addView(linhaTopo)
+        col.addView(caixaIcone(c, ico, ligado == true))
         col.addView(text(c, titulo, 13.5f, TEXT, true), lp(top = 11, c = c))
         if (desc.isNotEmpty()) {
             val d = text(c, desc, 10.5f, MUTED)
             d.maxLines = 2
             col.addView(d, lp(top = 3, c = c))
         }
-        frame.addView(col, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        clique(col, onClick)
-
+        // espaco flexivel empurra o selo pro rodape - assim ele nunca fica em cima do icone
+        // ou do titulo, por mais longo que o texto do estado seja ou por mais estreito que o tile fique.
+        col.addView(View(c), LinearLayout.LayoutParams(1, 0, 1f))
         val cor = if (ligado == true) RED else MUTED
-        val selo = text(c, estado, 8.5f, cor, true, mono = true)
+        val selo = text(c, estado, 9f, cor, true, mono = true)
         selo.letterSpacing = if (Prefs.maiusc) 0.08f else 0.02f
         selo.maxLines = 1
         selo.ellipsize = android.text.TextUtils.TruncateAt.END
         selo.background = shape(c, Theme.alpha(cor, if (ligado == true) 0x26 else 0x16), 7)
         selo.setPadding(dp(c, 7), dp(c, 3), dp(c, 7), dp(c, 3))
-        selo.maxWidth = dp(c, 86)
-        val sp = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END)
-        sp.topMargin = dp(c, 14)
-        sp.rightMargin = dp(c, 14)
-        frame.addView(selo, sp)
-        return frame
+        val sp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        sp.topMargin = dp(c, 9)
+        col.addView(selo, sp)
+        clique(col, onClick)
+        return col
     }
 
     /** maiusculo o texto quando o modo "tudo maiusculo" esta ligado; usado onde o texto nao passa pelo text() */
