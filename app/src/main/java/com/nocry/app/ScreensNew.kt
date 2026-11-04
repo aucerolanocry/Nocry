@@ -458,7 +458,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     // ---------------- intro de abertura ----------------
     private fun secaoIntro(c: Context): View {
         val s = secao(c, "intro de abertura", icone = R.drawable.ic_play)
-        s.addView(Ui.text(c, "Animação HACKER com “app desenvolvido por aucerola”. Toque na tela para pular.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        s.addView(Ui.text(c, "Abertura de cinema: a catedral na névoa, as torres e o NOCRY entrando no ritmo da música. Toque na tela para pular.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
 
         val modos = listOf("sempre", "novo", "off")
         s.addView(Ui.segmento(c, listOf("Sempre", "1ª vez", "Desligada"), modos.indexOf(Prefs.introModo).coerceAtLeast(0)) { i ->

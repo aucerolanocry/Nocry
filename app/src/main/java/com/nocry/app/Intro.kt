@@ -8,6 +8,8 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -17,8 +19,10 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.Surface
 import android.view.TextureView
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import java.io.File
 
@@ -44,14 +48,21 @@ object Intro {
 }
 
 /**
- * A intro: toca o video HACKER 4 (res/raw) por cima do app, em tela cheia.
+ * A intro: toca o video de abertura (res/raw/intro_nocry: a catedral na nevoa, as torres e o NOCRY
+ * entrando no ritmo da musica) por cima do app, em tela cheia.
  * Toque na tela pula. Se o usuario escolheu uma musica propria, o som do video fica mudo
  * e a musica toca no lugar (se ela falhar, volta o som original).
  */
 class IntroView(private val act: Activity, private val aoFim: () -> Unit) : FrameLayout(act) {
+    private companion object {
+        /** prata quente, a mesma da legenda da intro */
+        const val PRATA = 0xFFCFC9BF.toInt()
+    }
     private val h = Handler(Looper.getMainLooper())
     private val tv = TextureView(act)
-    private val dica: TextView
+    private val dica: View
+    private val dicaTexto: TextView
+    private var dicaPulso: ValueAnimator? = null
     private var superficie: Surface? = null
     private var video: MediaPlayer? = null
     private var musica: MediaPlayer? = null
@@ -72,11 +83,24 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
         setBackgroundColor(Color.BLACK)
         isClickable = true                                          // engole os toques: nada por baixo reage
         addView(tv, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        dica = Ui.text(act, "TOQUE PARA PULAR", 10f, 0xFF19FF8C.toInt(), false, mono = true)
+        // "toque para pular" no mesmo estilo da intro: letra Italiana, prata, com tracinhos dos lados
+        dicaTexto = TextView(act)
+        dicaTexto.text = "TOQUE PARA PULAR"
+        dicaTexto.setTextColor(PRATA)
+        dicaTexto.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
+        dicaTexto.letterSpacing = 0.42f
+        dicaTexto.typeface = try { Typeface.createFromAsset(act.assets, "fonts/Italiana-Regular.ttf") } catch (_: Throwable) { Typeface.SERIF }
+        dicaTexto.setShadowLayer(Ui.dp(act, 6).toFloat(), 0f, 0f, 0xCC000000.toInt())
+        val linha = LinearLayout(act)
+        linha.orientation = LinearLayout.HORIZONTAL
+        linha.gravity = Gravity.CENTER_VERTICAL
+        linha.addView(tracinho(true), LinearLayout.LayoutParams(Ui.dp(act, 26), Ui.dp(act, 1)).also { it.rightMargin = Ui.dp(act, 12) })
+        linha.addView(dicaTexto)
+        linha.addView(tracinho(false), LinearLayout.LayoutParams(Ui.dp(act, 26), Ui.dp(act, 1)).also { it.leftMargin = Ui.dp(act, 4) })
+        dica = linha
         dica.alpha = 0f
-        dica.letterSpacing = 0.18f
         val lp = LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL)
-        lp.bottomMargin = Ui.dp(act, 30)
+        lp.bottomMargin = Ui.dp(act, 44)
         addView(dica, lp)
         setOnClickListener { pula() }
         tv.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
@@ -85,6 +109,15 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean { acabaJa(); return true }
             override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
         }
+    }
+
+    /** tracinho que some pra fora (o da esquerda clareia da ponta pro texto, o da direita ao contrario) */
+    private fun tracinho(esquerda: Boolean): View {
+        val v = View(act)
+        val forte = (PRATA and 0x00FFFFFF) or 0xCC000000.toInt()
+        val fraco = PRATA and 0x00FFFFFF
+        v.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, if (esquerda) intArrayOf(fraco, forte) else intArrayOf(forte, fraco))
+        return v
     }
 
     private fun atributos(): AudioAttributes = AudioAttributes.Builder()
@@ -101,7 +134,7 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
             val m = MediaPlayer()
             video = m
             m.setAudioAttributes(atributos())
-            val afd = resources.openRawResourceFd(R.raw.intro_hacker4)
+            val afd = resources.openRawResourceFd(R.raw.intro_nocry)
             try { m.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length) } finally { afd.close() }
             m.setSurface(s)
             val v = if (som && arqMusica == null) 1f else 0f
@@ -180,7 +213,14 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
         }
         try { musica?.start() } catch (_: Throwable) { usaOriginal() }
         Intro.marcaVista(act)
-        dica.animate().alpha(0.5f).setStartDelay(900).setDuration(500).start()
+        dica.animate().alpha(1f).setStartDelay(1500).setDuration(600).start()
+        val pz = ValueAnimator.ofFloat(0.45f, 0.9f)
+        pz.duration = 1100
+        pz.repeatMode = ValueAnimator.REVERSE
+        pz.repeatCount = ValueAnimator.INFINITE
+        pz.addUpdateListener { dicaTexto.alpha = it.animatedValue as Float }
+        pz.start()
+        dicaPulso = pz
         h.postDelayed(ticker, 50)
     }
 
@@ -207,7 +247,10 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
         }
     }
 
-    /** o video cabe inteiro na tela (sem cortar o HUD das bordas); o resto fica preto */
+    /**
+     * o video preenche a tela inteira, sem tarja preta: em celular comprido corta um pouco das laterais
+     * (a intro foi desenhada com tudo que importa no meio, dentro dessa area)
+     */
     private fun ajusta() {
         val w = tv.width.toFloat()
         val hh = tv.height.toFloat()
@@ -216,7 +259,7 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
         val ac = w / hh
         var sx = 1f
         var sy = 1f
-        if (av > ac) sy = (w / av) / hh else sx = (hh * av) / w
+        if (av > ac) sx = (hh * av) / w else sy = (w / av) / hh
         val m = Matrix()
         m.setScale(sx, sy, w / 2f, hh / 2f)
         tv.setTransform(m)
@@ -252,6 +295,8 @@ class IntroView(private val act: Activity, private val aoFim: () -> Unit) : Fram
         if (fim) return
         fim = true
         h.removeCallbacks(ticker)
+        dicaPulso?.cancel()
+        dicaPulso = null
         for (m in listOf(video, musica)) {
             try { m?.release() } catch (_: Throwable) {}
         }

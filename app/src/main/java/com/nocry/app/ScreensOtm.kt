@@ -713,6 +713,6 @@ class SobreScreen(a: MainActivity) : Screen(a) {
 
         // ---------------- creditos ----------------
         add(Ui.text(c, "App desenvolvido por Aucerola · ADB embutido: libadb-android (Muntashir Al-Islam), licença Apache-2.0.", 9.5f, Ui.MUTED), 22)
-        add(Ui.text(c, "Fontes: Big Shoulders, Tektur, Outfit, Bricolage Grotesque, Gloock, Work Sans, Instrument Sans, Pixelify Sans, Red Hat Mono, Space Grotesk, JetBrains Mono (licença SIL OFL) e Poppins (licença OFL).", 9.5f, Ui.MUTED), 6)
+        add(Ui.text(c, "Fontes: Big Shoulders, Tektur, Outfit, Bricolage Grotesque, Gloock, Work Sans, Instrument Sans, Italiana, Pixelify Sans, Red Hat Mono, Space Grotesk, JetBrains Mono (licença SIL OFL) e Poppins (licença OFL).", 9.5f, Ui.MUTED), 6)
     }
 }
