@@ -94,9 +94,11 @@ class KeyGate(private val act: MainActivity) {
             Ui.item(c, "Seu IP", "o servidor vê sozinho", R.drawable.ic_globe),
             Ui.item(c, "Marca e modelo", "do celular", R.drawable.ic_info),
             Ui.item(c, "Versões", "do Android e do app", R.drawable.ic_chip),
-            Ui.item(c, "Código anônimo do aparelho", "não é o IMEI nem o número do telefone", R.drawable.ic_lock)
+            Ui.item(c, "Código anônimo do aparelho", "não é o IMEI nem o número do telefone", R.drawable.ic_lock),
+            Ui.item(c, "Quando o app está aberto", "e que horas você entrou", R.drawable.ic_stat),
+            Ui.item(c, "O que você usa no app", "bypass e modos ligados, com horário", R.drawable.ic_shield)
         )), Ui.lp(top = 22, c = c))
-        col.addView(Ui.dica(c, "Não envia telefone, localização, contatos, mensagens nem a lista de apps. Serve para saber quem usa cada key e poder desativar uma key.", Ui.Dica.OK), Ui.lp(top = 10, c = c))
+        col.addView(Ui.dica(c, "Não envia telefone, localização, contatos, mensagens nem a lista de apps. Serve para saber quem usa cada key, ver quem está online e poder desativar uma key.", Ui.Dica.OK), Ui.lp(top = 10, c = c))
 
         // ---------------- rodape ----------------
         col.addView(Ui.chips(c,

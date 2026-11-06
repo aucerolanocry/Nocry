@@ -99,10 +99,10 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         add(Ui.dica(c, "Os protegidos ficam de fora. Desativar devolve tudo como estava.", Ui.Dica.INFO), 12)
 
         if (on) {
-            add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "Desativando") { log -> Otm.desativar(log) }) }, 14)
-            add(Ui.button(c, "otimizar de novo", Ui.Kind.GHOST, R.drawable.ic_check) { act.abre(RunScreen(act, "Otimizando") { log -> Otm.ativar(log) }) }, 10)
+            add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "Desativando") { log -> Otm.desativar(log).also { if (it) Presenca.evento("modo_off", "OTIMIZAÇÃO") } }) }, 14)
+            add(Ui.button(c, "otimizar de novo", Ui.Kind.GHOST, R.drawable.ic_check) { act.abre(RunScreen(act, "Otimizando") { log -> Otm.ativar(log).also { if (it) Presenca.evento("modo_on", "OTIMIZAÇÃO") } }) }, 10)
         } else {
-            add(Ui.button(c, "ativar otimização", Ui.Kind.PRIMARY, R.drawable.ic_check) { act.abre(RunScreen(act, "Otimizando") { log -> Otm.ativar(log) }) }, 14)
+            add(Ui.button(c, "ativar otimização", Ui.Kind.PRIMARY, R.drawable.ic_check) { act.abre(RunScreen(act, "Otimizando") { log -> Otm.ativar(log).also { if (it) Presenca.evento("modo_on", "OTIMIZAÇÃO") } }) }, 14)
         }
 
         add(Ui.grupo(c, "ferramentas", listOf(

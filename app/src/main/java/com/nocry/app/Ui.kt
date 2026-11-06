@@ -797,6 +797,14 @@ object Ui {
             .show()
     }
 
+    /** aviso com um botao so (nao fecha tocando fora) */
+    fun dialogAviso(c: Context, titulo: String, msg: String, ok: String, onOk: () -> Unit) {
+        builder(c).setTitle(up(titulo)).setMessage(up(msg))
+            .setCancelable(false)
+            .setPositiveButton(up(ok)) { _, _ -> onOk() }
+            .show()
+    }
+
     fun dialogConfirma(c: Context, titulo: String, msg: String, ok: String = "SIM", onOk: () -> Unit) {
         builder(c).setTitle(up(titulo)).setMessage(up(msg))
             .setPositiveButton(up(ok)) { _, _ -> onOk() }

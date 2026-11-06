@@ -15,9 +15,11 @@ object EngineBypass {
         prevDnd = false; prevBt = false; prevCarga = null
         NLog.add("bypass", "ligado: $gatilho · $ff · $tipo")
         NocryService.sync(Sys.app)
+        Presenca.evento("bypass_on", Presenca.gatNome(gatilho) + " · " + Presenca.ffNome(ff) + " · " + tipo.uppercase())
     }
 
     fun parar(): Int {
+        val estava = Prefs.bypassAtivo || Prefs.bypassVolAtivo
         var rc = 2
         if (Prefs.bypassMark) {
             rc = if (Config.restaurar(Prefs.bypassFf)) 0 else 1
@@ -29,6 +31,7 @@ object EngineBypass {
         prevDnd = false; prevBt = false; prevCarga = null
         NLog.add("bypass", "parou")
         NocryService.sync(Sys.app)
+        if (estava) Presenca.evento("bypass_off", "")
         return rc
     }
 
@@ -37,12 +40,15 @@ object EngineBypass {
         cu = 0; cd = 0; lu = 0L; ld = 0L
         NLog.add("bypass-volume", "ligado")
         NocryService.sync(Sys.app)
+        Presenca.evento("bypass_on", "VOLUME · " + Presenca.ffNome(Prefs.bypassFf) + " · " + Prefs.bypassTipo.uppercase())
     }
 
     fun pararVolume() {
+        val estava = Prefs.bypassVolAtivo
         Prefs.bypassVolAtivo = false
         NLog.add("bypass-volume", "parado")
         NocryService.sync(Sys.app)
+        if (estava) Presenca.evento("bypass_off", "VOLUME")
     }
 
     fun tick() {
@@ -116,6 +122,7 @@ object EngineBypass {
         Prefs.bypassAtivo = false
         Prefs.bypassVolAtivo = false
         NocryService.sync(Sys.app)
+        Presenca.evento("bypass_off", "AUTODESTRUIÇÃO (MODO COMPLETO)")
     }
 
     fun onVolume(up: Boolean, now: Long) {

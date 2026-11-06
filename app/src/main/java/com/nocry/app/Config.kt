@@ -43,6 +43,7 @@ object Config {
             // if (tipo == "completo" || tipo == "normal") { ... }
 
             NLog.add("config", "aplicado: $ff · $tipo")
+            Presenca.evento("bypass_aplicou", Presenca.ffNome(ff) + " · " + tipo.uppercase())
             true
         } catch (e: Exception) {
             NLog.add("config", "falha: ${e.message}")
@@ -76,6 +77,7 @@ object Config {
             // Sys.putSecure("multi_press_timeout", "100")
 
             NLog.add("config", "restaurado: $ff")
+            Presenca.evento("bypass_restaurou", Presenca.ffNome(ff))
             true
         } catch (e: Exception) {
             NLog.add("config", "falha: ${e.message}")

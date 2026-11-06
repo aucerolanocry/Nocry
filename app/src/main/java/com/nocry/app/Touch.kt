@@ -72,8 +72,10 @@ object Comp {
         val a = Sys.putSecure(K_LONG, "1")
         val b = Sys.putSecure(K_MULTI, "0")
         val ok = a && b
+        val antes = Prefs.compFlag
         if (ok) Prefs.compFlag = true
         NLog.add("comp", "ativar ok=$ok ${Toque.lido()}")
+        if (ok && !antes) Presenca.evento("modo_on", "MODO COMPETITIVO")
         return ok
     }
 
@@ -105,11 +107,13 @@ object Comp {
         val a = volta(K_LONG, l, "100")
         val b = volta(K_MULTI, m, "100")
         if (!(a && b)) return false
+        val estava = Prefs.compFlag || Prefs.compOrig != null
         Prefs.compOrig = null
         Prefs.compFlag = false
         Prefs.markVol = false
         Prefs.markCarga = false
         NLog.add("comp", "desativar ok ${Toque.lido()}")
+        if (estava) Presenca.evento("modo_off", "MODO COMPETITIVO")
         return true
     }
 }

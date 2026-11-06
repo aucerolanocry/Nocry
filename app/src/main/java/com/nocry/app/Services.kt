@@ -247,6 +247,8 @@ class NocryService : Service() {
                     }
                     // versao nova saiu com o app em segundo plano: avisa logo (a cada 2 min)
                     if (n % 120 == 30) Bg.io { Update.atualizarCache(applicationContext) }
+                    // o app esta rodando em segundo plano: continua aparecendo como online no painel da staff
+                    if (n % 30 == 7) Presenca.ping(applicationContext)
                 } catch (t: Throwable) {
                     NLog.add("servico", "ciclo: $t")
                 }

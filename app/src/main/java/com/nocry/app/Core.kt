@@ -388,6 +388,14 @@ var bypassVolAtivo: Boolean
     var consentiu: Boolean
         get() = gb("consent")
         set(v) = pb("consent", v)
+    /** ja viu (e aceitou) que o app manda a atividade (online, bypass e modos) pro painel da staff */
+    var avisoAtividade: Boolean
+        get() = gb("aviso_atividade")
+        set(v) = pb("aviso_atividade", v)
+    /** eventos esperando pra ir pro servidor (JSON) */
+    var presencaFila: String?
+        get() = gs("presenca_fila")
+        set(v) = ps("presenca_fila", v)
     var licKey: String?
         get() = gs("lic_key")
         set(v) = ps("lic_key", v)

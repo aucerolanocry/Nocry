@@ -150,7 +150,7 @@ object License {
         return Base64.encodeToString(b, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     }
 
-    private fun post(caminho: String, corpo: JSONObject): JSONObject? {
+    internal fun post(caminho: String, corpo: JSONObject): JSONObject? {
         val base = BuildConfig.API_URL.trim().trimEnd('/')
         if (base.isEmpty()) return null
         return try {
@@ -167,8 +167,11 @@ object License {
         } catch (_: Throwable) { null }
     }
 
-    /** entra com uma key (bloqueia: chame fora da tela). So guarda se a resposta vier assinada e certa */
-    fun login(c: Context, keyDigitada: String): Result {
+    /**
+     * entra com uma key (bloqueia: chame fora da tela). So guarda se a resposta vier assinada e certa.
+     * renovar = o app so esta reconfirmando sozinho (no painel aparece como "renovou", nao como "entrou")
+     */
+    fun login(c: Context, keyDigitada: String, renovar: Boolean = false): Result {
         if (BuildConfig.API_URL.isBlank()) return Result(false, "nourl")
         val key = keyDigitada.trim().uppercase(Locale.ROOT).replace(Regex("\\s+"), "")
         val dev = devId(c)
@@ -183,6 +186,7 @@ object License {
             .put("sdk", Build.VERSION.SDK_INT)
             .put("app", versao(c))
             .put("lang", Locale.getDefault().toString())
+            .put("modo", if (renovar) "renovar" else "entrar")
         val j = post("/v1/auth", corpo) ?: return Result(false, "net")
         if (!j.optBoolean("ok", false)) return Result(false, j.optString("reason", "server"))
         val p = j.optString("p")
@@ -194,6 +198,8 @@ object License {
         Prefs.licSig = sig
         Prefs.licLabel = j.optString("label", "")
         Prefs.licVisto = System.currentTimeMillis()
+        // quem entra pela tela da key ja leu (e marcou) a lista do que o app envia, incluindo a atividade
+        if (!renovar) Prefs.avisoAtividade = true
         cacheSig = null
         NLog.add("key", "entrou como " + roleNome() + (if (Prefs.licLabel.isNotEmpty()) " (" + Prefs.licLabel + ")" else ""))
         return Result(true, "ok")
@@ -203,7 +209,7 @@ object License {
     fun revalida(c: Context): Result {
         val k = Prefs.licKey ?: return Result(false, "invalid")
         ultimaTentativa = System.currentTimeMillis()
-        val r = login(c, k)
+        val r = login(c, k, renovar = true)
         if (r.negado()) sair("o servidor disse: " + r.reason)
         else if (!r.ok) NLog.add("key", "não consegui confirmar agora (" + r.reason + ")")
         return r

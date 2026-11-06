@@ -639,15 +639,18 @@ object OtmAuto {
         fora = 0
         NLog.add("otm-auto", "ligado")
         NocryService.sync(Sys.app)
+        Presenca.evento("modo_on", "OTIMIZAÇÃO AUTOMÁTICA")
     }
 
     /** desliga o automatico e desfaz o que ele ligou */
     fun desligar() {
+        val estava = Prefs.otmAuto
         Prefs.otmAuto = false
         desliga()
         sessao = false
         fora = 0
         NLog.add("otm-auto", "desligado")
         NocryService.sync(Sys.app)
+        if (estava) Presenca.evento("modo_off", "OTIMIZAÇÃO AUTOMÁTICA")
     }
 }

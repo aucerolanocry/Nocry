@@ -141,6 +141,8 @@ class MainActivity : Activity() {
                     if (i != null) Bg.ui { mostraUpdateGate(i) }
                 }
             }
+            // avisa o painel da staff que o app continua aberto (no maximo 1 vez por minuto)
+            Presenca.ping(applicationContext)
             h.postDelayed(this, 20_000)
         }
     }
@@ -195,7 +197,27 @@ class MainActivity : Activity() {
     /** primeira tela depois da abertura: o inicio, ou a tela da key se nao tiver key valida */
     private fun abreInicial() {
         if (gate || pilha.isNotEmpty()) return
-        if (License.valid()) abre(HomeScreen(this)) else mostraGate()
+        if (License.valid()) { abre(HomeScreen(this)); avisoAtividade() } else mostraGate()
+    }
+
+    private var avisoAberto = false
+
+    /**
+     * quem ja tinha key antes da 1.0.39 nunca viu que o app agora manda a atividade pro painel:
+     * mostra uma vez so (quem entra pela tela da key ja ve isso na lista e marca "Li e concordo")
+     */
+    private fun avisoAtividade() {
+        if (avisoAberto || gate || intro != null || Prefs.avisoAtividade || !License.valid()) return
+        avisoAberto = true
+        Ui.dialogAviso(this, "Novidade no NOCRY",
+            "A partir desta versão o app também envia para o painel da staff: quando o app está aberto ou rodando, " +
+                "que horas você entrou e o que você liga nele (bypass e modos), com horário.\n\n" +
+                "Continua sem enviar telefone, localização, contatos, mensagens ou a lista de apps.",
+            "Entendi") {
+            avisoAberto = false
+            Prefs.avisoAtividade = true
+            Presenca.ping(applicationContext, forcar = true)
+        }
     }
 
     // ------------------------------------------------------------------ intro
@@ -438,6 +460,9 @@ class MainActivity : Activity() {
             val i = Update.pendente(applicationContext)
             if (i != null) Bg.ui { mostraUpdateGate(i) }
         }
+        Presenca.naTela = true
+        Presenca.ping(applicationContext, forcar = true)
+        avisoAtividade()
         if (!gate) {
             Bg.io { License.tick(applicationContext) }
             // tenta conectar sozinho (depuracao sem fio ja pareada)
@@ -451,6 +476,9 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        // saiu da tela: no painel passa a aparecer "2º plano" (ou some, se nada estiver rodando)
+        Presenca.naTela = false
+        Presenca.ping(applicationContext, forcar = true)
         intro?.acabaJa()
         h.removeCallbacks(ciclo)
         h.removeCallbacks(cicloUpdate)

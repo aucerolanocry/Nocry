@@ -85,6 +85,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
                                 ocupado = false
                                 percent = if (ok) 1f else null
                                 log = if (ok) "PASTA SUJA INSTALADA!" else "FALHA AO EXTRAIR"
+                                if (ok) Presenca.evento("recurso", "PASTA SUJA · " + Presenca.ffNome(ff))
                                 redesenha()
                             }
                         }
@@ -134,6 +135,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
                                 ocupado = false
                                 percent = if (ok) 1f else null
                                 log = if (ok) "PASTA LIMPA INSTALADA!" else "FALHA AO EXTRAIR"
+                                if (ok) Presenca.evento("recurso", "PASTA LIMPA · " + Presenca.ffNome(ff))
                                 redesenha()
                             }
                         }

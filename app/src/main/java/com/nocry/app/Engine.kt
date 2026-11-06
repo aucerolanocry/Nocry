@@ -104,9 +104,11 @@ object Engine {
         }
         NocryService.sync(app)
         mudou()
+        Presenca.evento("modo_on", "TOQUE VIA VOLUME")
     }
 
     fun pararVol(): Int {
+        val estava = Prefs.volAtivo
         var rc = 2
         synchronized(lock) {
             if (Prefs.markVol) {
@@ -118,6 +120,7 @@ object Engine {
         }
         NocryService.sync(app)
         mudou()
+        if (estava) Presenca.evento("modo_off", "TOQUE VIA VOLUME")
         return rc
     }
 
@@ -137,9 +140,11 @@ object Engine {
         }
         NocryService.sync(app)
         mudou()
+        Presenca.evento("modo_on", "TOQUE VIA CARREGADOR")
     }
 
     fun pararCarga(): Int {
+        val estava = Prefs.cargaAtivo
         var rc = 2
         synchronized(lock) {
             if (Prefs.markCarga) {
@@ -152,6 +157,7 @@ object Engine {
         }
         NocryService.sync(app)
         mudou()
+        if (estava) Presenca.evento("modo_off", "TOQUE VIA CARREGADOR")
         return rc
     }
 
@@ -184,6 +190,7 @@ object Engine {
                         NLog.add("toque-carga", "terminou as repeticoes, parando")
                         Prefs.cargaAtivo = false
                         NocryService.sync(app)
+                        Presenca.evento("modo_off", "TOQUE VIA CARREGADOR (ACABARAM AS REPETIÇÕES)")
                     }
                 }
             }
@@ -218,9 +225,11 @@ object Engine {
         }
         NocryService.sync(app)
         mudou()
+        Presenca.evento("modo_on", "MODO CARREGADOR")
     }
 
     fun pararMc(): Boolean {
+        val estava = Prefs.mcAtivo
         var ok = true
         synchronized(lock) {
             if (Prefs.densOrig != null) {
@@ -234,6 +243,7 @@ object Engine {
         }
         NocryService.sync(app)
         mudou()
+        if (estava) Presenca.evento("modo_off", "MODO CARREGADOR")
         return ok
     }
 
