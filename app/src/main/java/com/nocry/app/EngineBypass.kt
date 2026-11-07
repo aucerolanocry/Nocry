@@ -147,6 +147,10 @@ object EngineBypass {
                 if (Config.aplicar(Prefs.bypassFf, Prefs.bypassTipo)) {
                     Prefs.bypassMark = true
                     Notif.say(Sys.app, "BYPASS APLICADO (VOL+ ${cliques}x)")
+                } else {
+                    // antes falhava calado e parecia que o volume nao tinha funcionado
+                    NLog.add("bypass-volume", "nao aplicou: " + Adb.lastError)
+                    Notif.say(Sys.app, "NÃO DEU PRA APLICAR AGORA (ADB). APERTE VOL+ ${cliques}x DE NOVO EM ALGUNS SEGUNDOS")
                 }
                 Bg.ui { Engine.onChange?.invoke() }
             }
@@ -161,7 +165,12 @@ object EngineBypass {
                         Prefs.bypassMark = false
                         Notif.say(Sys.app, "BYPASS RESTAURADO (VOL- ${cliques}x)")
                         autodestruirSeCompleto()
+                    } else {
+                        NLog.add("bypass-volume", "nao restaurou: " + Adb.lastError)
+                        Notif.say(Sys.app, "NÃO DEU PRA RESTAURAR AGORA (ADB). APERTE VOL- ${cliques}x DE NOVO EM ALGUNS SEGUNDOS")
                     }
+                } else {
+                    Notif.say(Sys.app, "NADA PRA RESTAURAR: O BYPASS NÃO ESTÁ APLICADO")
                 }
                 Bg.ui { Engine.onChange?.invoke() }
             }
