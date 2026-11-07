@@ -171,7 +171,15 @@ class NocryService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        primeiroPlano(Engine.resumo())
+        try {
+            primeiroPlano(Engine.resumo())
+        } catch (t: Throwable) {
+            // o Android nao deixou ligar em primeiro plano agora (app parado em segundo plano):
+            // volta quando abrir o app ou pela vigia (UpdateJob)
+            NLog.add("servico", "nao deu pra ligar em primeiro plano: $t")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (!Prefs.precisaServico() || !License.valid()) {
             stopSelf()
             return START_NOT_STICKY
@@ -179,6 +187,7 @@ class NocryService : Service() {
         rodando = true
         registraReceptor()
         inicia()
+        InstalaService.retoma(applicationContext)
         return START_STICKY
     }
 
@@ -269,6 +278,8 @@ class NocryService : Service() {
                     if (n % 20 == 0) Bg.io { License.tick(applicationContext) }
                     if (!License.valid()) { stopSelf(); break }
                     cuidaAdb()
+                    // uma vez por abertura: tira o app da economia de bateria etc. (pra nao ser fechado em segundo plano)
+                    if (Adb.connected) SegundoPlano.garantePeloAdb()
                     if (Prefs.otmAuto) OtmAuto.tick(this)
                 } catch (t: Throwable) {
                     NLog.add("servico", "adb: $t")
@@ -309,6 +320,20 @@ class NocryService : Service() {
         }
     }
 
+    /**
+     * O usuario fechou o app nos recentes. No Android puro o servico continua; no Xiaomi e em outros
+     * o sistema mata tudo junto - entao agenda pra religar sozinho se ainda tiver algo ativado.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        NLog.add("servico", "app fechado nos recentes (" + Engine.resumo() + ")")
+        if (Prefs.precisaServico() && License.valid()) SegundoPlano.agendaVolta(applicationContext)
+        if (Instalador.ocupado()) {
+            // a instalacao tem o proprio servico; se ele cair junto, volta quando o servico principal ligar
+            InstalaService.retoma(applicationContext)
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
         go = false
         rodando = false
@@ -335,6 +360,7 @@ class BootReceiver : BroadcastReceiver() {
             Notif.init(context)
             NLog.add("boot", "recebi " + intent.action)
             if (Prefs.precisaServico() && License.valid()) NocryService.sync(context)
+            InstalaService.retoma(context)
         } catch (t: Throwable) {
             NLog.add("boot", "erro: $t")
         }

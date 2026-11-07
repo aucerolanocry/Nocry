@@ -392,6 +392,10 @@ var bypassVolAtivo: Boolean
     var avisoAtividade: Boolean
         get() = gb("aviso_atividade")
         set(v) = pb("aviso_atividade", v)
+    /** pastas esperando pra instalar ("normal:suja,max:limpa"); fica salva se o Android fechar o app no meio */
+    var instalaFila: String?
+        get() = gs("instala_fila")
+        set(v) = ps("instala_fila", v)
     /** eventos esperando pra ir pro servidor (JSON) */
     var presencaFila: String?
         get() = gs("presenca_fila")
@@ -429,6 +433,7 @@ object Notif {
     const val CH_SVC = "nocry_svc"
     const val CH_ALERT = "nocry_alert"
     const val CH_PAIR = "nocry_pair"
+    const val CH_INST = "nocry_inst"
     const val ID_SVC = 1001
     const val ID_ALERT = 2001
     const val ID_PAIR = 3001
@@ -439,6 +444,7 @@ object Notif {
         nm.createNotificationChannel(NotificationChannel(CH_SVC, "NOCRY em segundo plano", NotificationManager.IMPORTANCE_LOW))
         nm.createNotificationChannel(NotificationChannel(CH_ALERT, "Avisos do NOCRY", NotificationManager.IMPORTANCE_HIGH))
         nm.createNotificationChannel(NotificationChannel(CH_PAIR, "Pareamento", NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CH_INST, "Instalação das pastas", NotificationManager.IMPORTANCE_LOW))
     }
 
     /** aviso rapido na tela (some sozinho) */

@@ -14,6 +14,14 @@ import android.content.Context
  */
 class UpdateJob : JobService() {
     override fun onStartJob(p: JobParameters): Boolean {
+        // de quebra serve de vigia: se o Android fechou o NOCRY com algo ativado (ou instalando), religa
+        try {
+            if (Prefs.precisaServico() && License.valid() && !NocryService.rodando) {
+                NLog.add("servico", "vigia: estava ativado mas parado; religando")
+                NocryService.sync(applicationContext)
+            }
+            InstalaService.retoma(applicationContext)
+        } catch (_: Throwable) {}
         Bg.io {
             try { Update.atualizarCache(applicationContext, forcar = true) } finally { jobFinished(p, false) }
         }

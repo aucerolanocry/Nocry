@@ -1,5 +1,7 @@
 package com.nocry.app
 
+import android.app.NotificationManager
+import android.provider.Settings
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -22,22 +24,64 @@ object Config {
         }
     }
 
-    fun dndLigado(): Boolean {
-        val r = Adb.exec("dumpsys notification | grep mZenMode=")
-        return r.ok && r.out.contains("ZEN_MODE_IMPORTANT_INTERRUPTIONS")
+    /**
+     * "Nao perturbe" ligado? Le direto do Android (nao precisa do ADB, entao funciona mesmo se ele cair).
+     * null = nao deu pra saber agora: quem chama NAO deve tratar como desligado (senao restauraria a toa).
+     */
+    fun dndEstado(): Boolean? {
+        try {
+            val nm = Sys.app.getSystemService(NotificationManager::class.java)
+            if (nm != null) {
+                val f = nm.currentInterruptionFilter
+                if (f != NotificationManager.INTERRUPTION_FILTER_UNKNOWN) return f != NotificationManager.INTERRUPTION_FILTER_ALL
+            }
+        } catch (_: Throwable) {}
+        if (!Adb.connected) return null
+        val r = Adb.exec("settings get global zen_mode")
+        val v = r.out.trim()
+        return if (r.ok && v.isNotEmpty() && v != "null") v != "0" else null
     }
 
-    fun btLigado(): Boolean {
+    /** Bluetooth ligado? Mesmo esquema: direto do Android, ADB so de reserva; null = nao deu pra saber */
+    fun btEstado(): Boolean? {
+        try {
+            return Settings.Global.getInt(Sys.app.contentResolver, Settings.Global.BLUETOOTH_ON) != 0
+        } catch (_: Throwable) {}
+        if (!Adb.connected) return null
         val r = Adb.exec("settings get global bluetooth_on")
-        return r.ok && r.out.trim() == "1"
+        val v = r.out.trim()
+        return if (r.ok && v.isNotEmpty() && v != "null") v == "1" else null
+    }
+
+    fun dndLigado(): Boolean = dndEstado() == true
+    fun btLigado(): Boolean = btEstado() == true
+
+    /**
+     * Troca a pasta "android" do jogo pela de [origem]. So apaga a do jogo se a de origem existir,
+     * e so devolve true se a copia terminou de verdade (antes dava "aplicado" mesmo quando falhava).
+     */
+    private fun troca(destino: String, origem: String, oQue: String): Boolean {
+        val r = Adb.exec(
+            "if [ -d \"$origem/android\" ]; then " +
+                "rm -rf \"$destino/android\" && mkdir -p \"$destino\" && cp -rf \"$origem/android\" \"$destino/\" && echo NOCRY_OK; " +
+                "else echo NOCRY_SEM_PASTA; fi",
+            180000
+        )
+        if (r.out.contains("NOCRY_OK")) return true
+        if (r.out.contains("NOCRY_SEM_PASTA")) {
+            NLog.add("config", "$oQue: a pasta de origem nao existe ($origem/android)")
+            Notif.say(Sys.app, "A ${oQue.uppercase()} NÃO ESTÁ INSTALADA. ABRA O NOCRY EM INSTALAR RECURSOS.")
+        } else {
+            NLog.add("config", "$oQue: a copia nao terminou (adb ok=${r.ok}) " + r.out.take(200))
+        }
+        return false
     }
 
     fun aplicar(ff: String = "normal", tipo: String = "completo"): Boolean {
         if (!Adb.ensure(Sys.app)) return false
         val (destino, srcA, _) = destinos(ff)
         return try {
-            Adb.exec("rm -rf \"$destino/android\"")
-            Adb.exec("cp -rf \"$srcA/android\" \"$destino/\"")
+            if (!troca(destino, srcA, "pasta suja")) return false
             
             // 👇 REMOVIDO DAQUI: Não mexe mais no toque.
             // if (tipo == "completo" || tipo == "normal") { ... }
@@ -69,8 +113,7 @@ object Config {
         if (!Adb.ensure(Sys.app)) return false
         val (destino, _, srcB) = destinos(ff)
         return try {
-            Adb.exec("rm -rf \"$destino/android\"")
-            Adb.exec("cp -rf \"$srcB/android\" \"$destino/\"")
+            if (!troca(destino, srcB, "pasta limpa")) return false
             
             // 👇 REMOVIDO DAQUI: Não mexe mais no toque.
             // Sys.putSecure("long_press_timeout", "100")

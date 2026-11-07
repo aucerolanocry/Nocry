@@ -11,7 +11,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
 
     override fun key(): String = listOf(
         Prefs.bypassAtivo, Prefs.bypassGatilho, Prefs.bypassFf, Prefs.bypassTipo,
-        Prefs.bypassMark, Prefs.bypassVolAtivo, Prefs.bypassCliques, Adb.connected
+        Prefs.bypassMark, Prefs.bypassVolAtivo, Prefs.bypassCliques, Adb.connected, SegundoPlano.estado(act)
     ).joinToString("|")
 
     override fun render() {
@@ -107,14 +107,15 @@ class BypassScreen(a: MainActivity) : Screen(a) {
 
         if (Prefs.bypassMark) {
             add(Ui.button(c, "restaurar padrão agora", Ui.Kind.GHOST, R.drawable.ic_stop) {
-                Bg.run({ Config.restaurar(Prefs.bypassFf); Prefs.bypassMark = false; 0 }) { _ ->
-                    Ui.toast(act, "PADRÃO RESTAURADO")
+                Bg.run({ Config.restaurar(Prefs.bypassFf).also { if (it) Prefs.bypassMark = false } }) { ok ->
+                    Ui.toast(act, if (ok) "PADRÃO RESTAURADO" else "NÃO DEU PRA RESTAURAR (ADB). TENTE DE NOVO")
                     redesenha()
                 }
             }, 10)
         }
 
-        add(Ui.dica(c, "O app fica em segundo plano escutando o gatilho. Para parar, toque em desativar.", Ui.Dica.INFO), 18)
+        add(Ui.dica(c, "O app fica em segundo plano escutando o gatilho, mesmo minimizado ou fechado nos recentes. Para parar, toque em desativar.", Ui.Dica.INFO), 18)
+        add(SegundoPlano.grupo(act) { redesenha() }, 14)
     }
 
     /** um gatilho dentro do grupo: icone, nome, como funciona e o marcador de escolhido */

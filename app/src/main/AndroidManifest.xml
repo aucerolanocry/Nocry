@@ -10,6 +10,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- segura o celular acordado enquanto baixa as pastas com a tela desligada -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- religa o NOCRY sozinho quando ele e fechado nos recentes (com algo ativado) -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- pedido de "bateria sem restricao" (o Android nao fecha o app em segundo plano) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
@@ -54,6 +60,16 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Monitores de toque (volume e carregador) e otimizacao de segundo plano que o usuario liga" />
+        </service>
+
+        <!-- instala as pastas em segundo plano (continua com o app minimizado ou fechado) -->
+        <service
+            android:name=".InstalaService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Baixa e extrai as pastas que o usuario pediu para instalar, mesmo com o app em segundo plano" />
         </service>
 
         <service

@@ -462,6 +462,10 @@ class MainActivity : Activity() {
         }
         Presenca.naTela = true
         Presenca.ping(applicationContext, forcar = true)
+        // instalacao que ficou na fila (o Android fechou o app no meio): continua
+        InstalaService.retoma(applicationContext)
+        // algo ativado mas o servico nao esta rodando (foi fechado a forca): religa
+        if (Prefs.precisaServico() && License.valid() && !NocryService.rodando) NocryService.sync(applicationContext)
         avisoAtividade()
         if (!gate) {
             Bg.io { License.tick(applicationContext) }

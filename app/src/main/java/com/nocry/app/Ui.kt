@@ -319,7 +319,11 @@ object Ui {
         RippleDrawable(ColorStateList.valueOf(Theme.alpha(Color.WHITE, 0x22)), null, android.graphics.drawable.ColorDrawable(Color.WHITE))
 
     /** item de lista sem fundo proprio (vai dentro de grupo()): icone, titulo, descricao, valor em pilula e seta */
-    fun item(c: Context, titulo: String, sub: String = "", ico: Int = 0, valor: String? = null, onClick: (() -> Unit)? = null): View {
+    fun item(c: Context, titulo: String, sub: String = "", ico: Int = 0, valor: String? = null, onClick: (() -> Unit)? = null): View =
+        itemEstado(c, titulo, sub, ico, valor, null, onClick)
+
+    /** igual ao item(), mas com a cor do valor da direita (ex.: verde = OK, amarelo = falta liberar) */
+    fun itemEstado(c: Context, titulo: String, sub: String, ico: Int, valor: String?, valorCor: Int?, onClick: (() -> Unit)? = null): View {
         val r = hbox(c)
         r.minimumHeight = dp(c, 52)
         r.setPadding(0, dp(c, 10), 0, dp(c, 10))
@@ -333,8 +337,9 @@ object Ui {
         if (sub.isNotEmpty()) col.addView(text(c, sub, 10.5f, MUTED), lp(top = 2, c = c))
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (valor != null) {
-            val v = text(c, valor, 11f, RED, true, mono = true)
-            v.background = shape(c, Theme.alpha(RED, 0x1A), 8)
+            val vc = valorCor ?: RED
+            val v = text(c, valor, 11f, vc, true, mono = true)
+            v.background = shape(c, Theme.alpha(vc, 0x1A), 8)
             v.setPadding(dp(c, 10), dp(c, 5), dp(c, 10), dp(c, 5))
             v.maxLines = 1
             val vp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
