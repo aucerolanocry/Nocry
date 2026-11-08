@@ -285,7 +285,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             card.addView(linha, Ui.lp(top = 8, c = c))
         }
         if (Sniper.semValor.isNotEmpty()) {
-            card.addView(Ui.text(c, "Ainda sem valor (não entram): ${Sniper.semValor.joinToString(", ")}", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+            card.addView(Ui.text(c, "Ainda sem valor (não entram): ${Sniper.semValor.joinToString(", ")} · use DESCOBRIR VALORES em ajustes", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
         }
         secOrgs.addView(card)
     }
@@ -356,6 +356,18 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         card.addView(Ui.item(c, "Mensagem automática", Sniper.msgAuto, 0, null) {
             Ui.dialogTexto(c, "MENSAGEM AUTOMÁTICA", Sniper.msgAuto) { t -> if (t.isNotBlank()) Sniper.definirMsgAuto(t) }
         }, Ui.lp(top = 8, c = c))
+        val np = Sniper.qtdPendentes()
+        if (np > 0 || Sniper.descobrindo) {
+            val sub = if (Sniper.descobrindo) Sniper.progresso.ifEmpty { "lendo as filas..." }
+                else "Lê o valor das $np filas que vieram como \"Desconhecido\" (${Sniper.pendentes.keys.joinToString(", ")}). Só lê, não entra em fila."
+            card.addView(Ui.item(c, "Descobrir valores", sub, 0, if (Sniper.descobrindo) "..." else "$np") {
+                when {
+                    Sniper.descobrindo -> Ui.toast(c, "já está descobrindo")
+                    !Sniper.conectado -> Ui.toast(c, "ligue o bot primeiro")
+                    else -> Sniper.descobrir()
+                }
+            }, Ui.lp(top = 8, c = c))
+        }
         if (Cofre.tem(c)) {
             card.addView(Ui.item(c, "Trocar token", "Apaga o token salvo e desliga o bot.", 0, null) {
                 Ui.dialogConfirma(c, "TROCAR TOKEN", "O token salvo é apagado e o bot desliga. Depois é só colar o novo.", "APAGAR") {

@@ -118,6 +118,12 @@ object Sniper {
         private set
     var semValor: List<String> = emptyList()
         private set
+    /** filas sem valor ainda: org -> modo -> ids */
+    var pendentes: Map<String, Map<String, List<String>>> = emptyMap()
+        private set
+    @Volatile var descobrindo = false
+    @Volatile var progresso = ""
+    fun qtdPendentes(): Int = pendentes.values.sumOf { m -> m.values.sumOf { it.size } }
     val listaOrgs: List<String> get() = listOf("TODAS") + orgs.keys
     var todosValores: List<String> = emptyList()
         private set
@@ -211,8 +217,10 @@ object Sniper {
     private fun carregarOrgs() {
         val txt = try { app.assets.open("sniper_orgs.json").bufferedReader().use { it.readText() } } catch (_: Throwable) { "{}" }
         val o = JSONObject(txt)
+        val apr = try { JSONObject(sp.getString("aprendidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
         val out = LinkedHashMap<String, SOrg>()
         val sem = ArrayList<String>()
+        val pendAll = LinkedHashMap<String, Map<String, List<String>>>()
         for (nome in o.keys()) {
             val d = o.optJSONObject(nome) ?: continue
             val rot = HashMap<String, String>()
@@ -223,7 +231,7 @@ object Sniper {
                 val um = b.optJSONObject("1X1")
                 SBotoes(lista(um?.optJSONArray("NORMAL")), lista(um?.optJSONArray("INFINITO")), lista(b.optJSONArray("outros_modos")))
             }
-            val filas = LinkedHashMap<String, Map<String, String>>()
+            val filas = LinkedHashMap<String, LinkedHashMap<String, String>>()
             d.optJSONObject("filas")?.let { f ->
                 for (modo in f.keys()) {
                     val m = f.optJSONObject(modo) ?: continue
@@ -232,13 +240,33 @@ object Sniper {
                     if (mm.isNotEmpty()) filas[modo] = mm
                 }
             }
-            var pend = 0
-            d.optJSONObject("pendentes")?.let { p -> p.keys().forEach { pend += p.optJSONArray(it)?.length() ?: 0 } }
-            if (filas.isEmpty()) { if (pend > 0) sem.add(nome); continue }
-            out[nome] = SOrg(nome, rot, botoes, filas, pend)
+            val pend = LinkedHashMap<String, MutableList<String>>()
+            d.optJSONObject("pendentes")?.let { p ->
+                for (modo in p.keys()) {
+                    val a = p.optJSONArray(modo) ?: continue
+                    pend[modo] = (0 until a.length()).map { a.optString(it) }.filter { it.isNotEmpty() }.toMutableList()
+                }
+            }
+            // valores que o "descobrir valores" já leu das filas (ficam salvos no celular)
+            apr.optJSONObject(nome)?.let { a ->
+                for (modo in a.keys()) {
+                    val mm = a.optJSONObject(modo) ?: continue
+                    for (v in mm.keys()) {
+                        val id = mm.s(v) ?: continue
+                        val f = filas.getOrPut(modo) { LinkedHashMap() }
+                        if (!f.containsKey(v)) f[v] = id
+                        pend[modo]?.remove(id)
+                    }
+                }
+            }
+            val pendLimpo = pend.filterValues { it.isNotEmpty() }
+            if (pendLimpo.isNotEmpty()) pendAll[nome] = pendLimpo
+            if (filas.isEmpty()) { if (pendLimpo.isNotEmpty()) sem.add(nome); continue }
+            out[nome] = SOrg(nome, rot, botoes, filas, pendLimpo.values.sumOf { it.size })
         }
         orgs = out
         semValor = sem
+        pendentes = pendAll
         todosValores = out.values.flatMap { it.filas.values.flatMap { f -> f.keys } }.toSet().sortedBy { it.toIntOrNull() ?: 0 }
     }
 
@@ -934,16 +962,16 @@ object Sniper {
     }
 
     /** acha a mensagem da fila. Depois da 1ª vez já sabe o canal e vai direto (fica salvo). */
-    private fun acharFila(fid: String, o: String): DMsg? {
+    private fun acharFila(fid: String, o: String, forcar: Boolean = false): DMsg? {
         val d = dc ?: return null
         val t = agora()
-        if (t - (sumida[fid] ?: 0L) < ESQUECER_SUMIDA || t - (orgSumida[o] ?: 0L) < ESQUECER_SUMIDA) return null
+        if (!forcar && (t - (sumida[fid] ?: 0L) < ESQUECER_SUMIDA || t - (orgSumida[o] ?: 0L) < ESQUECER_SUMIDA)) return null
         canalDaFila[fid]?.let { cid ->
             val (m, r) = d.mensagem(cid, fid)
             if (m != null) return m
             if (r.ok || r.codigo == 403 || r.codigo == 404) canalDaFila.remove(fid) else return null
         }
-        status(o, "procurando as filas...", "info")
+        if (!forcar) status(o, "procurando as filas...", "info")
         val conhecidos = canaisDaOrg[o]?.toList() ?: emptyList()
         val candidatos = LinkedHashSet<String>()
         if (conhecidos.isNotEmpty()) {
@@ -955,7 +983,8 @@ object Sniper {
             for (gid in gs) candidatos.addAll(textosDe(gid))
         }
         for (cid in candidatos) {
-            if (!buscando) return null
+            if (!forcar && !buscando) return null
+            if (dc == null) return null
             val (m, r) = d.mensagem(cid, fid)
             if (m != null) {
                 canalDaFila[fid] = cid
@@ -968,6 +997,7 @@ object Sniper {
             if (r.codigo == 401) return null
             Thread.sleep(120)
         }
+        if (forcar) return null
         sumida[fid] = t
         if (conhecidos.isEmpty()) {
             val f = (falhasOrg[o] ?: 0) + 1
@@ -1081,6 +1111,67 @@ object Sniper {
             }
             Thread.sleep(PAUSA_ENTRE_FILAS)
         }
+    }
+
+    // ======================================================================== descobrir valores
+    /** abre cada fila sem valor (GOLD, FARM...), lê o "Valor: R$ ..." dela e guarda. Só lê, não entra em fila. */
+    fun descobrir() {
+        if (descobrindo) return
+        if (!conectado || dc == null) { log("erro", "ligue o bot primeiro"); return }
+        val lista = ArrayList<Triple<String, String, String>>()
+        for ((o, ms) in pendentes) for ((m, ids) in ms) for (id in ids) lista.add(Triple(o, m, id))
+        if (lista.isEmpty()) { log("info", "nenhuma fila sem valor"); return }
+        descobrindo = true
+        log("info", "descobrindo o valor de ${lista.size} filas (só lê, não entra em nenhuma)...")
+        val th = Thread {
+            var achou = 0
+            val faltou = ArrayList<String>()
+            val apr = try { JSONObject(sp.getString("aprendidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
+            val semServidor = HashSet<String>()
+            val semAchar = HashMap<String, Int>()
+            try {
+                for ((i, t) in lista.withIndex()) {
+                    if (dc == null) break
+                    val (o, m, id) = t
+                    if (o in semServidor) continue
+                    progresso = "lendo $o $m (${i + 1}/${lista.size})"
+                    mudou()
+                    val msg = acharFila(id, o, forcar = true)
+                    if (msg == null) {
+                        if (canaisDaOrg[o].isNullOrEmpty()) {
+                            val n = (semAchar[o] ?: 0) + 1
+                            semAchar[o] = n
+                            if (n >= 2) { semServidor.add(o); faltou.add("$o: não achei nenhuma fila (você está no servidor?)") }
+                        } else faltou.add("$o $m: não achei a fila $id")
+                        continue
+                    }
+                    val v = lerValor(msg)
+                    if (v == null) { faltou.add("$o $m: não deu pra ler o valor da fila $id"); continue }
+                    val jaTem = orgs[o]?.filas?.get(m)?.get(v) ?: apr.optJSONObject(o)?.optJSONObject(m)?.s(v)
+                    if (jaTem != null && jaTem != id) { faltou.add("$o $m: a fila $id diz ${rotuloValor(v)}, mas já tem outra com esse valor"); continue }
+                    val jo = apr.optJSONObject(o) ?: JSONObject().also { apr.put(o, it) }
+                    val jm = jo.optJSONObject(m) ?: JSONObject().also { jo.put(m, it) }
+                    jm.put(v, id)
+                    achou++
+                    log("ok", "$o $m: fila de ${rotuloValor(v)} descoberta")
+                    Thread.sleep(300)
+                }
+            } catch (_: InterruptedException) {
+            } catch (t: Throwable) {
+                log("erro", "descobrir: ${t.message ?: t.javaClass.simpleName}")
+            } finally {
+                sp.edit().putString("aprendidos", apr.toString()).apply()
+                carregarOrgs()
+                descobrindo = false
+                progresso = ""
+                log("ok", "pronto · $achou filas descobertas" + (if (faltou.isNotEmpty()) " · ${faltou.size} ficaram sem valor" else ""))
+                for (f in faltou.take(12)) log("erro", f)
+                mudou()
+            }
+        }
+        th.isDaemon = true
+        th.name = "sniper-descobrir"
+        th.start()
     }
 
     // ======================================================================== aviso no celular
