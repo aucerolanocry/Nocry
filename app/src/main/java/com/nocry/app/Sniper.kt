@@ -243,6 +243,7 @@ object Sniper {
         val txt = try { app.assets.open("sniper_orgs.json").bufferedReader().use { it.readText() } } catch (_: Throwable) { "{}" }
         val o = JSONObject(txt)
         val apr = try { JSONObject(sp.getString("aprendidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
+        val cor = try { JSONObject(sp.getString("corrigidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
         val out = LinkedHashMap<String, SOrg>()
         val sem = ArrayList<String>()
         val pendAll = LinkedHashMap<String, Map<String, List<String>>>()
@@ -282,6 +283,15 @@ object Sniper {
                         if (!f.containsKey(v)) f[v] = id
                         pend[modo]?.remove(id)
                     }
+                }
+            }
+            // filas que a própria mensagem mostrou ter outro valor: muda pro valor certo
+            for ((modo, f) in filas) {
+                val trocas = f.entries.filter { (v, id) -> cor.s(id)?.let { it != v } == true }.map { it.key to it.value }
+                for ((v, id) in trocas) {
+                    f.remove(v)
+                    val certo = cor.s(id) ?: continue
+                    if (!f.containsKey(certo)) f[certo] = id
                 }
             }
             val pendLimpo = pend.filterValues { it.isNotEmpty() }
@@ -721,12 +731,15 @@ object Sniper {
             s.chat.clear()
             for (m in lista) {
                 s.vistos.add(m.id)
-                s.chat.add(linhaChat(m))
+                if (!vazia(m)) s.chat.add(linhaChat(m))
             }
         }
         lista.lastOrNull()?.let { s.ultimoId = it.id }
         mudou()
     }
+
+    /** mensagem sem texto, card nem botão (entrou na thread, fixou...): não aparece no chat */
+    private fun vazia(m: DMsg): Boolean = m.conteudo.isBlank() && m.embeds.all { it.titulo.isBlank() && it.descricao.isBlank() && it.campos.isEmpty() } && m.botoes.isEmpty()
 
     private fun linhaChat(m: DMsg): SChat {
         val tipo = if (m.autorId == eu) "voce" else if (m.autorBot) "bot" else "pessoa"
@@ -785,7 +798,7 @@ object Sniper {
             val s = salas[m.canalId] ?: return
             if (s.vistos.add(m.id)) {
                 s.ultimoId = maior(s.ultimoId, m.id)
-                synchronized(s.chat) { s.chat.add(linhaChat(m)) }
+                if (!vazia(m)) synchronized(s.chat) { s.chat.add(linhaChat(m)) }
                 mudou()
             }
             return
@@ -811,7 +824,7 @@ object Sniper {
         s.ultima = agora()
         if (!m.autorBot) s.respondida = true
         s.inativa = false
-        synchronized(s.chat) {
+        if (!vazia(m)) synchronized(s.chat) {
             s.chat.add(linhaChat(m))
             while (s.chat.size > 120) s.chat.removeAt(0)
         }
@@ -1075,6 +1088,7 @@ object Sniper {
         }
         if (eu.isNotEmpty()) t = t.replace("<@$eu>", "@VOCÊ").replace("<@!$eu>", "@VOCÊ")
         return t.replace(Regex("<@!?\\d+>"), "@alguém").replace(Regex("<@&\\d+>"), "@cargo").replace(Regex("<#\\d+>"), "#canal")
+            .replace(Regex("<a?:(\\w+):\\d+>"), ":$1:")
     }
 
     /** valor escrito na mensagem da fila (em centavos), ou null */
@@ -1190,6 +1204,16 @@ object Sniper {
         return null
     }
 
+    /** a mensagem da fila mostra outro valor: guarda o valor certo desse ID (vale nas próximas rodadas) */
+    @Synchronized
+    private fun corrigirValor(fid: String, valor: String) {
+        val cor = try { JSONObject(sp.getString("corrigidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
+        if (cor.s(fid) == valor) return
+        cor.put(fid, valor)
+        sp.edit().putString("corrigidos", cor.toString()).apply()
+        carregarOrgs()
+    }
+
     /** você já aparece na lista de jogadores da fila (por @menção ou pelo nome) */
     private fun jaEstou(jogadores: String): Boolean {
         if (jogadores.isEmpty()) return false
@@ -1265,7 +1289,11 @@ object Sniper {
             }
             val aceitos = orgs[o]?.filas?.get(modo)?.filter { it.value == fid }?.keys ?: emptySet()
             if (lido != null && lido !in aceitos) {
-                avisarUmaVez("valor|$fid", "erro", "fila $nome: a mensagem diz ${rotuloValor(lido)} · confira esse ID")
+                // ID com valor trocado (FURIA/MORRO): não entra e corrige pro valor certo
+                avisarUmaVez("valor|$fid", "info", "$o $modo: o ID que estava como ${rotuloFila(o, v)} é de ${rotuloValor(lido)} · corrigido, não entrei")
+                corrigirValor(fid, lido)
+                Thread.sleep(PAUSA_ENTRE_FILAS)
+                continue
             }
             val botao = acharBotao(m, o, modo)
             if (botao == null) {
@@ -1280,9 +1308,11 @@ object Sniper {
             } else if (botao.desativado) {
                 status(o, "fila $modo ${rotuloFila(o, v)} fechada agora", "info")
             } else {
+                if (!buscando) return
                 val nonce = Snow.novo()
                 cliques[nonce] = arrayOf(fid, o, nome)
-                val r = d.clicar(m, botao, nonce)
+                val r = d.clicar(m, botao, nonce) { buscando && filasEntradas.size < maxFilas }
+                if (r.codigo == -2) { cliques.remove(nonce); return }
                 if (r.ok) {
                     filasEntradas.add(fid)
                     ultimaFila[o] = fid to nome
@@ -1310,14 +1340,19 @@ object Sniper {
 
     // ======================================================================== descobrir valores
     /** abre cada fila sem valor (GOLD, FARM...), lê o "Valor: R$ ..." dela e guarda. Só lê, não entra em fila. */
-    fun descobrir() {
+    fun descobrir(conferirTudo: Boolean = false) {
         if (descobrindo) return
         if (!conectado || dc == null) { log("erro", "ligue o bot primeiro"); return }
         val lista = ArrayList<Triple<String, String, String>>()
         for ((o, ms) in pendentes) for ((m, ids) in ms) for (id in ids) lista.add(Triple(o, m, id))
-        if (lista.isEmpty()) { log("info", "nenhuma fila sem valor"); return }
+        val conferir = ArrayList<Triple<String, String, String>>()
+        if (conferirTudo) {
+            val vistos = HashSet<String>()
+            for ((o, od) in orgs) for ((m, f) in od.filas) for ((v, id) in f) if (vistos.add(id)) conferir.add(Triple(o, m, id))
+        }
+        if (lista.isEmpty() && conferir.isEmpty()) { log("info", "nenhuma fila sem valor"); return }
         descobrindo = true
-        log("info", "descobrindo o valor de ${lista.size} filas (só lê, não entra em nenhuma)...")
+        log("info", "lendo ${lista.size + conferir.size} filas (só lê, não entra em nenhuma)...")
         val th = Thread {
             var achou = 0
             val faltou = ArrayList<String>()
@@ -1351,6 +1386,25 @@ object Sniper {
                     log("ok", "$o $m: fila de ${rotuloValor(v)} descoberta")
                     Thread.sleep(300)
                 }
+                // confere as que já têm valor: ID com valor trocado é corrigido
+                var corrigidas = 0
+                for ((i, t) in conferir.withIndex()) {
+                    if (dc == null) break
+                    val (o, m, id) = t
+                    if (o in semServidor) continue
+                    progresso = "conferindo $o $m (${i + 1}/${conferir.size})"
+                    mudou()
+                    val msg = acharFila(id, o, forcar = true) ?: continue
+                    val lido = lerValor(msg) ?: continue
+                    val aceitos = orgs[o]?.filas?.get(m)?.filter { it.value == id }?.keys ?: emptySet()
+                    if (lido !in aceitos) {
+                        corrigirValor(id, lido)
+                        corrigidas++
+                        log("info", "$o $m: ID corrigido pra ${rotuloValor(lido)}")
+                    }
+                    Thread.sleep(250)
+                }
+                if (conferir.isNotEmpty()) log("ok", "conferência: $corrigidas filas estavam com valor trocado e foram corrigidas")
             } catch (_: InterruptedException) {
             } catch (t: Throwable) {
                 log("erro", "descobrir: ${t.message ?: t.javaClass.simpleName}")

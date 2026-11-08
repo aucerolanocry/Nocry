@@ -175,9 +175,12 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             secSalasTopo.addView(Ui.text(c, "Nenhuma sala aberta. Quando formar partida ela aparece aqui sozinha (e chega notificação).", 11.5f, Ui.MUTED))
             return
         }
-        val linha = Ui.hbox(c)
+        var linha = Ui.hbox(c)
         for ((i, id) in ids.withIndex()) {
-            if (i >= Sniper.MAX_SALAS) break
+            if (i > 0 && i % 6 == 0) {
+                secSalasTopo.addView(linha, Ui.lp(top = if (i == 6) 0 else 6, c = c))
+                linha = Ui.hbox(c)
+            }
             val s = Sniper.salas[id] ?: continue
             val sel = id == Sniper.salaAtiva
             val rot = (if (s.apostaOk) "★" else "") + "${i + 1}" + (if (s.naoLidas > 0) "·${s.naoLidas}" else "")
@@ -194,10 +197,17 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             tv.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 12))
             Ui.clique(tv) { Sniper.ativarSala(i) }
             val p = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            if (i > 0) p.leftMargin = Ui.dp(c, 6)
+            if (i % 6 > 0) p.leftMargin = Ui.dp(c, 6)
             linha.addView(tv, p)
         }
-        secSalasTopo.addView(linha)
+        // completa a última linha pra os botões ficarem do mesmo tamanho
+        val sobra = (6 - ids.size % 6) % 6
+        for (k in 0 until sobra) {
+            val p = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            p.leftMargin = Ui.dp(c, 6)
+            linha.addView(View(c), p)
+        }
+        secSalasTopo.addView(linha, Ui.lp(top = if (ids.size > 6) 6 else 0, c = c))
         Sniper.salaAtiva?.let { Sniper.salas[it] }?.let { s ->
             val extra = when {
                 s.apostaOk -> " · ★ APOSTA CONFIRMADA"
@@ -389,6 +399,15 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                 }
             }, Ui.lp(top = 8, c = c))
         }
+        card.addView(Ui.item(c, "Conferir todos os valores", if (Sniper.descobrindo) Sniper.progresso.ifEmpty { "lendo as filas..." }
+            else "Abre cada fila de todas as orgs e corrige ID com valor trocado (FURIA/MORRO estavam assim). Demora uns 3 min. Só lê.", 0, null) {
+            when {
+                Sniper.descobrindo -> Ui.toast(c, "já está lendo as filas")
+                !Sniper.conectado -> Ui.toast(c, "ligue o bot primeiro")
+                Sniper.buscando -> Ui.toast(c, "pause a busca primeiro")
+                else -> Sniper.descobrir(conferirTudo = true)
+            }
+        }, Ui.lp(top = 8, c = c))
         if (Cofre.tem(c)) {
             card.addView(Ui.item(c, "Trocar token", "Apaga o token salvo e desliga o bot.", 0, null) {
                 Ui.dialogConfirma(c, "TROCAR TOKEN", "O token salvo é apagado e o bot desliga. Depois é só colar o novo.", "APAGAR") {
@@ -405,7 +424,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         secLog.removeAllViews()
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_log, "registro"))
-        val ls = Sniper.logs(14)
+        val ls = Sniper.logs(25)
         if (ls.isEmpty()) card.addView(Ui.text(c, "nada ainda", 11f, Ui.MUTED, code = true), Ui.lp(top = 8, c = c))
         for (l in ls.reversed()) {
             val (marca, cor) = when (l.tipo) {

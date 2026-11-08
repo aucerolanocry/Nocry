@@ -224,10 +224,12 @@ class Discord(private val token: String, private val vendorId: String, private v
         }
     }
 
-    fun req(metodo: String, caminho: String, corpo: JSONObject? = null): Resp {
+    fun req(metodo: String, caminho: String, corpo: JSONObject? = null, antes: (() -> Boolean)? = null): Resp {
         var tentativa = 0
         while (true) {
             esperaVez(caminho)
+            // esperou a vez de clicar: confere se ainda pode (ex.: a busca foi pausada enquanto esperava)
+            if (antes != null && !antes()) return Resp(-2, "cancelado")
             val b = Request.Builder().url(API + caminho)
                 .header("Authorization", token)
                 .header("User-Agent", ua)
@@ -297,7 +299,7 @@ class Discord(private val token: String, private val vendorId: String, private v
     fun entrarThread(tid: String): Resp = req("PUT", "/channels/$tid/thread-members/@me")
 
     /** clica num botão de mensagem (o mesmo que tocar no botão no app) */
-    fun clicar(m: DMsg, b: DBotao, nonce: String = Snow.novo()): Resp {
+    fun clicar(m: DMsg, b: DBotao, nonce: String = Snow.novo(), antes: (() -> Boolean)? = null): Resp {
         val corpo = JSONObject()
             .put("type", 3)
             .put("nonce", nonce)
@@ -308,7 +310,7 @@ class Discord(private val token: String, private val vendorId: String, private v
             .put("session_id", sessao ?: "")
             .put("data", JSONObject().put("component_type", 2).put("custom_id", b.customId))
         if (m.guildId != null) corpo.put("guild_id", m.guildId)
-        return req("POST", "/interactions", corpo)
+        return req("POST", "/interactions", corpo, antes)
     }
 
     // ------------------------------------------------------------------ gateway
