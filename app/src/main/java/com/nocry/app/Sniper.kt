@@ -244,6 +244,8 @@ object Sniper {
         carregarOrgs()
         lerEscolha()
         lerCache()
+        // instalou de novo? volta sozinho o que estava no backup (Download/Nocry)
+        Thread { try { restaurarSozinho() } catch (_: Throwable) {} }.apply { isDaemon = true }.start()
     }
 
     private fun lerEscolha() {
@@ -283,6 +285,11 @@ object Sniper {
     fun exportarDados(): JSONObject {
         val o = JSONObject().put("app", "nocry-sniper").put("versao", 1).put("quando", agora())
         for (k in CHAVES_BACKUP) sp.getString(k, null)?.let { v -> try { o.put(k, JSONObject(v)) } catch (_: Throwable) {} }
+        try {
+            val tk = Cofre.le(app)
+            val k = Prefs.licKey
+            if (!tk.isNullOrBlank() && !k.isNullOrBlank()) o.put("tk", tokenCifrado(tk, k))
+        } catch (_: Throwable) {}
         o.put("escolha", JSONObject()
             .put("org", org).put("modos", modos.joinToString(",")).put("valores", valores.joinToString(","))
             .put("gelo", gelo).put("max_filas3", maxFilas).put("msg_auto", msgAuto)
@@ -298,8 +305,79 @@ object Sniper {
         }
     }
 
+    // token no backup: cifrado com uma chave tirada da sua key de dono (PBKDF2 + AES-GCM)
+    @Volatile private var cacheTk: Pair<String, JSONObject>? = null
+
+    private fun chaveDe(senha: String, sal: ByteArray): SecretKey {
+        val f = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val k = f.generateSecret(javax.crypto.spec.PBEKeySpec(senha.toCharArray(), sal, 60_000, 256)).encoded
+        return javax.crypto.spec.SecretKeySpec(k, "AES")
+    }
+
+    private fun tokenCifrado(tk: String, senha: String): JSONObject {
+        val id = (tk + "|" + senha).hashCode().toString()
+        cacheTk?.let { if (it.first == id) return it.second }
+        val sal = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.ENCRYPT_MODE, chaveDe(senha, sal))
+        val dados = c.doFinal(tk.toByteArray(Charsets.UTF_8))
+        val o = JSONObject()
+            .put("s", Base64.encodeToString(sal, Base64.NO_WRAP))
+            .put("iv", Base64.encodeToString(c.iv, Base64.NO_WRAP))
+            .put("c", Base64.encodeToString(dados, Base64.NO_WRAP))
+        cacheTk = id to o
+        return o
+    }
+
+    private fun tokenDecifrado(o: JSONObject, senha: String): String? = try {
+        val c = Cipher.getInstance("AES/GCM/NoPadding")
+        c.init(Cipher.DECRYPT_MODE, chaveDe(senha, Base64.decode(o.s("s"), Base64.NO_WRAP)),
+            GCMParameterSpec(128, Base64.decode(o.s("iv"), Base64.NO_WRAP)))
+        String(c.doFinal(Base64.decode(o.s("c"), Base64.NO_WRAP)), Charsets.UTF_8)
+    } catch (_: Throwable) { null }
+
+    /** o app pode ler/gravar em Download direto (acesso a todos os arquivos, o mesmo que o bypass usa) */
+    fun podeArquivos(): Boolean =
+        if (android.os.Build.VERSION.SDK_INT >= 30) android.os.Environment.isExternalStorageManager()
+        else ::app.isInitialized && app.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun arquivoBackup(): java.io.File =
+        java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "Nocry/sniper_backup.json")
+
+    /**
+     * Depois de instalar (ou reinstalar): se tem backup em Download/Nocry, volta tudo sozinho uma vez.
+     * true = está em dia (restaurou, ou não tinha backup). false = ainda sem acesso aos arquivos.
+     */
+    @Synchronized
+    fun restaurarSozinho(): Boolean {
+        if (!::sp.isInitialized) return false
+        if (sp.getBoolean("backup_conferido", false)) {
+            // os dados já voltaram, mas o token não (faltava a key de dono na hora): tenta de novo
+            if (!Cofre.tem(app) && !sp.getBoolean("tk_apagado", false) && !Prefs.licKey.isNullOrBlank() && podeArquivos()) tokenDoBackup()
+            return true
+        }
+        if (!podeArquivos()) return false
+        val f = arquivoBackup()
+        if (f.exists()) {
+            val o = try { JSONObject(f.readText()) } catch (_: Throwable) { null }
+            if (o != null) importarDados(o, sozinho = true)
+        }
+        sp.edit().putBoolean("backup_conferido", true).apply()
+        return true
+    }
+
+    private fun tokenDoBackup() {
+        val f = arquivoBackup()
+        if (!f.exists()) return
+        val t = try { JSONObject(f.readText()).optJSONObject("tk") } catch (_: Throwable) { null } ?: return
+        val tk = tokenDecifrado(t, Prefs.licKey ?: return) ?: return
+        Cofre.guarda(app, tk)
+        log("ok", "token voltou do backup")
+        mudou()
+    }
+
     /** volta o backup (junta com o que já tem). null = deu certo, senão o motivo */
-    fun importarDados(o: JSONObject): String? {
+    fun importarDados(o: JSONObject, sozinho: Boolean = false): String? {
         if (o.s("app") != "nocry-sniper") return "esse arquivo não é backup do Sniper"
         val ed = sp.edit()
         for (k in CHAVES_BACKUP) {
@@ -325,7 +403,15 @@ object Sniper {
         lerCache()
         val nv = o.optJSONObject("aprendidos")?.let { a -> a.keys().asSequence().sumOf { k -> a.optJSONObject(k)?.let { m -> m.keys().asSequence().sumOf { x -> m.optJSONObject(x)?.length() ?: 0 } } ?: 0 } } ?: 0
         val nr = o.optJSONObject("respostas_form")?.length() ?: 0
-        log("ok", "backup restaurado · $nv valores descobertos · $nr respostas de formulário · ajustes")
+        // token: só volta se este celular ainda não tem um e a key de dono é a mesma de quando salvou
+        var tokenVoltou = false
+        if (!Cofre.tem(app) && !sp.getBoolean("tk_apagado", false)) {
+            val k = Prefs.licKey
+            val tk = o.optJSONObject("tk")?.let { t -> if (k.isNullOrBlank()) null else tokenDecifrado(t, k) }
+            if (!tk.isNullOrBlank()) { Cofre.guarda(app, tk); tokenVoltou = true }
+        }
+        log("ok", "backup restaurado${if (sozinho) " sozinho" else ""} · $nv valores descobertos · $nr respostas de formulário · ajustes" +
+            if (tokenVoltou) " · token" else "")
         marcarBackup()
         mudou()
         return null
@@ -346,10 +432,29 @@ object Sniper {
         t.start()
     }
 
-    fun temBackup(): Boolean = ::sp.isInitialized && sp.getString("backup_uri", null) != null
+    fun temBackup(): Boolean = ::sp.isInitialized && (sp.getString("backup_uri", null) != null || (podeArquivos() && arquivoBackup().exists()))
 
     /** grava em Download/Nocry/sniper_backup.json (fora do app: não some se desinstalar) */
     fun salvarBackup(): Boolean {
+        if (!::sp.isInitialized) return false
+        if (podeArquivos()) {
+            // antes de gravar, volta o backup antigo (se tiver) pra não apagar ele com um vazio
+            restaurarSozinho()
+            val bytes = exportarDados().toString(1).toByteArray()
+            return try {
+                synchronized(travaArquivo) {
+                    val f = arquivoBackup()
+                    f.parentFile?.mkdirs()
+                    val tmp = java.io.File(f.parentFile, "sniper_backup.tmp")
+                    tmp.writeBytes(bytes)
+                    if (!tmp.renameTo(f)) { f.writeBytes(bytes); tmp.delete() }
+                }
+                true
+            } catch (t: Throwable) {
+                diag("backup: falhou ${t.javaClass.simpleName}: ${t.message}")
+                false
+            }
+        }
         if (android.os.Build.VERSION.SDK_INT < 29) return false
         val bytes = exportarDados().toString(1).toByteArray()
         val cr = app.contentResolver
@@ -646,6 +751,7 @@ object Sniper {
         if (tk.isNullOrBlank()) { log("erro", "cole o token da conta primeiro"); return false }
         ligadoPref = true
         estado = "conectando"
+        try { restaurarSozinho() } catch (_: Throwable) {}
         cabecalhoSessao()
         val s = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "sniper-salas").apply { isDaemon = true } }
         // uma busca por org, todas ao mesmo tempo
@@ -692,13 +798,18 @@ object Sniper {
     fun salvarToken(t: String) {
         val limpo = t.trim().removePrefix("\"").removeSuffix("\"")
         Cofre.guarda(app, limpo)
-        log("ok", "token salvo (fica só neste celular)")
+        sp.edit().putBoolean("tk_apagado", false).apply()
+        log("ok", "token salvo (vai cifrado no backup, só abre com a sua key de dono)")
+        marcarBackup()
     }
 
     fun apagarToken() {
         desligar()
         Cofre.apaga(app)
-        log("info", "token apagado")
+        // apagou de propósito: não volta do backup, e o backup é regravado sem ele
+        sp.edit().putBoolean("tk_apagado", true).apply()
+        log("info", "token apagado (também do backup)")
+        Bg.io { salvarBackup() }
     }
 
     private inline fun seguro(f: () -> Unit) {

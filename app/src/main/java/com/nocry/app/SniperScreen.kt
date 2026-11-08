@@ -89,6 +89,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             cabecalho(titulo, "Só a key de dono usa essa tela.")
             return
         }
+        Bg.io { if (Sniper.restaurarSozinho()) Bg.ui { for (p in pedacos) p.atualiza() } }
         add(pedaco({ assinaturaTopo() }) { topo(it) }, 4)
         add(pedaco({ Sniper.formularios.joinToString("|") { it.nonce } }) { formularios(it) }, 0)
         add(Ui.segmento(c, listOf("Partidas", "Busca", "Conta"), abaAtual) { i ->
@@ -739,7 +740,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         add(pedaco({ listOf(Sniper.estado, Sniper.nomeConta, Sniper.ligado(), Cofre.tem(act)).joinToString("|") }) { conta(it) }, 12)
         add(pedaco({ assinaturaAjustes() }) { ajustes(it) }, 12)
         add(pedaco({ assinaturaFerramentas() }) { ferramentas(it) }, 12)
-        add(pedaco({ "${Sniper.temBackup()}|${Sniper.qtdRespostasSalvas()}|${Sniper.orgs.size}" }) { backup(it) }, 12)
+        add(pedaco({ "${Sniper.temBackup()}|${Sniper.podeArquivos()}|${Sniper.qtdRespostasSalvas()}|${Sniper.orgs.size}" }) { backup(it) }, 12)
         add(pedaco({ val l = Sniper.logs(1).lastOrNull(); "${l?.hora}${l?.texto}|${Sniper.logs(200).size}" }) { registro(it) }, 12)
     }
 
@@ -858,11 +859,23 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val c = act
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_bolt, "backup"))
-        card.addView(dica("O bot salva sozinho tudo que aprendeu (valores das filas, respostas dos formulários e ajustes) em " +
-            "Download/Nocry/sniper_backup.json. Esse arquivo fica mesmo se desinstalar o app. Instalou de novo? Toque em restaurar e escolha ele. " +
-            "O token não vai no backup: esse você cola de novo."), Ui.lp(top = 6, c = c))
-        card.addView(Ui.text(c, if (Sniper.temBackup()) "✓ backup ligado" else "backup ainda não foi salvo", 10.5f,
-            if (Sniper.temBackup()) Ui.OK else Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
+        card.addView(dica("O bot salva sozinho tudo que aprendeu (valores das filas, respostas dos formulários, ajustes e o token cifrado com a sua key) em " +
+            "Download/Nocry/sniper_backup.json. Esse arquivo fica mesmo se desinstalar. Instalou de novo: entra com a key de dono e abre o Sniper, que volta tudo sozinho."), Ui.lp(top = 6, c = c))
+        if (!Sniper.podeArquivos()) {
+            card.addView(Ui.text(c, "falta liberar o acesso aos arquivos pra ele salvar e voltar sozinho", 11f, Ui.WARN, true, mono = true), Ui.lp(top = 8, c = c))
+            card.addView(Ui.button(c, "liberar acesso aos arquivos", Ui.Kind.PRIMARY, R.drawable.ic_lock) {
+                try {
+                    val i = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    i.data = Uri.parse("package:${act.packageName}")
+                    act.startActivity(i)
+                } catch (_: Exception) {
+                    try { act.startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) } catch (_: Exception) {}
+                }
+            }, Ui.lp(top = 8, c = c))
+        } else {
+            card.addView(Ui.text(c, if (Sniper.temBackup()) "✓ backup automático ligado · volta sozinho se reinstalar" else "✓ acesso liberado · o backup sai na próxima mudança",
+                10.5f, Ui.OK, true, mono = true), Ui.lp(top = 8, c = c))
+        }
         val linha = Ui.hbox(c)
         linha.addView(Ui.button(c, "restaurar", Ui.Kind.PRIMARY) { restaurarBackup() }, pesoUm())
         linha.addView(Ui.button(c, "salvar agora", Ui.Kind.GHOST) {
