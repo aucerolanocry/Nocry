@@ -224,10 +224,11 @@ class Discord(private val token: String, private val vendorId: String, private v
         }
     }
 
-    fun req(metodo: String, caminho: String, corpo: JSONObject? = null, antes: (() -> Boolean)? = null): Resp {
+    fun req(metodo: String, caminho: String, corpo: JSONObject? = null, antes: (() -> Boolean)? = null, rapido: Boolean = false): Resp {
         var tentativa = 0
         while (true) {
-            esperaVez(caminho)
+            // pedido urgente (mensagem automática) fura a fila
+            if (!rapido) esperaVez(caminho)
             // esperou a vez de clicar: confere se ainda pode (ex.: a busca foi pausada enquanto esperava)
             if (antes != null && !antes()) return Resp(-2, "cancelado")
             val b = Request.Builder().url(API + caminho)
@@ -289,12 +290,12 @@ class Discord(private val token: String, private val vendorId: String, private v
         return out to r
     }
 
-    fun enviar(cid: String, texto: String): Resp = req("POST", "/channels/$cid/messages", JSONObject()
+    fun enviar(cid: String, texto: String, rapido: Boolean = false): Resp = req("POST", "/channels/$cid/messages", JSONObject()
         .put("content", texto)
         .put("nonce", Snow.novo())
         .put("enforce_nonce", true)
         .put("tts", false)
-        .put("flags", 0))
+        .put("flags", 0), rapido = rapido)
 
     fun entrarThread(tid: String): Resp = req("PUT", "/channels/$tid/thread-members/@me")
 

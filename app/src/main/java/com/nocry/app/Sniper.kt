@@ -196,6 +196,8 @@ object Sniper {
     @Volatile private var dc: Discord? = null
     @Volatile private var exSalas: ScheduledExecutorService? = null
     @Volatile private var exFilas: ScheduledExecutorService? = null
+    @Volatile private var exVigia: ScheduledExecutorService? = null     // conferir salas (não atrasa os eventos)
+    @Volatile private var exRapido: ScheduledExecutorService? = null    // só a mensagem automática (sai na hora)
     private val giroOrg = ConcurrentHashMap<String, Int>()
     private val orgRodando: MutableSet<String> = ConcurrentHashMap.newKeySet()
     @Volatile private var ultimaVarredura = 0L
@@ -456,11 +458,15 @@ object Sniper {
         val f = Executors.newScheduledThreadPool(orgs.size.coerceIn(2, 20)) { r -> Thread(r, "sniper-filas").apply { isDaemon = true } }
         exSalas = s
         exFilas = f
+        val v = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "sniper-vigia").apply { isDaemon = true } }
+        val rp = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "sniper-rapido").apply { isDaemon = true; priority = Thread.MAX_PRIORITY } }
+        exVigia = v
+        exRapido = rp
         val d = Discord(tk.trim(), vendorId(), ouvinte)
         dc = d
         log("info", "conectando no Discord...")
         s.execute { seguro { d.conectar() } }
-        s.scheduleWithFixedDelay({ seguro { vigiarSalas() } }, 4, 2, TimeUnit.SECONDS)
+        v.scheduleWithFixedDelay({ seguro { vigiarSalas() } }, 4, 2, TimeUnit.SECONDS)
         f.scheduleWithFixedDelay({ seguro { distribuir() } }, 6, 1, TimeUnit.SECONDS)
         NocryService.sync(app)
         mudou()
@@ -474,6 +480,8 @@ object Sniper {
         dc = null
         exSalas?.shutdownNow(); exSalas = null
         exFilas?.shutdownNow(); exFilas = null
+        exVigia?.shutdownNow(); exVigia = null
+        exRapido?.shutdownNow(); exRapido = null
         orgRodando.clear()
         if (estado != "token") estado = "desligado"
         if (!lembrar) ligadoPref = false
@@ -671,6 +679,7 @@ object Sniper {
 
     fun numeroSala(id: String): Int = ordem.indexOf(id) + 1
 
+    @Synchronized
     private fun abrirSala(c: DCanal): SSala? {
         if (largadas.contains(c.id)) return null
         salas[c.id]?.let { return it }
@@ -688,22 +697,25 @@ object Sniper {
         }
         notificar("Sala aberta · $o", c.nome)
         mudou()
-        exSalas?.schedule(Runnable { seguro { prepararSala(s) } }, 2, TimeUnit.SECONDS)
+        // a mensagem automática sai na hora (antes dos jogadores mandarem a deles)
+        (exRapido ?: exSalas)?.execute { seguro { prepararSala(s) } }
         return s
     }
 
     private fun prepararSala(s: SSala) {
         val d = dc ?: return
         if (!salas.containsKey(s.id)) return
-        if (s.thread) d.entrarThread(s.id)
-        val (antes, _) = d.historico(s.id, 25, null, s.guildId)
-        if (antes.any { it.autorId == eu && it.conteudo.trim() == msgAuto.trim() }) {
-            s.msgEnviada = true
-            log("info", "sala ${numeroSala(s.id)}: a mensagem automática já estava lá, não mandei de novo")
-            carregarHistorico(s)
-            return
+        // sala que já existia (o app abriu de novo, por exemplo): só manda se ainda não mandou
+        if (agora() - Snow.ms(s.id) > 90_000) {
+            val (antes, _) = d.historico(s.id, 25, null, s.guildId)
+            if (antes.any { it.autorId == eu && it.conteudo.trim() == msgAuto.trim() }) {
+                s.msgEnviada = true
+                exSalas?.execute { seguro { carregarHistorico(s) } }
+                return
+            }
         }
-        val r = d.enviar(s.id, msgAuto)
+        val r = d.enviar(s.id, msgAuto, rapido = true)
+        if (s.thread) Thread { try { d.entrarThread(s.id) } catch (_: Throwable) {} }.start()
         if (r.ok) {
             s.msgEnviada = true
         } else if (r.codigo == 403 || r.erro() == 50013 || r.erro() == 50001) {
@@ -720,19 +732,22 @@ object Sniper {
         } else {
             log("erro", "não deu pra mandar a mensagem automática na sala ${numeroSala(s.id)} (${motivo(r)})")
         }
-        carregarHistorico(s)
+        exSalas?.execute { seguro { carregarHistorico(s) } }
     }
 
     private fun carregarHistorico(s: SSala) {
         val d = dc ?: return
         val (ms, _) = d.historico(s.id, 50, null, s.guildId)
         val lista = ms.sortedBy { it.id.toLongOrNull() ?: 0L }
+        val ultimoHist = lista.lastOrNull()?.id?.toLongOrNull() ?: 0L
         synchronized(s.chat) {
+            val depois = s.chat.filter { (it.id.toLongOrNull() ?: 0L) > ultimoHist }
             s.chat.clear()
             for (m in lista) {
                 s.vistos.add(m.id)
                 if (!vazia(m)) s.chat.add(linhaChat(m))
             }
+            s.chat.addAll(depois)
         }
         lista.lastOrNull()?.let { s.ultimoId = it.id }
         mudou()
@@ -884,7 +899,7 @@ object Sniper {
             }
         }
         // servidor em que acabou de entrar numa fila: confere se apareceu canal novo (sala tipo "partida-11")
-        if (t - ultimaVarredura > 20_000) {
+        if (t - ultimaVarredura > 10_000) {
             ultimaVarredura = t
             for ((gid, quando) in entrouEm) {
                 if (t - quando > SALA_NOVA) continue
@@ -902,7 +917,7 @@ object Sniper {
             }
         }
         // threads ativas desses servidores (sala "aguardando" mesmo se o Discord não avisar ao vivo)
-        if (t - ultimaThreads > 10_000) {
+        if (t - ultimaThreads > 6_000) {
             ultimaThreads = t
             for ((gid, quando) in entrouEm) {
                 if (t - quando > SALA_NOVA) continue
