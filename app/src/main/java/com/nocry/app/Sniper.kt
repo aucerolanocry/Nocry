@@ -648,7 +648,7 @@ object Sniper {
 
     private fun carregarHistorico(s: SSala) {
         val d = dc ?: return
-        val (ms, _) = d.historico(s.id, 50)
+        val (ms, _) = d.historico(s.id, 50, null, s.guildId)
         val lista = ms.sortedBy { it.id.toLongOrNull() ?: 0L }
         synchronized(s.chat) {
             s.chat.clear()
@@ -747,7 +747,7 @@ object Sniper {
             // o Discord não mandou nada dessa sala há um tempo: busca as mensagens novas direto
             if (s.ultimoId != null && t - s.gatewayEm > 15_000 && t - s.ultimoPoll > 3_000) {
                 s.ultimoPoll = t
-                val (ms, r) = d.historico(s.id, 50, s.ultimoId)
+                val (ms, r) = d.historico(s.id, 50, s.ultimoId, s.guildId)
                 if (r.codigo == 404 || r.erro() == 10003) { fecharSala(s.id); continue }
                 for (m in ms.sortedBy { it.id.toLongOrNull() ?: 0L }) aoMsg(m, false)
             }
@@ -774,7 +774,7 @@ object Sniper {
 
     private fun clicarSair(s: SSala): Boolean {
         val d = dc ?: return false
-        val (ms, _) = d.historico(s.id, 20)
+        val (ms, _) = d.historico(s.id, 20, null, s.guildId)
         for (m in ms) for (b in m.botoes) {
             if (!b.desativado && PALAVRAS_SAIR.any { b.label.uppercase().contains(it) }) {
                 if (d.clicar(m, b).ok) return true
@@ -785,7 +785,7 @@ object Sniper {
 
     private fun clicarConfirmar(s: SSala): Boolean {
         val d = dc ?: return false
-        val (ms, _) = d.historico(s.id, 50)
+        val (ms, _) = d.historico(s.id, 50, null, s.guildId)
         for (m in ms) for (b in m.botoes) {
             val l = b.label.uppercase()
             if (!b.desativado && "CONFIRM" in l && "CANCEL" !in l) {
@@ -938,10 +938,18 @@ object Sniper {
         r.codigo == 401 -> "token inválido"
         r.codigo == 403 -> "sem permissão"
         r.codigo == 404 -> "não existe mais"
-        else -> "código ${r.codigo}"
+        else -> "código ${r.codigo}" + (r.obj()?.s("message")?.let { ": " + it.take(80) } ?: "")
     }
 
     // ======================================================================== filas
+    /** servidor de um canal: o clique no botão precisa dele (a API não manda junto da mensagem) */
+    private fun gidDe(cid: String): String? {
+        canais[cid]?.guildId?.let { return it }
+        val c = dc?.canal(cid)?.obj()?.let { canalDe(it) } ?: return null
+        if (c.id.isNotEmpty()) canais[c.id] = c
+        return c.guildId
+    }
+
     private fun ordenarCanais(ids: List<String>): List<String> {
         val chaves = listOf("fila", "x1", "1v1", "2v2", "3v3", "4v4", "mob", "emu", "apost", "x2", "x3", "x4")
         return ids.sortedBy { id -> val n = (canais[id]?.nome ?: "").lowercase(); if (chaves.any { it in n }) 0 else 1 }
@@ -967,7 +975,7 @@ object Sniper {
         val t = agora()
         if (!forcar && (t - (sumida[fid] ?: 0L) < ESQUECER_SUMIDA || t - (orgSumida[o] ?: 0L) < ESQUECER_SUMIDA)) return null
         canalDaFila[fid]?.let { cid ->
-            val (m, r) = d.mensagem(cid, fid)
+            val (m, r) = d.mensagem(cid, fid, gidDe(cid))
             if (m != null) return m
             if (r.ok || r.codigo == 403 || r.codigo == 404) canalDaFila.remove(fid) else return null
         }
@@ -985,7 +993,7 @@ object Sniper {
         for (cid in candidatos) {
             if (!forcar && !buscando) return null
             if (dc == null) return null
-            val (m, r) = d.mensagem(cid, fid)
+            val (m, r) = d.mensagem(cid, fid, canais[cid]?.guildId)
             if (m != null) {
                 canalDaFila[fid] = cid
                 canaisDaOrg.getOrPut(o) { ConcurrentHashMap.newKeySet() }.add(cid)
@@ -1068,7 +1076,8 @@ object Sniper {
             for (e in m.embeds) for (f in e.campos) if ("JOGADOR" in f.nome.uppercase()) jogadores = f.valor
             val lido = lerValor(m)
             val texto = textoCard(m).uppercase()
-            if (lido == null && "JOGADOR" !in texto && "FILA" !in texto) {
+            val botaoConhecido = orgs[o]?.botoes != null && acharBotao(m, o, modo) != null
+            if (lido == null && "JOGADOR" !in texto && "FILA" !in texto && !botaoConhecido) {
                 avisarUmaVez("naofila|$fid", "erro", "$nome: esse ID não parece uma fila (sem valor/jogadores) · não cliquei")
                 status(o, "✗ ID de $modo ${rotuloFila(o, v)} não é fila", "erro")
                 Thread.sleep(PAUSA_ENTRE_FILAS)

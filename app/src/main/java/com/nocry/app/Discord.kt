@@ -253,25 +253,25 @@ class Discord(private val token: String, private val vendorId: String, private v
     fun canal(cid: String): Resp = req("GET", "/channels/$cid")
 
     /** busca uma mensagem pelo id (conta de usuário usa o "around"). null se não estiver nesse canal */
-    fun mensagem(cid: String, mid: String): Pair<DMsg?, Resp> {
+    fun mensagem(cid: String, mid: String, gid: String? = null): Pair<DMsg?, Resp> {
         val r = req("GET", "/channels/$cid/messages?limit=1&around=$mid")
         if (!r.ok) return null to r
         val a = r.arr() ?: return null to r
         for (i in 0 until a.length()) {
             val o = a.optJSONObject(i) ?: continue
-            if (o.s("id") == mid) return DMsg.de(o) to r
+            if (o.s("id") == mid) return DMsg.de(o, gid) to r
         }
         return null to r
     }
 
     /** últimas mensagens (mais nova primeiro, igual o Discord devolve). depois = só as mais novas que esse id */
-    fun historico(cid: String, limite: Int, depois: String? = null): Pair<List<DMsg>, Resp> {
+    fun historico(cid: String, limite: Int, depois: String? = null, gid: String? = null): Pair<List<DMsg>, Resp> {
         val q = "/channels/$cid/messages?limit=$limite" + (if (depois != null) "&after=$depois" else "")
         val r = req("GET", q)
         if (!r.ok) return emptyList<DMsg>() to r
         val a = r.arr() ?: return emptyList<DMsg>() to r
         val out = ArrayList<DMsg>()
-        for (i in 0 until a.length()) a.optJSONObject(i)?.let { out.add(DMsg.de(it)) }
+        for (i in 0 until a.length()) a.optJSONObject(i)?.let { out.add(DMsg.de(it, gid)) }
         return out to r
     }
 
