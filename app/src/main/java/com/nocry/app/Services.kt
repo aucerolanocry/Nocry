@@ -238,6 +238,8 @@ class NocryService : Service() {
     }
 
     private fun inicia() {
+        // o Android fechou o app com o SNIPER ligado: o serviço voltou, liga o bot de novo
+        if (Sniper.ligadoPref && !Sniper.ligado() && License.isOwner()) Sniper.ligar()
         if (go) return
         go = true
         NLog.add("servico", "ligado: " + Engine.resumo())

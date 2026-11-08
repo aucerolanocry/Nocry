@@ -82,4 +82,6 @@ dependencies {
     implementation("org.conscrypt:conscrypt-android:2.5.3")
     implementation("androidx.annotation:annotation:1.9.1")
     implementation("androidx.core:core:1.13.1")
+    // SNIPER (só dono): conexão com o Discord (gateway + API)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

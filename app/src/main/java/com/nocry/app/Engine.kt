@@ -304,6 +304,7 @@ object Engine {
         if (Prefs.otmAuto) l.add("OTIMIZACAO AUTO")
         if (Prefs.bypassAtivo) l.add("BYPASS(${Prefs.bypassGatilho})")
         if (Prefs.bypassVolAtivo) l.add("BYPASS-VOLUME")
+        Sniper.resumo().takeIf { it.isNotEmpty() }?.let { l.add(it) }
         return if (l.isEmpty()) "nada ligado" else l.joinToString(" · ")
     }
 }

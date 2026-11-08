@@ -417,7 +417,7 @@ var bypassVolAtivo: Boolean
         set(v) = ps("lic_sig", v)
 
     /** precisa do servico em primeiro plano? */
-    fun precisaServico(): Boolean = volAtivo || cargaAtivo || mcAtivo || otmAuto || bypassAtivo || bypassVolAtivo
+    fun precisaServico(): Boolean = volAtivo || cargaAtivo || mcAtivo || otmAuto || bypassAtivo || bypassVolAtivo || Sniper.ligadoPref
 }
 
 /** Estado do carregador (sem ADB). */

@@ -197,7 +197,10 @@ class MainActivity : Activity() {
     /** primeira tela depois da abertura: o inicio, ou a tela da key se nao tiver key valida */
     private fun abreInicial() {
         if (gate || pilha.isNotEmpty()) return
-        if (License.valid()) { abre(HomeScreen(this)); avisoAtividade() } else mostraGate()
+        if (License.valid()) {
+            abre(HomeScreen(this)); avisoAtividade()
+            if (intent?.getStringExtra("abrir") == "sniper" && License.isOwner()) abre(SniperScreen(this))
+        } else mostraGate()
     }
 
     private var avisoAberto = false
@@ -351,6 +354,14 @@ class MainActivity : Activity() {
         conteudo.removeAllViews()
         val g = KeyGate(this)
         conteudo.addView(g.criar(), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    /** tocou na notificação do SNIPER com o app já aberto: vai pra tela dele */
+    override fun onNewIntent(i: android.content.Intent) {
+        super.onNewIntent(i)
+        if (i.getStringExtra("abrir") == "sniper" && License.isOwner() && !gate && pilha.lastOrNull() !is SniperScreen) {
+            abre(SniperScreen(this))
+        }
     }
 
     /** a key valeu: abre o app */
