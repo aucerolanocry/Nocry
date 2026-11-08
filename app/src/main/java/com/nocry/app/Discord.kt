@@ -3,8 +3,10 @@ package com.nocry.app
 import android.os.Build
 import android.util.Base64
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
@@ -46,6 +48,8 @@ class DCanal(
 }
 
 class DBotao(val customId: String, val label: String, val desativado: Boolean)
+/** arquivo/imagem anexado na mensagem */
+class DAnexo(val nome: String, val url: String, val proxy: String, val imagem: Boolean)
 class DCampo(val nome: String, val valor: String)
 class DEmbed(val titulo: String, val descricao: String, val campos: List<DCampo>)
 
@@ -62,7 +66,8 @@ class DMsg(
     val mencoes: List<Pair<String, String>>,
     val flags: Int,
     val interacaoUser: String?,
-    val appId: String?
+    val appId: String?,
+    val anexos: List<DAnexo> = emptyList()
 ) {
     val efemera: Boolean get() = flags and 64 != 0
 
@@ -112,6 +117,17 @@ class DMsg(
             val inter = (o.optJSONObject("interaction_metadata") ?: o.optJSONObject("interaction"))
                 ?.optJSONObject("user")?.s("id")
             val bot = a.optBoolean("bot", false)
+            val anexos = ArrayList<DAnexo>()
+            o.optJSONArray("attachments")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val x = arr.optJSONObject(i) ?: continue
+                    val nome = x.s("filename") ?: "arquivo"
+                    val url = x.s("url") ?: continue
+                    val img = (x.s("content_type") ?: "").startsWith("image/") ||
+                        nome.lowercase().let { n -> listOf(".png", ".jpg", ".jpeg", ".gif", ".webp").any { n.endsWith(it) } }
+                    anexos.add(DAnexo(nome, url, x.s("proxy_url") ?: url, img))
+                }
+            }
             return DMsg(
                 id = o.s("id") ?: "",
                 canalId = o.s("channel_id") ?: "",
@@ -125,7 +141,8 @@ class DMsg(
                 mencoes = mencoes,
                 flags = o.optInt("flags", 0),
                 interacaoUser = inter,
-                appId = o.s("application_id") ?: o.optJSONObject("webhook")?.s("id") ?: (if (bot) a.s("id") else null)
+                appId = o.s("application_id") ?: o.optJSONObject("webhook")?.s("id") ?: (if (bot) a.s("id") else null),
+                anexos = anexos
             )
         }
     }
@@ -224,7 +241,8 @@ class Discord(private val token: String, private val vendorId: String, private v
         }
     }
 
-    fun req(metodo: String, caminho: String, corpo: JSONObject? = null, antes: (() -> Boolean)? = null, rapido: Boolean = false): Resp {
+    fun req(metodo: String, caminho: String, corpo: JSONObject? = null, antes: (() -> Boolean)? = null, rapido: Boolean = false,
+            bruto: RequestBody? = null): Resp {
         var tentativa = 0
         while (true) {
             // pedido urgente (mensagem automática) fura a fila
@@ -238,7 +256,7 @@ class Discord(private val token: String, private val vendorId: String, private v
                 .header("X-Discord-Locale", "pt-BR")
                 .header("X-Discord-Timezone", "America/Sao_Paulo")
                 .header("Accept-Language", "pt-BR")
-            val rb = corpo?.toString()?.toRequestBody(JSON)
+            val rb = bruto ?: corpo?.toString()?.toRequestBody(JSON)
             when (metodo) {
                 "GET" -> b.get()
                 "DELETE" -> b.delete(rb)
@@ -296,6 +314,20 @@ class Discord(private val token: String, private val vendorId: String, private v
         .put("enforce_nonce", true)
         .put("tts", false)
         .put("flags", 0), rapido = rapido)
+
+    /** manda uma imagem (ou arquivo) no canal */
+    fun enviarImagem(cid: String, nome: String, bytes: ByteArray, mime: String, texto: String = ""): Resp {
+        val payload = JSONObject()
+            .put("content", texto)
+            .put("nonce", Snow.novo())
+            .put("enforce_nonce", true)
+            .put("attachments", JSONArray().put(JSONObject().put("id", 0).put("filename", nome)))
+        val corpo = MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("payload_json", payload.toString())
+            .addFormDataPart("files[0]", nome, bytes.toRequestBody(mime.toMediaType()))
+            .build()
+        return req("POST", "/channels/$cid/messages", bruto = corpo)
+    }
 
     fun entrarThread(tid: String): Resp = req("PUT", "/channels/$tid/thread-members/@me")
 

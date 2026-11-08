@@ -69,7 +69,8 @@ object Cofre {
 class SBotoes(val normal: List<String>, val infinito: List<String>, val outros: List<String>)
 class SOrg(val nome: String, val rotulos: Map<String, String>, val botoes: SBotoes?, val filas: Map<String, Map<String, String>>, val pendentes: Int)
 class SLinha(val hora: String, val tipo: String, val texto: String)
-class SChat(val id: String, val hora: String, val tipo: String, val nome: String, val texto: String)
+class SChat(val id: String, val hora: String, val tipo: String, val nome: String, val texto: String,
+            val imagem: String? = null, val imagemGrande: String? = null)
 
 class SSala(val id: String, val nome: String, val org: String, val guildId: String?, val thread: Boolean) {
     val aberta = System.currentTimeMillis()
@@ -754,12 +755,15 @@ object Sniper {
     }
 
     /** mensagem sem texto, card nem botão (entrou na thread, fixou...): não aparece no chat */
-    private fun vazia(m: DMsg): Boolean = m.conteudo.isBlank() && m.embeds.all { it.titulo.isBlank() && it.descricao.isBlank() && it.campos.isEmpty() } && m.botoes.isEmpty()
+    private fun vazia(m: DMsg): Boolean = m.conteudo.isBlank() && m.embeds.all { it.titulo.isBlank() && it.descricao.isBlank() && it.campos.isEmpty() } &&
+        m.botoes.isEmpty() && m.anexos.isEmpty()
 
     private fun linhaChat(m: DMsg): SChat {
         val tipo = if (m.autorId == eu) "voce" else if (m.autorBot) "bot" else "pessoa"
         val nome = if (m.autorId == eu) "você" else m.autorNome
-        return SChat(m.id, hora(Snow.ms(m.id)), tipo, nome, textoMsg(m))
+        val img = m.anexos.firstOrNull { it.imagem }
+        val pequena = img?.let { it.proxy + (if ('?' in it.proxy) "&" else "?") + "width=480&height=480" }
+        return SChat(m.id, hora(Snow.ms(m.id)), tipo, nome, textoMsg(m), pequena, img?.url)
     }
 
     fun fecharSala(id: String, apostaPedida: Boolean = false) {
@@ -981,6 +985,17 @@ object Sniper {
         }
     }
 
+    /** manda uma imagem na sala aberta no chat */
+    fun enviarImagem(bytes: ByteArray, nome: String, mime: String) {
+        naFila {
+            val s = salaAtual() ?: run { log("erro", "nenhuma sala aberta"); return@naFila }
+            log("info", "enviando imagem na sala ${numeroSala(s.id)}...")
+            val r = dc?.enviarImagem(s.id, nome, bytes, mime) ?: return@naFila
+            if (r.ok) r.obj()?.let { aoMsg(DMsg.de(it, s.guildId), false) }
+            else log("erro", "não deu pra enviar a imagem (${motivo(r)})")
+        }
+    }
+
     fun confirmar() {
         naFila {
             val s = salaAtual() ?: run { log("erro", "nenhuma sala aberta pra confirmar"); return@naFila }
@@ -1096,7 +1111,8 @@ object Sniper {
             partes.add(("[CARD] $t").trim())
         }
         if (m.botoes.isNotEmpty()) partes.add("[" + m.botoes.joinToString(" | ") { it.label.uppercase() } + "]")
-        var t = partes.joinToString("  ").ifEmpty { "(vazio)" }
+        for (a in m.anexos) if (!a.imagem) partes.add("[arquivo: ${a.nome}]")
+        var t = partes.joinToString("  ").ifEmpty { if (m.anexos.any { it.imagem }) "" else "(vazio)" }
         for ((id, nome) in m.mencoes) {
             val n = if (id == eu) "@VOCÊ" else "@$nome"
             t = t.replace("<@$id>", n).replace("<@!$id>", n)

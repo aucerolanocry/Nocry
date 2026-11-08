@@ -1,7 +1,15 @@
 package com.nocry.app
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
+import android.net.Uri
+import android.util.LruCache
+import android.widget.ImageView
+import java.io.ByteArrayOutputStream
 import android.text.InputType
 import android.util.TypedValue
 import android.view.Gravity
@@ -27,7 +35,7 @@ import android.widget.TextView
 class SniperScreen(a: MainActivity) : Screen(a) {
     override val titulo = "SNIPER"
 
-    private var aba = 0
+    private var abaAtual = 0
     private var geracao = 0
 
     /** pedaço que se refaz sozinho quando a "assinatura" (o que ele mostra) muda */
@@ -82,10 +90,10 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             return
         }
         add(pedaco({ assinaturaTopo() }) { topo(it) }, 4)
-        add(Ui.segmento(c, listOf("Partidas", "Busca", "Conta"), aba) { i ->
-            if (i != aba) { aba = i; esconderTeclado(); render() }
+        add(Ui.segmento(c, listOf("Partidas", "Busca", "Conta"), abaAtual) { i ->
+            if (i != abaAtual) { abaAtual = i; esconderTeclado(); render() }
         }, 12)
-        when (aba) {
+        when (abaAtual) {
             0 -> abaPartidas()
             1 -> abaBusca()
             else -> abaConta()
@@ -204,7 +212,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             Ui.chip(c, "APOSTAS", "${Sniper.apostas}", if (Sniper.apostas > 0) true else null)
         ), Ui.lp(top = 12, c = c))
         val botao = when {
-            !Cofre.tem(c) -> Ui.button(c, "colar o token", Ui.Kind.PRIMARY, R.drawable.ic_key) { aba = 2; render() }
+            !Cofre.tem(c) -> Ui.button(c, "colar o token", Ui.Kind.PRIMARY, R.drawable.ic_key) { abaAtual = 2; render() }
             !Sniper.ligado() -> Ui.button(c, "ligar o bot", Ui.Kind.PRIMARY, R.drawable.ic_power) { Sniper.ligar() }
             Sniper.estado != "online" -> Ui.button(c, "conectando...", Ui.Kind.GHOST) {}
             Sniper.buscando -> Ui.button(c, "▌▌  pausar busca", Ui.Kind.DANGER) { Sniper.alternarBusca() }
@@ -281,6 +289,11 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             campoMsg = it
         }
         solta(e)
+        val foto = texto("📷", 20f, Ui.TEXT)
+        foto.gravity = Gravity.CENTER
+        foto.background = Botao(c, "ghost", 12)
+        Ui.clique(foto) { escolherImagem() }
+        linha.addView(foto, LinearLayout.LayoutParams(Ui.dp(c, 50), Ui.dp(c, 50)).also { it.rightMargin = Ui.dp(c, 8) })
         linha.addView(e, pesoUm())
         val enviar = Ui.button(c, "enviar", Ui.Kind.PRIMARY) { enviarCampo() }
         linha.addView(enviar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 8) })
@@ -385,6 +398,32 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         e.setText("")
     }
 
+    // ---------------- imagem ----------------
+    private fun escolherImagem() {
+        if (Sniper.salas.isEmpty()) { Ui.toast(act, "nenhuma sala aberta"); return }
+        val i = Intent(Intent.ACTION_GET_CONTENT)
+        i.addCategory(Intent.CATEGORY_OPENABLE)
+        i.type = "image/*"
+        act.aoResultado = { req, res, data ->
+            val u = data?.data
+            if (req == REQ_IMAGEM && res == Activity.RESULT_OK && u != null) {
+                val ctx = act.applicationContext
+                Ui.toast(act, "enviando imagem...")
+                Bg.io {
+                    val p = try { prepararImagem(ctx, u) } catch (_: Throwable) { null }
+                    if (p == null) Bg.ui { Ui.toast(act, "não consegui abrir essa imagem") }
+                    else Sniper.enviarImagem(p.first, p.second, p.third)
+                }
+            }
+        }
+        try {
+            @Suppress("DEPRECATION")
+            act.startActivityForResult(i, REQ_IMAGEM)
+        } catch (_: Exception) {
+            Ui.toast(act, "não consegui abrir a galeria")
+        }
+    }
+
     private fun mandar(t: String) {
         if (Sniper.salas.isEmpty()) { Ui.toast(act, "nenhuma sala aberta"); return }
         Sniper.enviar(t)
@@ -429,13 +468,77 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val corTexto = if (eu) Theme.sobreGrad() else if (bot) Ui.MUTED else Ui.TEXT
         val nome = texto("${if (eu) "você" else l.nome} · ${l.hora}", 10.5f, if (eu) Theme.alpha(Theme.sobreGrad(), 0xB0) else if (bot) Theme.alpha(Ui.MUTED, 0xB0) else Ui.ACC2, true)
         b.addView(nome)
-        val t = texto(l.texto, if (bot) 12.5f else 14.5f, corTexto)
-        t.maxWidth = (largura * 0.72).toInt()
-        if (bot) t.typeface = Typeface.create(Theme.fonte(c, false, false), Typeface.NORMAL)
-        b.addView(t, Ui.lp(top = 2, c = c))
+        if (l.imagem != null) {
+            val iv = ImageView(c)
+            iv.adjustViewBounds = true
+            iv.maxWidth = (largura * 0.62).toInt()
+            iv.maxHeight = Ui.dp(c, 300)
+            iv.scaleType = ImageView.ScaleType.FIT_CENTER
+            iv.minimumHeight = Ui.dp(c, 80)
+            iv.minimumWidth = Ui.dp(c, 120)
+            carregarImagem(l.imagem, iv)
+            val grande = l.imagemGrande
+            if (grande != null) Ui.clique(iv) {
+                try { act.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(grande))) } catch (_: Exception) {}
+            }
+            b.addView(iv, Ui.lp(top = 4, c = c))
+        }
+        if (l.texto.isNotEmpty()) {
+            val t = texto(l.texto, if (bot) 12.5f else 14.5f, corTexto)
+            t.maxWidth = (largura * 0.72).toInt()
+            if (bot) t.typeface = Typeface.create(Theme.fonte(c, false, false), Typeface.NORMAL)
+            b.addView(t, Ui.lp(top = 2, c = c))
+        }
         linha.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         linha.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 6) }
         return linha
+    }
+
+    private fun carregarImagem(url: String, iv: ImageView) {
+        cacheImg.get(url)?.let { iv.setImageBitmap(it); return }
+        iv.tag = url
+        Bg.io {
+            val bmp = try {
+                val r = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                r.connectTimeout = 15000
+                r.readTimeout = 20000
+                r.inputStream.use { BitmapFactory.decodeStream(it) }
+            } catch (_: Throwable) { null }
+            if (bmp != null) {
+                cacheImg.put(url, bmp)
+                Bg.ui { if (iv.tag == url) iv.setImageBitmap(bmp) }
+            }
+        }
+    }
+
+    companion object {
+        private const val REQ_IMAGEM = 4301
+
+        /** imagens do chat já baixadas (até ~16 MB) */
+        private val cacheImg = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
+            override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+        }
+
+        /** lê a imagem escolhida; se for muito grande, diminui e manda em JPEG (o Discord aceita até ~10 MB) */
+        fun prepararImagem(ctx: android.content.Context, uri: Uri): Triple<ByteArray, String, String>? {
+            val cr = ctx.contentResolver
+            val mime = cr.getType(uri) ?: "image/jpeg"
+            val bruto = cr.openInputStream(uri)?.use { it.readBytes() } ?: return null
+            val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bruto, 0, bruto.size, o)
+            val maior = maxOf(o.outWidth, o.outHeight)
+            val heic = mime.contains("heic") || mime.contains("heif")
+            if (!heic && bruto.size <= 7_500_000 && maior in 1..2560) {
+                val ext = when (mime) { "image/png" -> "png"; "image/gif" -> "gif"; "image/webp" -> "webp"; else -> "jpg" }
+                return Triple(bruto, "imagem.$ext", if (ext == "jpg") "image/jpeg" else mime)
+            }
+            var amostra = 1
+            while (maior / amostra > 2560) amostra *= 2
+            val bmp = BitmapFactory.decodeByteArray(bruto, 0, bruto.size, BitmapFactory.Options().apply { inSampleSize = amostra }) ?: return null
+            val out = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            return Triple(out.toByteArray(), "imagem.jpg", "image/jpeg")
+        }
     }
 
     // ======================================================================== BUSCA
