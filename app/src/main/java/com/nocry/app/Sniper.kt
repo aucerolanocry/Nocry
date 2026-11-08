@@ -276,6 +276,15 @@ object Sniper {
                     pend[modo] = (0 until a.length()).map { a.optString(it) }.filter { it.isNotEmpty() }.toMutableList()
                 }
             }
+            // filas que a própria mensagem mostrou ter outro valor: muda pro valor certo ("-" = fila que não existe mais)
+            for ((_, f) in filas) {
+                val trocas = f.entries.filter { (v, id) -> cor.s(id)?.let { it != v } == true }.map { it.key to it.value }
+                for ((v, id) in trocas) {
+                    f.remove(v)
+                    val certo = cor.s(id) ?: continue
+                    if (certo != "-" && !f.containsKey(certo)) f[certo] = id
+                }
+            }
             // valores que o "descobrir valores" já leu das filas (ficam salvos no celular)
             apr.optJSONObject(nome)?.let { a ->
                 for (modo in a.keys()) {
@@ -286,15 +295,6 @@ object Sniper {
                         if (!f.containsKey(v)) f[v] = id
                         pend[modo]?.remove(id)
                     }
-                }
-            }
-            // filas que a própria mensagem mostrou ter outro valor: muda pro valor certo
-            for ((modo, f) in filas) {
-                val trocas = f.entries.filter { (v, id) -> cor.s(id)?.let { it != v } == true }.map { it.key to it.value }
-                for ((v, id) in trocas) {
-                    f.remove(v)
-                    val certo = cor.s(id) ?: continue
-                    if (!f.containsKey(certo)) f[certo] = id
                 }
             }
             val pendLimpo = pend.filterValues { it.isNotEmpty() }
@@ -1409,7 +1409,15 @@ object Sniper {
                     val v = lerValor(msg)
                     if (v == null) { faltou.add("$o $m: não deu pra ler o valor da fila $id"); continue }
                     val jaTem = orgs[o]?.filas?.get(m)?.get(v) ?: apr.optJSONObject(o)?.optJSONObject(m)?.s(v)
-                    if (jaTem != null && jaTem != id) { faltou.add("$o $m: a fila $id diz ${rotuloValor(v)}, mas já tem outra com esse valor"); continue }
+                    if (jaTem != null && jaTem != id) {
+                        // já tinha outro ID nesse valor: abre ele também e vê quem está certo
+                        val outra = acharFila(jaTem, o, forcar = true)
+                        val lidoOutra = outra?.let { lerValor(it) }
+                        if (lidoOutra == v) { faltou.add("$o $m: duas filas de ${rotuloValor(v)} ($jaTem e $id), fiquei com a primeira"); continue }
+                        corrigirValor(jaTem, lidoOutra ?: "-")
+                        log("info", "$o $m: o ID que estava como ${rotuloValor(v)} era " +
+                            (lidoOutra?.let { "de ${rotuloValor(it)}" } ?: "de fila apagada") + " · corrigido")
+                    }
                     val jo = apr.optJSONObject(o) ?: JSONObject().also { apr.put(o, it) }
                     val jm = jo.optJSONObject(m) ?: JSONObject().also { jo.put(m, it) }
                     jm.put(v, id)
