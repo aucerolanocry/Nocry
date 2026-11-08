@@ -144,7 +144,7 @@ object Sniper {
     val modos: MutableSet<String> = ConcurrentHashMap.newKeySet()
     val valores: MutableSet<String> = ConcurrentHashMap.newKeySet()
     @Volatile var gelo = "NORMAL"
-    @Volatile var maxFilas = 60
+    @Volatile var maxFilas = 300
     @Volatile var msgAuto = MSG_PADRAO
     /** sala sem resposta de PESSOA nesse tempo: clica em sair/cancelar e volta a procurar */
     @Volatile var tempoResposta = TIMEOUT_RESPOSTA
@@ -214,7 +214,7 @@ object Sniper {
         valores.clear(); valores.addAll((sp.getString("valores", "300") ?: "300").split(",").filter { it in todosValores })
         if (valores.isEmpty() && todosValores.isNotEmpty()) valores.add(if ("300" in todosValores) "300" else todosValores[0])
         gelo = sp.getString("gelo", "NORMAL") ?: "NORMAL"
-        maxFilas = sp.getInt("max_filas2", 60)
+        maxFilas = sp.getInt("max_filas3", 300)
         msgAuto = sp.getString("msg_auto", MSG_PADRAO) ?: MSG_PADRAO
         sairAoAbrir = sp.getBoolean("sair_ao_abrir2", false)
         tempoResposta = sp.getLong("tempo_resposta", TIMEOUT_RESPOSTA)
@@ -311,7 +311,7 @@ object Sniper {
             .putString("modos", modos.joinToString(","))
             .putString("valores", valores.joinToString(","))
             .putString("gelo", gelo)
-            .putInt("max_filas2", maxFilas)
+            .putInt("max_filas3", maxFilas)
             .putString("msg_auto", msgAuto)
             .putBoolean("sair_ao_abrir2", sairAoAbrir)
             .putLong("tempo_resposta", tempoResposta)
@@ -418,7 +418,7 @@ object Sniper {
     }
 
     fun escolherGelo(g: String) { gelo = g; salvarEscolha(); mudou() }
-    fun definirMaxFilas(n: Int) { maxFilas = n.coerceIn(1, 100); salvarEscolha(); mudou() }
+    fun definirMaxFilas(n: Int) { maxFilas = n.coerceIn(1, 300); salvarEscolha(); mudou() }
     fun definirMsgAuto(t: String) { msgAuto = t.ifBlank { MSG_PADRAO }; salvarEscolha(); mudou() }
     fun definirSairAoAbrir(v: Boolean) { sairAoAbrir = v; salvarEscolha(); mudou() }
     fun definirTempoResposta(seg: Int) { tempoResposta = seg.coerceIn(10, 300) * 1000L; salvarEscolha(); mudou() }

@@ -151,7 +151,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val t = Ui.text(c, tempoBusca(), 11f, Ui.MUTED, mono = true)
         tempoTxt = t
         card.addView(Ui.chips(c,
-            Ui.chip(c, "FILAS", "${Sniper.filasEntradas.size}/${Sniper.maxFilas}", if (Sniper.filasEntradas.isNotEmpty()) true else null),
+            Ui.chip(c, "FILAS", if (Sniper.maxFilas >= 300) "${Sniper.filasEntradas.size}" else "${Sniper.filasEntradas.size}/${Sniper.maxFilas}", if (Sniper.filasEntradas.isNotEmpty()) true else null),
             Ui.chip(c, "SALAS", "${Sniper.salas.size}", if (Sniper.salas.isNotEmpty()) true else null),
             Ui.chip(c, "APOSTAS", "${Sniper.apostas}", if (Sniper.apostas > 0) true else null)
         ), Ui.lp(top = 12, c = c))
@@ -372,8 +372,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         secAjustes.removeAllViews()
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_sliders, "ajustes"))
-        card.addView(Ui.item(c, "Limite de filas do bot", "Teto do próprio bot (todas as orgs juntas). Cada org já segura o limite dela e avisa; ele respeita e tenta de novo depois.", 0, "${Sniper.maxFilas}") {
-            Ui.dialogNumero(c, "LIMITE DE FILAS DO BOT", "de 1 a 100", 1, 100, Sniper.maxFilas) { n -> Sniper.definirMaxFilas(n) }
+        card.addView(Ui.item(c, "Limite de filas do bot", "Teto do próprio bot (todas as orgs juntas). 300 = sem limite: quem segura é o limite de cada org, que avisa, e ele tenta de novo depois.", 0, if (Sniper.maxFilas >= 300) "sem limite" else "${Sniper.maxFilas}") {
+            Ui.dialogNumero(c, "LIMITE DE FILAS DO BOT", "de 1 a 300 (300 = sem limite)", 1, 300, Sniper.maxFilas) { n -> Sniper.definirMaxFilas(n) }
         }, Ui.lp(top = 8, c = c))
         card.addView(Ui.toggle(c, "Sair das outras filas ao abrir sala", "Desligado (padrão): continua entrando nas filas até o limite de cada org. Ligado: abriu sala, sai das outras filas e pausa a busca.", Sniper.sairAoAbrir) { v ->
             Sniper.definirSairAoAbrir(v)
