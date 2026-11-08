@@ -111,7 +111,7 @@ object Sniper {
     /** canal com esse nome nunca é sala de partida */
     private val NAO_SALA = listOf("ticket", "suporte", "atendimento", "denuncia", "denúncia", "saque", "pix", "duvida", "dúvida",
         "parceria", "compra", "loja", "log", "regra", "anuncio", "anúncio", "verifica", "registro", "ranking",
-        "bot", "atualiz", "config", "staff", "admin", "mod", "comando", "cargo", "aviso", "chat-geral", "geral")
+        "bot", "atualiz", "config", "staff", "admin", "moderac", "comando", "cargo", "aviso", "chat-geral", "geral")
     private val PALAVRAS_APOSTA = listOf("aposta confirmada", "aposta gerada", "aposta criada")
     private val PALAVRAS_SAIR = listOf("SAIR", "CANCEL")
     private val NUNCA_CLICAR = listOf("TICKET", "SUPORTE", "ATENDIMENTO", "REGRA", "DENUN", "AJUDA", "SAQUE", "SACAR",
