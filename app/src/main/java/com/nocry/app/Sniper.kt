@@ -110,7 +110,8 @@ object Sniper {
     private val PALAVRAS_SALA = listOf("aguardando", "partida", "match", "vs", "sala", "duelo", "confronto")
     /** canal com esse nome nunca é sala de partida */
     private val NAO_SALA = listOf("ticket", "suporte", "atendimento", "denuncia", "denúncia", "saque", "pix", "duvida", "dúvida",
-        "parceria", "compra", "loja", "log", "regra", "anuncio", "anúncio", "verifica", "registro", "ranking")
+        "parceria", "compra", "loja", "log", "regra", "anuncio", "anúncio", "verifica", "registro", "ranking",
+        "bot", "atualiz", "config", "staff", "admin", "mod", "comando", "cargo", "aviso", "chat-geral", "geral")
     private val PALAVRAS_APOSTA = listOf("aposta confirmada", "aposta gerada", "aposta criada")
     private val PALAVRAS_SAIR = listOf("SAIR", "CANCEL")
     private val NUNCA_CLICAR = listOf("TICKET", "SUPORTE", "ATENDIMENTO", "REGRA", "DENUN", "AJUDA", "SAQUE", "SACAR",
@@ -627,7 +628,7 @@ object Sniper {
 
     private fun ehSala(nome: String): Boolean {
         val n = nome.lowercase()
-        return PALAVRAS_SALA.any { it in n }
+        return PALAVRAS_SALA.any { it in n } && n.any { it.isDigit() } && NAO_SALA.none { it in n }
     }
 
     private fun meMarcou(m: DMsg): Boolean {
@@ -844,7 +845,7 @@ object Sniper {
                 if (t - s.ultima > 3 * 60_000) { fecharSala(s.id); continue }
             } else if (!s.respondida && t - s.aberta > tempoResposta) {
                 log("info", "ninguém respondeu em ${tempoResposta / 1000}s na sala $n (${s.org}), cancelando e voltando a procurar")
-                clicarSair(s)
+                if (!clicarSair(s)) log("info", "sala $n: não achei botão de sair/cancelar, só larguei a sala")
                 fecharSala(s.id)
                 liberarFilasDa(s.org)
                 continue
@@ -852,7 +853,9 @@ object Sniper {
             if (t - s.ultima > TIMEOUT_INATIVA && !s.inativa) {
                 s.inativa = true
                 liberarFilasDa(s.org)
-                log("info", "sala $n parada há 10 min, liberando a vaga")
+                fecharSala(s.id)
+                log("info", "sala $n (${s.org}) parada há 10 min: saiu do painel")
+                continue
             }
             // o Discord não mandou nada dessa sala há um tempo: busca as mensagens novas direto
             if (s.ultimoId != null && t - s.gatewayEm > 15_000 && t - s.ultimoPoll > 3_000) {
