@@ -72,8 +72,25 @@ class SLinha(val hora: String, val tipo: String, val texto: String)
 class SChat(val id: String, val hora: String, val tipo: String, val nome: String, val texto: String,
             val imagem: String? = null, val imagemGrande: String? = null)
 
+/** um campo do formulário (modal) que a org abre: texto ou lista de opções */
+class SCampo(val chave: String, val rotulo: String, val dica: String, val tipo: Int, val customId: String,
+             val obrigatorio: Boolean, val inicial: String, val opcoes: List<Pair<String, String>>, val padrao: List<String>,
+             val minimo: Int, val maximo: Int)
+
+/** formulário que a org abriu depois de um clique (DUCK, FURIA, HELIPA...) */
+class SForm(val nonce: String, val modalId: String, val customId: String, val appId: String, val canalId: String, val guildId: String?,
+            val titulo: String, val org: String, val nome: String, val fid: String?, val salaId: String?,
+            val textos: List<String>, val campos: List<SCampo>, val bruto: org.json.JSONArray) {
+    val chegou = System.currentTimeMillis()
+}
+
 class SSala(val id: String, val nome: String, val org: String, val guildId: String?, val thread: Boolean) {
     val aberta = System.currentTimeMillis()
+    /** a org cancelou/fechou (te tirou da sala ou não deixa mais escrever) */
+    @Volatile var encerrada = false
+    /** abriu só porque a org te colocou na thread (nome não parece sala): só cancela sozinho se tiver card de confirmar */
+    @Volatile var incerta = false
+    @Volatile var temConfirmar = false
     @Volatile var ultima = aberta
     @Volatile var respondida = false
     @Volatile var inativa = false
@@ -110,6 +127,7 @@ object Sniper {
     const val PAUSA_SEM_MEDIADOR = 5 * 60_000L
     const val PAUSA_BLOQUEIO = 15 * 60_000L
     const val PAUSA_LIMITE = 45_000L      // org disse "limite máximo de filas": espera isso e tenta de novo
+    const val FORM_VALIDO = 12 * 60_000L  // formulário aberto vale uns 15 min no Discord
     const val MSG_PADRAO = "# FULL UMP E XM8 SEM MOBILADOR E SEM BUG DE KIT"
     val MODOS = listOf("1X1", "2X2", "3X3", "4X4")
     private val PALAVRAS_SALA = listOf("aguardando", "partida", "match", "vs", "sala", "duelo", "confronto")
@@ -118,6 +136,8 @@ object Sniper {
         "parceria", "compra", "loja", "log", "regra", "anuncio", "anúncio", "verifica", "registro", "ranking",
         "bot", "atualiz", "config", "staff", "admin", "moderac", "comando", "cargo", "aviso", "chat-geral", "geral")
     private val PALAVRAS_APOSTA = listOf("aposta confirmada", "aposta gerada", "aposta criada")
+    private val CANCELADA = listOf(Regex("(partida|aposta|sala|fila) (foi )?(cancelad|encerrad|finalizad|expirad)"), Regex("foi cancelad"),
+        Regex("tempo (esgotado|expirou|acabou)"), Regex("expirou"), Regex("nao confirm(ou|aram) (a tempo|em)"))
     private val PALAVRAS_SAIR = listOf("SAIR", "CANCEL")
     private val NUNCA_CLICAR = listOf("TICKET", "SUPORTE", "ATENDIMENTO", "REGRA", "DENUN", "AJUDA", "SAQUE", "SACAR",
         "DEPOSIT", "PIX", "PERFIL", "CADASTR", "VERIFIC", "ABRIR")
@@ -164,6 +184,16 @@ object Sniper {
     @Volatile var buscarAoLigar = false
     @Volatile private var pausadoPorSala = false
     private val cliques = ConcurrentHashMap<String, Array<String>>()      // nonce -> (id da fila, org, nome)
+    /** todo clique (fila ou sala): nonce -> (tipo "fila"/"sala", id, org, nome, quando) · fica uns minutos */
+    private val cliqueInfo = ConcurrentHashMap<String, Array<String>>()
+    /** o que a org fez com o clique: "ok", "form" (abriu formulário) ou "falha" */
+    private val desfecho = ConcurrentHashMap<String, String>()
+    private val travaEntrada = Object()
+    /** formulários que o bot não soube responder sozinho: você responde uma vez e ele lembra */
+    val formularios = CopyOnWriteArrayList<SForm>()
+    private val enviosForm = ConcurrentHashMap<String, SForm>()          // nonce do envio -> formulário
+    /** org que bloqueou a mensagem automática: a versão que passou */
+    private val msgPorOrg = ConcurrentHashMap<String, String>()
     private val esperaFila = ConcurrentHashMap<String, Long>()            // id da fila -> não tenta antes disso
     @Volatile private var ultimaThreads = 0L
     @Volatile var apostas = 0
@@ -297,6 +327,7 @@ object Sniper {
                     }
                 }
             }
+            for ((_, l) in pend) l.removeAll { cor.s(it) == "-" }
             val pendLimpo = pend.filterValues { it.isNotEmpty() }
             if (pendLimpo.isNotEmpty()) pendAll[nome] = pendLimpo
             if (filas.isEmpty()) { if (pendLimpo.isNotEmpty()) sem.add(nome); continue }
@@ -569,6 +600,7 @@ object Sniper {
         }
 
         override fun evento(tipo: String, d: JSONObject) {
+            if (tipo.startsWith("INTERACTION_")) marcarDesfecho(tipo, d)
             naFila { aoEvento(tipo, d) }
         }
 
@@ -636,9 +668,27 @@ object Sniper {
         }
     }
 
+    private fun marcarDesfecho(t: String, d: JSONObject) {
+        val n = d.s("nonce") ?: return
+        when (t) {
+            "INTERACTION_SUCCESS" -> desfecho.putIfAbsent(n, "ok")
+            "INTERACTION_MODAL_CREATE" -> desfecho[n] = "form"
+            "INTERACTION_FAILURE" -> desfecho[n] = "falha"
+        }
+    }
+
     private fun aoEvento(t: String, d: JSONObject) {
-        if (t.startsWith("CHANNEL_") || t.startsWith("THREAD_") || t.startsWith("INTERACTION_")) {
-            diag("evento $t id=${d.s("id") ?: d.s("nonce")} nome=${d.s("name") ?: ""} servidor=${d.s("guild_id")?.let { guildas[it] ?: it } ?: ""}")
+        if (t.startsWith("INTERACTION_")) {
+            val n = d.s("nonce")
+            val quem = n?.let { cliqueInfo[it]?.get(3) ?: enviosForm[it]?.let { f -> "formulário ${f.nome}" } } ?: ""
+            if (t != "INTERACTION_MODAL_CREATE") diag("evento $t $quem")
+        } else if ((t == "CHANNEL_CREATE" || t == "CHANNEL_DELETE" || t.startsWith("THREAD_")) && t != "THREAD_LIST_SYNC") {
+            // só o que é das orgs (o resto é barulho: tem servidor que manda milhares de CHANNEL_UPDATE)
+            val gid = d.s("guild_id")
+            if (gid != null && adivinharOrg(gid) != "?") {
+                val extra = if (t == "THREAD_MEMBERS_UPDATE") " +${d.optJSONArray("added_members")?.length() ?: 0} -${d.optJSONArray("removed_member_ids")?.length() ?: 0}" else ""
+                diag("evento $t ${d.s("name") ?: ""} id=${d.s("id")} ${adivinharOrg(gid)}$extra")
+            }
         }
         when (t) {
             "RESUMED" -> { conectado = true; estado = "online"; log("info", "reconectado") }
@@ -670,6 +720,12 @@ object Sniper {
             }
             "THREAD_MEMBERS_UPDATE" -> {
                 val tid = d.s("id") ?: return
+                d.optJSONArray("removed_member_ids")?.let { rm ->
+                    for (i in 0 until rm.length()) if (rm.optString(i) == eu) {
+                        salaEncerrada(tid, "a org te tirou da sala (partida cancelada ou acabou)")
+                        return
+                    }
+                }
                 val add = d.optJSONArray("added_members") ?: return
                 var euEntrei = false
                 for (i in 0 until add.length()) if (add.optJSONObject(i)?.s("user_id") == eu) euEntrei = true
@@ -677,13 +733,31 @@ object Sniper {
                 val c = canais[tid] ?: dc?.canal(tid)?.obj()?.let { canalDe(it, d.s("guild_id")) } ?: return
                 c.membro = true
                 canais[c.id] = c
-                if (ehMinhaSala(c)) abrirSala(c)
+                // a org acabou de te colocar nessa thread logo depois de entrar na fila (COLOMBIA usa "fila-123"): é sala
+                if (ehMinhaSala(c, adicionado = true)) abrirSala(c)?.let { s -> if (!ehSala(c.nome)) s.incerta = true }
             }
             "MESSAGE_CREATE" -> aoMsg(DMsg.de(d), true)
-            "INTERACTION_SUCCESS" -> { d.s("nonce")?.let { cliques.remove(it) } }
+            "INTERACTION_MODAL_CREATE" -> aoFormulario(d)
+            "INTERACTION_SUCCESS" -> {
+                val n = d.s("nonce") ?: return
+                cliques.remove(n)
+                enviosForm.remove(n)?.let { formularioAceito(it) }
+            }
             "INTERACTION_FAILURE" -> {
+                val n = d.s("nonce") ?: return
+                enviosForm.remove(n)?.let { f ->
+                    f.fid?.let { esperaFila[it] = agora() + 60_000 }
+                    log("erro", "${f.nome}: a org não aceitou o formulário (tenta de novo em 1 min)")
+                    status(f.org, "✗ a org não aceitou o formulário", "erro")
+                    return
+                }
+                val info = cliqueInfo[n]
+                if (info != null && info[0] == "sala") {
+                    log("erro", "${info[3]}: a org não aceitou o clique · se ainda estiver na sala, faça pelo Discord")
+                    return
+                }
                 // a org não respondeu ao clique: não entrou nessa fila
-                val c = d.s("nonce")?.let { cliques.remove(it) } ?: return
+                val c = cliques.remove(n) ?: return
                 filasEntradas.remove(c[0])
                 esperaFila[c[0]] = agora() + 20_000
                 log("erro", "${c[2]}: a org não respondeu ao clique (não entrou)")
@@ -715,7 +789,7 @@ object Sniper {
     }
 
     /** canal/thread é uma sala sua? (thread "aguardando", canal privado "partida-11", ou sala nova que te marcou) */
-    private fun ehMinhaSala(c: DCanal, marcou: Boolean = false): Boolean {
+    private fun ehMinhaSala(c: DCanal, marcou: Boolean = false, adicionado: Boolean = false): Boolean {
         val gid = c.guildId ?: return false
         if (salas.containsKey(c.id) || largadas.contains(c.id)) return false
         if (canalDaFila.containsValue(c.id)) return false
@@ -726,12 +800,25 @@ object Sniper {
         val nome = ehSala(c.nome)
         val naFila = agora() - (entrouEm[gid] ?: 0L) < SALA_NOVA
         // thread: só se você está nela (a org te colocou/marcou) ou é privada; thread pública de outro jogador não
-        if (c.ehThread) return (c.membro && (novo || nome)) || (novo && c.privado) || (novo && marcou && naFila)
+        if (c.ehThread) return (c.membro && (novo || nome)) || (novo && c.privado) || (novo && marcou && naFila) ||
+            (adicionado && naFila)
         // canal (tipo "partida-11" da TOKIO): novo, privado, com acesso seu e nome de sala; canal público não
         return c.tipo == 0 && novo && ((nome && c.privado && c.meuAcesso) || (marcou && naFila))
     }
 
     fun numeroSala(id: String): Int = ordem.indexOf(id) + 1
+
+    /** a org cancelou/fechou a sala: fica no painel só pra ver (some em 3 min, a não ser que a aposta tenha sido confirmada) */
+    private fun salaEncerrada(id: String, motivo: String) {
+        val s = salas[id] ?: return
+        if (s.encerrada) return
+        s.encerrada = true
+        s.somenteLeitura = true
+        s.ultima = agora()
+        log("info", "sala ${numeroSala(id)} (${s.org}): $motivo")
+        if (!s.protegida) liberarFilasDa(s.org)
+        mudou()
+    }
 
     @Synchronized
     private fun abrirSala(c: DCanal): SSala? {
@@ -768,9 +855,22 @@ object Sniper {
                 return
             }
         }
-        val r = d.enviar(s.id, msgAuto, rapido = true)
+        var r = d.enviar(s.id, msgPorOrg[s.org] ?: msgAuto, rapido = true)
         if (s.thread) Thread { try { d.entrarThread(s.id) } catch (_: Throwable) {} }.start()
         diag("mensagem automática sala ${s.nome} -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(200) else ""}")
+        if (!r.ok && r.erro() == 200000) {
+            // a org bloqueia alguma palavra/formatação da mensagem (AutoMod): manda versões mais simples
+            for (alt in alternativasMsg()) {
+                r = d.enviar(s.id, alt, rapido = true)
+                diag("mensagem automática (versão simples '$alt') -> ${r.codigo}")
+                if (r.ok) {
+                    msgPorOrg[s.org] = alt
+                    log("info", "${s.org} bloqueia sua mensagem automática · mandei assim: $alt")
+                    break
+                }
+                if (r.erro() != 200000) break
+            }
+        }
         if (r.ok) {
             s.msgEnviada = true
         } else if (r.codigo == 403 || r.erro() == 50013 || r.erro() == 50001) {
@@ -790,6 +890,13 @@ object Sniper {
         exSalas?.execute { seguro { carregarHistorico(s) } }
     }
 
+    /** versões mais simples da mensagem automática (pra org que bloqueia # ou alguma palavra) */
+    private fun alternativasMsg(): List<String> {
+        val semTitulo = msgAuto.lines().joinToString(" ") { it.replace(Regex("^\\s*#+\\s*"), "") }.trim()
+        val soLetras = semTitulo.replace(Regex("[^\\p{L}\\p{N} ]"), " ").replace(Regex("\\s+"), " ").trim().lowercase()
+        return listOf(semTitulo, soLetras, "full ump e xm8", "on").filter { it.isNotBlank() && it != msgAuto }.distinct()
+    }
+
     private fun carregarHistorico(s: SSala) {
         val d = dc ?: return
         val (ms, _) = d.historico(s.id, 50, null, s.guildId)
@@ -801,12 +908,15 @@ object Sniper {
             for (m in lista) {
                 s.vistos.add(m.id)
                 if (!vazia(m)) s.chat.add(linhaChat(m))
+                if (temBotaoConfirmar(m)) s.temConfirmar = true
             }
             s.chat.addAll(depois)
         }
         lista.lastOrNull()?.let { s.ultimoId = it.id }
         mudou()
     }
+
+    private fun temBotaoConfirmar(m: DMsg) = m.botoes.any { b -> b.label.uppercase().let { "CONFIRM" in it || "ACEIT" in it } }
 
     /** mensagem sem texto, card nem botão (entrou na thread, fixou...): não aparece no chat */
     private fun vazia(m: DMsg): Boolean = m.conteudo.isBlank() && m.embeds.all { it.titulo.isBlank() && it.descricao.isBlank() && it.campos.isEmpty() } &&
@@ -901,7 +1011,9 @@ object Sniper {
             s.chat.add(linhaChat(m))
             while (s.chat.size > 120) s.chat.removeAt(0)
         }
-        diag("chat sala ${numeroSala(s.id)} (${s.org}) ${if (m.autorBot) "bot " else ""}${m.autorNome}: ${textoMsg(m).take(300)}")
+        if (temBotaoConfirmar(m)) s.temConfirmar = true
+        diag("chat sala ${numeroSala(s.id)} (${s.org}) ${if (m.autorBot) "bot " else ""}${m.autorNome}: ${textoMsg(m).take(400)}" +
+            (m.bruto?.let { " · bruto: $it" } ?: ""))
         if (s.id != salaAtiva) {
             s.naoLidas++
             if (s.naoLidas == 1) log("info", "mensagem nova na sala ${numeroSala(s.id)} (${s.org})")
@@ -918,6 +1030,11 @@ object Sniper {
             mudou()
             return
         }
+        // a org avisou que a partida foi cancelada / expirou (só vale depois que a sala já está aberta um tempo)
+        val tudo = semAcento((txt + " " + m.embeds.joinToString(" ") { it.descricao }).lowercase())
+        if (m.autorBot && !s.protegida && agora() - s.aberta > 15_000 && CANCELADA.any { it.containsMatchIn(tudo) }) {
+            log("info", "sala ${numeroSala(s.id)} (${s.org}): a org avisou que a partida foi cancelada/expirou")
+        }
         if (!s.apostaOk && PALAVRAS_APOSTA.any { it in txt }) {
             s.apostaOk = true
             apostas++
@@ -930,12 +1047,19 @@ object Sniper {
     private fun vigiarSalas() {
         val d = dc ?: return
         val t = agora()
+        // limpa o que já passou
+        cliqueInfo.entries.removeIf { t - (it.value.getOrNull(4)?.toLongOrNull() ?: 0L) > 5 * 60_000 }
+        if (desfecho.size > 400) desfecho.clear()
+        formularios.removeAll { f ->
+            (t - f.chegou > FORM_VALIDO).also { velho -> if (velho) { f.fid?.let { esperaFila.remove(it) }; orgPausada.remove(f.org); mudou() } }
+        }
         for (s in salas.values.toList()) {
             val n = numeroSala(s.id)
             if (s.somenteLeitura) {
-                // sala só pra ver: some sozinha depois de 3 min parada (não clica em nada)
-                if (t - s.ultima > 3 * 60_000) { fecharSala(s.id); continue }
-            } else if (!s.protegida && !s.respondida && t - s.aberta > tempoResposta) {
+                // sala só pra ver / encerrada: some sozinha depois de 3 min parada (não clica em nada). Confirmada fica.
+                if (!s.protegida && t - s.ultima > 3 * 60_000) { fecharSala(s.id); continue }
+                if (s.encerrada) continue
+            } else if (!s.protegida && !s.respondida && t - s.aberta > tempoResposta && (!s.incerta || s.temConfirmar)) {
                 log("info", "ninguém respondeu em ${tempoResposta / 1000}s na sala $n (${s.org}), cancelando e voltando a procurar")
                 if (!clicarSair(s)) log("info", "sala $n: não achei botão de sair/cancelar, só larguei a sala")
                 fecharSala(s.id)
@@ -994,12 +1118,25 @@ object Sniper {
         }
     }
 
+    private fun registrarClique(tipo: String, id: String, org: String, nome: String): String {
+        val n = Snow.novo()
+        cliqueInfo[n] = arrayOf(tipo, id, org, nome, agora().toString())
+        return n
+    }
+
+    /** botões das últimas mensagens da sala (pra mostrar no registro quando não acha o que procura) */
+    private var ultimosBotoes = ""
+
     private fun clicarSair(s: SSala): Boolean {
         val d = dc ?: return false
-        val (ms, _) = d.historico(s.id, 20, null, s.guildId)
+        val (ms, _) = d.historico(s.id, 30, null, s.guildId)
+        ultimosBotoes = ms.flatMap { it.botoes }.joinToString(", ") { it.label.uppercase() + (if (it.desativado) " (desativado)" else "") }
         for (m in ms) for (b in m.botoes) {
             if (!b.desativado && PALAVRAS_SAIR.any { b.label.uppercase().contains(it) }) {
-                if (d.clicar(m, b).ok) return true
+                val n = registrarClique("sala", s.id, s.org, "${b.label.uppercase()} na sala ${numeroSala(s.id)} (${s.org})")
+                val r = d.clicar(m, b, n)
+                diag("clique ${b.label} sala ${s.nome} -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(200) else ""}")
+                if (r.ok) return true
             }
         }
         return false
@@ -1008,10 +1145,14 @@ object Sniper {
     private fun clicarConfirmar(s: SSala): Boolean {
         val d = dc ?: return false
         val (ms, _) = d.historico(s.id, 50, null, s.guildId)
+        ultimosBotoes = ms.flatMap { it.botoes }.joinToString(", ") { it.label.uppercase() + (if (it.desativado) " (desativado)" else "") }
         for (m in ms) for (b in m.botoes) {
             val l = b.label.uppercase()
-            if (!b.desativado && "CONFIRM" in l && "CANCEL" !in l) {
-                if (d.clicar(m, b).ok) { s.confirmada = true; return true }
+            if (!b.desativado && ("CONFIRM" in l || "ACEIT" in l) && "CANCEL" !in l) {
+                val n = registrarClique("sala", s.id, s.org, "${b.label.uppercase()} na sala ${numeroSala(s.id)} (${s.org})")
+                val r = d.clicar(m, b, n)
+                diag("clique ${b.label} sala ${s.nome} -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(200) else ""}")
+                if (r.ok) { s.confirmada = true; return true }
             }
         }
         return false
@@ -1036,6 +1177,8 @@ object Sniper {
             val r = dc?.enviar(s.id, t) ?: return@naFila
             if (r.ok) {
                 r.obj()?.let { aoMsg(DMsg.de(it, s.guildId), false) }
+            } else if (r.codigo == 403 && (r.erro() == 50001 || r.erro() == 50083)) {
+                salaEncerrada(s.id, "você não está mais nessa sala (a org fechou ou te tirou) · não dá pra escrever")
             } else log("erro", "não deu pra enviar (${motivo(r)})")
         }
     }
@@ -1054,8 +1197,9 @@ object Sniper {
     fun confirmar() {
         naFila {
             val s = salaAtual() ?: run { log("erro", "nenhuma sala aberta pra confirmar"); return@naFila }
+            if (s.encerrada) { log("erro", "a sala ${numeroSala(s.id)} já foi encerrada pela org"); return@naFila }
             if (clicarConfirmar(s)) log("ganhou", "confirmado na sala ${numeroSala(s.id)}")
-            else log("erro", "botão de confirmar não encontrado ou desativado")
+            else log("erro", "sala ${numeroSala(s.id)}: botão de confirmar não encontrado ou desativado · botões: ${ultimosBotoes.ifEmpty { "nenhum" }}")
         }
     }
 
@@ -1063,11 +1207,17 @@ object Sniper {
         naFila {
             val s = salaAtual() ?: run { log("erro", "nenhuma sala aberta pra cancelar"); return@naFila }
             val n = numeroSala(s.id)
-            if (clicarSair(s)) {
+            if (s.encerrada) {
+                // a org já fechou: não tem o que clicar, só tira do painel
+                fecharSala(s.id)
+                log("info", "sala $n (${s.org}) já tinha sido encerrada pela org · tirei do painel")
+            } else if (clicarSair(s)) {
                 log("info", "cancelado na sala $n (${s.org})")
                 fecharSala(s.id)
                 liberarFilasDa(s.org)
-            } else log("erro", "botão de cancelar/sair não encontrado nessa sala")
+            } else {
+                log("erro", "sala $n (${s.org}): não achei botão de cancelar/sair · botões: ${ultimosBotoes.ifEmpty { "nenhum" }} · se quiser, use 'tirar do painel'")
+            }
         }
     }
 
@@ -1395,13 +1545,27 @@ object Sniper {
                 status(o, "fila $modo ${rotuloFila(o, v)} fechada agora", "info")
             } else {
                 if (!buscando) return
-                val nonce = Snow.novo()
+                val nonce = registrarClique("fila", fid, o, nome)
                 cliques[nonce] = arrayOf(fid, o, nome)
                 val r = d.clicar(m, botao, nonce) { buscando && filasEntradas.size < maxFilas }
                 diag("clique $nome botão '${botao.label}' -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(200) else ""}")
                 if (r.codigo == -2) { cliques.remove(nonce); return }
                 if (r.ok) {
-                    filasEntradas.add(fid)
+                    // espera a org responder: se abrir formulário (DUCK, FURIA, HELIPA...) ainda NÃO entrou
+                    val ate = agora() + 2_500
+                    var okEm = 0L
+                    while (agora() < ate) {
+                        val x = desfecho[nonce]
+                        if (x == "form" || x == "falha") break
+                        if (x == "ok") { if (okEm == 0L) okEm = agora() else if (agora() - okEm > 400) break }
+                        Thread.sleep(60)
+                    }
+                    val x = synchronized(travaEntrada) {
+                        val dx = desfecho[nonce]
+                        if (dx != "form" && dx != "falha") filasEntradas.add(fid)
+                        dx
+                    }
+                    if (x == "form" || x == "falha") { Thread.sleep(PAUSA_ENTRE_FILAS); continue }
                     ultimaFila[o] = fid to nome
                     m.guildId?.let { entrouEm[it] = agora() }
                     entradas++
@@ -1425,6 +1589,223 @@ object Sniper {
         }
     }
 
+    // ======================================================================== formulários (modal)
+    private fun chaveCampo(rotulo: String, customId: String): String {
+        val k = semAcento(rotulo).lowercase().filter { it.isLetterOrDigit() }.take(60)
+        return k.ifEmpty { "id:" + customId.take(60) }
+    }
+
+    /** lê o formulário que veio no INTERACTION_MODAL_CREATE */
+    private fun lerFormulario(d: JSONObject, nonce: String, org: String, nome: String, fid: String?, salaId: String?,
+                              canalId: String, gid: String?): SForm? {
+        val modalId = d.s("id") ?: return null
+        val custom = d.s("custom_id") ?: return null
+        val appId = d.optJSONObject("application")?.s("id") ?: d.s("application_id") ?: return null
+        val bruto = d.optJSONArray("components") ?: JSONArray()
+        val campos = ArrayList<SCampo>()
+        val textos = ArrayList<String>()
+        fun campo(x: JSONObject?, rotulo: String?, descricao: String?) {
+            if (x == null) return
+            val tipo = x.optInt("type")
+            val cid = x.s("custom_id") ?: return
+            val rot = (rotulo ?: x.s("label") ?: x.s("placeholder") ?: cid).trim()
+            val dica = (descricao ?: x.s("placeholder") ?: "").trim()
+            if (tipo == 4) {
+                campos.add(SCampo(chaveCampo(rot, cid), rot, dica, 4, cid, x.optBoolean("required", true), x.s("value") ?: "",
+                    emptyList(), emptyList(), x.optInt("min_length", 0), x.optInt("max_length", 4000)))
+            } else {
+                val ops = ArrayList<Pair<String, String>>()
+                val pad = ArrayList<String>()
+                x.optJSONArray("options")?.let { a ->
+                    for (i in 0 until a.length()) {
+                        val op = a.optJSONObject(i) ?: continue
+                        val v = op.s("value") ?: continue
+                        ops.add((op.s("label") ?: v) to v)
+                        if (op.optBoolean("default", false)) pad.add(v)
+                    }
+                }
+                val obrig = x.optBoolean("required", true) && x.optInt("min_values", 1) > 0
+                campos.add(SCampo(chaveCampo(rot, cid), rot, dica, tipo, cid, obrig, "", ops, pad,
+                    x.optInt("min_values", 1), x.optInt("max_values", 1)))
+            }
+        }
+        for (i in 0 until bruto.length()) {
+            val c = bruto.optJSONObject(i) ?: continue
+            when (c.optInt("type")) {
+                1 -> c.optJSONArray("components")?.let { a -> for (j in 0 until a.length()) campo(a.optJSONObject(j), null, null) }
+                18 -> campo(c.optJSONObject("component"), c.s("label"), c.s("description"))
+                10 -> c.s("content")?.let { textos.add(it) }
+            }
+        }
+        return SForm(nonce, modalId, custom, appId, canalId, gid, d.s("title") ?: "formulário", org, nome, fid, salaId, textos, campos, bruto)
+    }
+
+    private fun respostasSalvas(): JSONObject = try { JSONObject(sp.getString("respostas_form", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
+
+    /** o que o bot já sabe pôr nesse campo (resposta que você deu antes, valor que já vem preenchido, opção padrão) */
+    fun respostaConhecida(f: SCampo): List<String>? {
+        val salvo = respostasSalvas().optJSONArray(f.chave)?.let { a -> (0 until a.length()).map { a.optString(it) } }
+        if (f.tipo == 4) {
+            salvo?.firstOrNull()?.let { return listOf(it) }
+            if (f.inicial.isNotEmpty()) return listOf(f.inicial)
+            return if (!f.obrigatorio) listOf("") else null
+        }
+        if (f.tipo == 3) {
+            val validos = f.opcoes.map { it.second }
+            salvo?.filter { it in validos }?.takeIf { it.isNotEmpty() }?.let { return it }
+            if (f.padrao.isNotEmpty()) return f.padrao
+            // opção de gelo igual à que você escolheu na BUSCA
+            val g = if (gelo == "INFINITO") "INFIN" else "NORMAL"
+            f.opcoes.firstOrNull { g in semAcento(it.first).uppercase() }?.let { return listOf(it.second) }
+            return if (!f.obrigatorio) emptyList() else null
+        }
+        return if (!f.obrigatorio) emptyList() else null
+    }
+
+    private fun respostasAuto(f: SForm): Map<String, List<String>>? {
+        val out = HashMap<String, List<String>>()
+        for (c in f.campos) out[c.customId] = respostaConhecida(c) ?: return null
+        return out
+    }
+
+    private fun montarRespostas(f: SForm, valores: Map<String, List<String>>): JSONArray {
+        fun resp(x: JSONObject?): JSONObject? {
+            if (x == null) return null
+            val tipo = x.optInt("type")
+            val cid = x.s("custom_id") ?: return null
+            val o = JSONObject().put("type", tipo).put("custom_id", cid)
+            if (x.has("id")) o.put("id", x.optInt("id"))
+            val v = valores[cid] ?: emptyList()
+            if (tipo == 4) o.put("value", v.firstOrNull() ?: "") else o.put("values", JSONArray(v))
+            return o
+        }
+        val out = JSONArray()
+        for (i in 0 until f.bruto.length()) {
+            val c = f.bruto.optJSONObject(i) ?: continue
+            when (c.optInt("type")) {
+                1 -> {
+                    val linha = JSONArray()
+                    c.optJSONArray("components")?.let { a -> for (j in 0 until a.length()) resp(a.optJSONObject(j))?.let { linha.put(it) } }
+                    if (linha.length() > 0) out.put(JSONObject().put("type", 1).put("components", linha).also { o -> if (c.has("id")) o.put("id", c.optInt("id")) })
+                }
+                18 -> resp(c.optJSONObject("component"))?.let { r ->
+                    out.put(JSONObject().put("type", 18).put("component", r).also { o -> if (c.has("id")) o.put("id", c.optInt("id")) })
+                }
+                10 -> if (c.has("id")) out.put(JSONObject().put("type", 10).put("id", c.optInt("id")))
+            }
+        }
+        return out
+    }
+
+    private fun aoFormulario(d: JSONObject) {
+        diag("formulário: ${d.toString().take(3000)}")
+        val nonce = d.s("nonce") ?: ""
+        val info = cliqueInfo[nonce]
+        val tipo = info?.get(0) ?: "?"
+        val canalId = d.s("channel_id") ?: ""
+        val gid = d.s("guild_id") ?: canais[canalId]?.guildId ?: gidDe(canalId)
+        val o = info?.get(2) ?: adivinharOrg(gid)
+        val nome = info?.get(3) ?: o
+        val fid = if (tipo == "fila") info?.get(1) else null
+        val f = lerFormulario(d, nonce, o, nome, fid, if (tipo == "sala") info?.get(1) else null, canalId, gid) ?: run {
+            log("erro", "$nome: a org abriu um formulário que o app não entendeu (detalhes no registro completo)")
+            return
+        }
+        if (fid != null) {
+            synchronized(travaEntrada) {
+                if (filasEntradas.remove(fid) && entradas > 0) entradas--
+            }
+            // não clica de novo nessa fila enquanto o formulário estiver valendo
+            esperaFila[fid] = agora() + FORM_VALIDO
+        }
+        val auto = respostasAuto(f)
+        if (auto != null) {
+            exRapido?.execute { seguro { responderFormulario(f, auto, false) } }
+            return
+        }
+        formularios.removeAll { it.fid != null && it.fid == fid }
+        while (formularios.size >= 12) formularios.removeAt(0).fid?.let { esperaFila.remove(it) }
+        formularios.add(f)
+        // não clica nas outras filas dessa org até você responder (senão cada valor abre outro formulário)
+        orgPausada[o] = agora() + FORM_VALIDO
+        val campos = f.campos.joinToString(" · ") { it.rotulo }
+        avisarUmaVez("form|$o|${f.titulo}", "erro", "$o pediu um formulário ('${f.titulo}': $campos) · responda uma vez lá em cima que o bot lembra e responde sozinho nas próximas")
+        status(o, "📝 pediu formulário: responda no app", "pausa")
+        notificar("$o pediu um formulário", "${f.titulo}: $campos")
+        mudou()
+    }
+
+    /** manda o formulário. doUsuario = você respondeu agora (o bot guarda as respostas pras próximas) */
+    private fun responderFormulario(f: SForm, valores: Map<String, List<String>>, doUsuario: Boolean) {
+        val d = dc ?: return
+        formularios.remove(f)
+        if (doUsuario) orgPausada.remove(f.org)
+        if (agora() - f.chegou > FORM_VALIDO) {
+            f.fid?.let { esperaFila.remove(it) }
+            log("info", "${f.nome}: esse formulário expirou · o bot clica de novo na fila")
+            mudou()
+            return
+        }
+        if (doUsuario) {
+            val sv = respostasSalvas()
+            for (c in f.campos) {
+                val v = valores[c.customId] ?: continue
+                if (v.isEmpty() || v.all { it.isBlank() }) continue
+                sv.put(c.chave, JSONArray(v))
+            }
+            sp.edit().putString("respostas_form", sv.toString()).apply()
+        }
+        val n = Snow.novo()
+        enviosForm[n] = f
+        if (f.fid != null) ultimaFila[f.org] = f.fid to f.nome
+        val r = d.enviarFormulario(f.appId, f.canalId, f.guildId, f.modalId, f.customId, montarRespostas(f, valores), n)
+        diag("formulário ${f.nome} enviado -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(300) else ""}")
+        if (!r.ok) {
+            enviosForm.remove(n)
+            f.fid?.let { esperaFila[it] = agora() + 30_000 }
+            log("erro", "${f.nome}: não deu pra mandar o formulário (${motivo(r)})")
+        } else if (doUsuario) {
+            log("ok", "${f.nome}: formulário enviado · as próximas a org responde sozinha")
+            // os outros formulários parados que agora o bot sabe responder
+            for (g in formularios.toList()) respostasAuto(g)?.let { responderFormulario(g, it, false) }
+        }
+        mudou()
+    }
+
+    private fun formularioAceito(f: SForm) {
+        val fid = f.fid
+        if (fid != null) {
+            filasEntradas.add(fid)
+            esperaFila.remove(fid)
+            entradas++
+            f.guildId?.let { entrouEm[it] = agora() }
+            log("ok", "entrou na fila ${f.nome} (respondeu o formulário)")
+            status(f.org, "✓ na fila (formulário respondido)", "ok")
+        } else log("ok", "${f.nome}: formulário aceito")
+        mudou()
+    }
+
+    // ---------------- formulário: tela ----------------
+    fun responderPeloApp(f: SForm, valores: Map<String, List<String>>) {
+        exRapido?.execute { seguro { responderFormulario(f, valores, true) } } ?: log("erro", "ligue o bot primeiro")
+    }
+
+    fun ignorarFormulario(f: SForm) {
+        formularios.remove(f)
+        if (formularios.none { it.org == f.org }) orgPausada.remove(f.org)
+        f.fid?.let { esperaFila[it] = agora() + 5 * 60_000 }
+        log("info", "${f.nome}: formulário ignorado (não tenta essa fila por 5 min)")
+        mudou()
+    }
+
+    fun qtdRespostasSalvas(): Int = respostasSalvas().length()
+
+    fun apagarRespostas() {
+        sp.edit().remove("respostas_form").apply()
+        log("info", "respostas dos formulários apagadas")
+        mudou()
+    }
+
     // ======================================================================== descobrir valores
     /** abre cada fila sem valor (GOLD, FARM...), lê o "Valor: R$ ..." dela e guarda. Só lê, não entra em fila. */
     fun descobrir(conferirTudo: Boolean = false) {
@@ -1446,6 +1827,8 @@ object Sniper {
             val apr = try { JSONObject(sp.getString("aprendidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
             val semServidor = HashSet<String>()
             val semAchar = HashMap<String, Int>()
+            var apagadas = 0
+            val naoAchou = try { JSONObject(sp.getString("nao_achou", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
             try {
                 // confere as que já têm valor: ID com valor trocado é corrigido
                 var corrigidas = 0
@@ -1478,11 +1861,23 @@ object Sniper {
                             val n = (semAchar[o] ?: 0) + 1
                             semAchar[o] = n
                             if (n >= 2) { semServidor.add(o); faltou.add("$o: não achei nenhuma fila (você está no servidor?)") }
-                        } else faltou.add("$o $m: não achei a fila $id")
+                        } else {
+                            // não achou em nenhum canal da org: na 2ª vez seguida conta como apagada (a org postou o painel de novo)
+                            val k = naoAchou.optInt(id, 0) + 1
+                            naoAchou.put(id, k)
+                            diag("descobrir: $o $m fila $id não encontrada (${k}ª vez)")
+                            if (k >= 2) { corrigirValor(id, "-"); apagadas++ }
+                            else faltou.add("$o $m: não achei a fila $id (se faltar de novo na próxima, sai da lista)")
+                        }
                         continue
                     }
                     val v = lerValor(msg)
-                    if (v == null) { faltou.add("$o $m: não deu pra ler o valor da fila $id"); continue }
+                    if (v == null) {
+                        faltou.add("$o $m: não deu pra ler o valor da fila $id")
+                        diag("descobrir: $o $m $id sem valor · texto: ${textoCard(msg).take(400)} · botões: ${msg.botoes.joinToString { it.label }}" +
+                            (msg.bruto?.let { " · bruto: $it" } ?: ""))
+                        continue
+                    }
                     val jaTem = orgs[o]?.filas?.get(m)?.get(v) ?: apr.optJSONObject(o)?.optJSONObject(m)?.s(v)
                     if (jaTem != null && jaTem != id) {
                         // já tinha outro ID nesse valor: abre ele também e vê quem está certo
@@ -1504,12 +1899,18 @@ object Sniper {
             } catch (t: Throwable) {
                 log("erro", "descobrir: ${t.message ?: t.javaClass.simpleName}")
             } finally {
-                sp.edit().putString("aprendidos", apr.toString()).apply()
+                sp.edit().putString("aprendidos", apr.toString()).putString("nao_achou", naoAchou.toString()).apply()
                 carregarOrgs()
                 descobrindo = false
                 progresso = ""
-                log("ok", "pronto · $achou filas descobertas" + (if (faltou.isNotEmpty()) " · ${faltou.size} ficaram sem valor" else ""))
-                for (f in faltou.take(12)) log("erro", f)
+                log("ok", "pronto · $achou filas descobertas" + (if (apagadas > 0) " · $apagadas apagadas pela org saíram da lista" else "") +
+                    (if (faltou.isNotEmpty()) " · ${faltou.size} ficaram sem valor" else ""))
+                // um aviso por org (antes era uma linha por fila)
+                for ((org, qts) in faltou.groupBy { it.substringBefore(' ').substringBefore(':') }) {
+                    if (qts.size == 1) log("erro", qts[0])
+                    else log("erro", "$org: ${qts.size} filas sem valor (${qts[0].substringAfter(": ").substringBefore(" da fila").substringBefore(" a fila")}) · detalhes no registro completo")
+                    for (q in qts) diag("descobrir: $q")
+                }
                 mudou()
             }
         }

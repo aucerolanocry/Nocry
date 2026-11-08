@@ -90,6 +90,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             return
         }
         add(pedaco({ assinaturaTopo() }) { topo(it) }, 4)
+        add(pedaco({ Sniper.formularios.joinToString("|") { it.nonce } }) { formularios(it) }, 0)
         add(Ui.segmento(c, listOf("Partidas", "Busca", "Conta"), abaAtual) { i ->
             if (i != abaAtual) { abaAtual = i; esconderTeclado(); render() }
         }, 12)
@@ -222,6 +223,105 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         b.addView(card)
     }
 
+    // ======================================================================== formulário da org
+    private fun formularios(b: LinearLayout) {
+        val c = act
+        val fs = Sniper.formularios.toList()
+        if (fs.isEmpty()) return
+        val card = Ui.card(c, forte = true)
+        card.addView(Ui.text(c, "📝 ${if (fs.size == 1) "a org pediu um formulário" else "${fs.size} formulários esperando"}", 13f, Ui.WARN, true, mono = true))
+        card.addView(dica("Algumas orgs (DUCK, FURIA, HELIPA...) abrem um formulário quando clica pra entrar. Sem responder, NÃO entra na fila. Responda uma vez: o bot guarda e responde sozinho nas próximas."), Ui.lp(top = 6, c = c))
+        for (f in fs.take(3)) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.CENTER_VERTICAL
+            val info = Ui.vbox(c)
+            info.addView(Ui.text(c, "${f.org} · ${f.titulo}", 12.5f, Ui.TEXT, true, mono = true))
+            info.addView(texto(f.campos.joinToString(" · ") { it.rotulo }.ifEmpty { "sem campos" }, 11f, Ui.MUTED))
+            linha.addView(info, pesoUm())
+            linha.addView(Ui.button(c, "responder", Ui.Kind.PRIMARY) { dialogFormulario(f) }, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 8) })
+            card.addView(linha, Ui.lp(top = 12, c = c))
+        }
+        if (fs.size > 3) card.addView(dica("+ ${fs.size - 3} (respondendo um, os iguais vão sozinhos)"), Ui.lp(top = 8, c = c))
+        b.addView(card, Ui.lp(top = 12, c = c))
+    }
+
+    private fun dialogFormulario(f: SForm) {
+        val c = act
+        val box = Ui.vbox(c)
+        val p = Ui.dp(c, 20)
+        box.setPadding(p, Ui.dp(c, 8), p, Ui.dp(c, 8))
+        box.addView(texto("${f.org} · ${f.nome}", 11.5f, Ui.MUTED))
+        for (t in f.textos) box.addView(texto(t.replace(Regex("[#*_`>]+"), "").trim(), 12.5f, Ui.TEXT), Ui.lp(top = 8, c = c))
+        // customId -> como ler a resposta
+        val leitores = LinkedHashMap<String, () -> List<String>>()
+        for (campo in f.campos) {
+            box.addView(Ui.text(c, campo.rotulo + if (campo.obrigatorio) " *" else "", 12.5f, Ui.TEXT, true), Ui.lp(top = 14, c = c))
+            if (campo.dica.isNotEmpty() && campo.dica != campo.rotulo) box.addView(texto(campo.dica, 11f, Ui.MUTED), Ui.lp(top = 2, c = c))
+            val conhecida = Sniper.respostaConhecida(campo)
+            when (campo.tipo) {
+                4 -> {
+                    val e = Ui.field(c, campo.dica.ifEmpty { "resposta" }, false)
+                    e.setText(conhecida?.firstOrNull() ?: campo.inicial)
+                    if (campo.maximo in 1..3999) e.filters = arrayOf<android.text.InputFilter>(android.text.InputFilter.LengthFilter(campo.maximo))
+                    box.addView(e, Ui.lp(top = 6, c = c))
+                    leitores[campo.customId] = { listOf(e.text.toString().trim()) }
+                }
+                3 -> {
+                    val escolhidos = LinkedHashSet<String>(conhecida ?: campo.padrao)
+                    val botoes = ArrayList<Pair<String, TextView>>()
+                    fun pinta() {
+                        for ((v, tv) in botoes) {
+                            val sel = v in escolhidos
+                            tv.background = Botao(c, if (sel) "grad" else "ghost", 12)
+                            tv.setTextColor(if (sel) Theme.sobreGrad() else Ui.TEXT)
+                        }
+                    }
+                    for ((rot, v) in campo.opcoes) {
+                        val tv = Ui.text(c, rot, 12.5f, Ui.TEXT, true)
+                        tv.setPadding(Ui.dp(c, 14), Ui.dp(c, 12), Ui.dp(c, 14), Ui.dp(c, 12))
+                        Ui.clique(tv) {
+                            if (campo.maximo <= 1) { escolhidos.clear(); escolhidos.add(v) }
+                            else if (!escolhidos.remove(v) && escolhidos.size < campo.maximo) escolhidos.add(v)
+                            pinta()
+                        }
+                        botoes.add(v to tv)
+                        box.addView(tv, Ui.lp(top = 6, c = c))
+                    }
+                    pinta()
+                    leitores[campo.customId] = { escolhidos.toList() }
+                }
+                else -> {
+                    box.addView(texto("esse campo o app não sabe responder · se for obrigatório, responda pelo Discord", 11f, Ui.BAD), Ui.lp(top = 4, c = c))
+                    leitores[campo.customId] = { emptyList() }
+                }
+            }
+        }
+        val rola = ScrollView(c)
+        rola.addView(box)
+        val dlg = android.app.AlertDialog.Builder(c, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            .setTitle(f.titulo)
+            .setView(rola)
+            .setPositiveButton("ENVIAR E LEMBRAR", null)
+            .setNegativeButton("DEPOIS", null)
+            .setNeutralButton("IGNORAR") { _, _ -> Sniper.ignorarFormulario(f) }
+            .create()
+        dlg.setOnShowListener {
+            dlg.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val valores = HashMap<String, List<String>>()
+                for ((cid, ler) in leitores) valores[cid] = ler()
+                val falta = f.campos.firstOrNull { campo ->
+                    val v = valores[campo.customId] ?: emptyList()
+                    campo.obrigatorio && (v.isEmpty() || v.all { it.isBlank() } || (campo.tipo == 4 && (v.firstOrNull()?.length ?: 0) < campo.minimo))
+                }
+                if (falta != null) { Ui.toast(c, "preencha: ${falta.rotulo}"); return@setOnClickListener }
+                Sniper.responderPeloApp(f, valores)
+                dlg.dismiss()
+            }
+        }
+        dlg.show()
+    }
+
     // ======================================================================== PARTIDAS
     private fun abaPartidas() {
         val c = act
@@ -314,6 +414,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val s = salaAtual() ?: return ""
         return when {
             s.apostaOk -> "★ APOSTA CONFIRMADA"
+            s.encerrada -> "✗ A ORG ENCERROU ESSA SALA"
             s.confirmada -> "✓ VOCÊ CONFIRMOU"
             s.somenteLeitura -> "SÓ LEITURA"
             s.respondida -> "ADVERSÁRIO RESPONDEU"
@@ -329,7 +430,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val sb = StringBuilder(Sniper.salaAtiva ?: "-")
         for (id in Sniper.ordem) {
             val s = Sniper.salas[id] ?: continue
-            sb.append('|').append(id).append(s.naoLidas).append(s.respondida).append(s.apostaOk).append(s.confirmada).append(s.somenteLeitura)
+            sb.append('|').append(id).append(s.naoLidas).append(s.respondida).append(s.apostaOk).append(s.confirmada).append(s.somenteLeitura).append(s.encerrada)
                 .append((agora - s.aberta) / 10_000)
         }
         return sb.toString()
@@ -354,12 +455,13 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             val sel = id == Sniper.salaAtiva
             val cor = when {
                 sel -> null
+                s.encerrada && !s.protegida -> Theme.alpha(Ui.MUTED, 0x90)
                 s.protegida -> Ui.OK
                 s.respondida -> Ui.TEXT
                 agora - s.aberta > Sniper.tempoResposta - 10_000 -> Ui.BAD
                 else -> Ui.WARN
             }
-            val rot = (if (s.apostaOk) "★" else "") + "${i + 1}" + (if (s.naoLidas > 0) " •${s.naoLidas}" else "")
+            val rot = (if (s.apostaOk) "★" else if (s.encerrada) "✗" else "") + "${i + 1}" + (if (s.naoLidas > 0) " •${s.naoLidas}" else "")
             caixa(rot, s.org, sel, corTexto = cor) { Sniper.ativarSala(i) }
         }
         b.addView(grade(itens, 4))
@@ -370,11 +472,17 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     private fun assinaturaAcoes(): String {
         val s = salaAtual()
-        return "${s?.id}|${s?.protegida}|${Sniper.salas.size}"
+        return "${s?.id}|${s?.protegida}|${s?.encerrada}|${Sniper.salas.size}"
     }
 
     private fun acoes(b: LinearLayout) {
         val c = act
+        val sa = salaAtual()
+        if (sa != null && sa.encerrada && !sa.protegida) {
+            b.addView(dica("A org já fechou essa sala (cancelou ou acabou). Ela some sozinha em 3 min."))
+            b.addView(Ui.button(c, "tirar do painel agora", Ui.Kind.GHOST) { Sniper.largar() }, Ui.lp(top = 8, c = c))
+            return
+        }
         val linha = Ui.hbox(c)
         linha.addView(Ui.button(c, "✓ confirmar", Ui.Kind.PRIMARY) { Sniper.confirmar() }, pesoUm())
         linha.addView(Ui.button(c, "✗ cancelar", Ui.Kind.DANGER) {
@@ -707,7 +815,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         b.addView(card)
     }
 
-    private fun assinaturaFerramentas() = "${Sniper.descobrindo}|${Sniper.progresso}|${Sniper.qtdPendentes()}|${Sniper.conectado}|${Sniper.buscando}"
+    private fun assinaturaFerramentas() = "${Sniper.descobrindo}|${Sniper.progresso}|${Sniper.qtdPendentes()}|${Sniper.conectado}|${Sniper.buscando}|${Sniper.qtdRespostasSalvas()}"
 
     private fun ferramentas(b: LinearLayout) {
         val c = act
@@ -725,6 +833,12 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                     !Sniper.conectado -> Ui.toast(c, "ligue o bot primeiro")
                     else -> Sniper.descobrir()
                 }
+            }, Ui.lp(top = 8, c = c))
+        }
+        val nr = Sniper.qtdRespostasSalvas()
+        if (nr > 0) {
+            card.addView(Ui.item(c, "Respostas dos formulários", "O bot responde sozinho os formulários das orgs com o que você já respondeu. Toque pra apagar e responder de novo.", 0, "$nr") {
+                Ui.dialogConfirma(c, "APAGAR RESPOSTAS", "Apaga as $nr respostas salvas. Da próxima vez que uma org pedir formulário, ele pergunta de novo.", "APAGAR") { Sniper.apagarRespostas() }
             }, Ui.lp(top = 8, c = c))
         }
         card.addView(Ui.item(c, "Conferir todos os valores", "Abre cada fila de todas as orgs e corrige ID com valor trocado. Uns 3 min. Pause a busca antes.", 0, null) {

@@ -67,7 +67,9 @@ class DMsg(
     val flags: Int,
     val interacaoUser: String?,
     val appId: String?,
-    val anexos: List<DAnexo> = emptyList()
+    val anexos: List<DAnexo> = emptyList(),
+    /** JSON cru quando o app não entendeu nada da mensagem (vai pro registro completo pra ver o formato) */
+    val bruto: String? = null
 ) {
     val efemera: Boolean get() = flags and 64 != 0
 
@@ -89,6 +91,13 @@ class DMsg(
                 }
             }
             val botoes = ArrayList<DBotao>()
+            // mensagem nova do Discord (Components V2): o texto vem em blocos, não em content/embed
+            val textosV2 = ArrayList<String>()
+            val midias = ArrayList<DAnexo>()
+            fun midia(m: JSONObject?) {
+                val url = m?.s("url") ?: return
+                midias.add(DAnexo("imagem", url, m.s("proxy_url") ?: url, true))
+            }
             fun lerComp(arr: JSONArray?) {
                 if (arr == null) return
                 for (i in 0 until arr.length()) {
@@ -99,6 +108,11 @@ class DMsg(
                             val label = c.s("label")
                             if (id != null && label != null) botoes.add(DBotao(id, label, c.optBoolean("disabled", false)))
                         }
+                        10 -> c.s("content")?.let { textosV2.add(it) }          // texto
+                        11 -> midia(c.optJSONObject("media"))                     // miniatura
+                        12 -> c.optJSONArray("items")?.let { its ->               // galeria de imagens
+                            for (j in 0 until its.length()) midia(its.optJSONObject(j)?.optJSONObject("media"))
+                        }
                         else -> {
                             lerComp(c.optJSONArray("components"))
                             c.optJSONObject("accessory")?.let { lerComp(JSONArray().put(it)) }
@@ -107,6 +121,8 @@ class DMsg(
                 }
             }
             lerComp(o.optJSONArray("components"))
+            // o texto dos blocos vira um "card" (assim o resto do bot lê igual embed: valor, aviso, aposta confirmada...)
+            if (textosV2.isNotEmpty()) embeds.add(0, DEmbed("", textosV2.joinToString("\n").trim(), emptyList()))
             val mencoes = ArrayList<Pair<String, String>>()
             o.optJSONArray("mentions")?.let { ms ->
                 for (i in 0 until ms.length()) {
@@ -128,6 +144,7 @@ class DMsg(
                     anexos.add(DAnexo(nome, url, x.s("proxy_url") ?: url, img))
                 }
             }
+            for (md in midias) if (anexos.none { it.url == md.url }) anexos.add(md)
             return DMsg(
                 id = o.s("id") ?: "",
                 canalId = o.s("channel_id") ?: "",
@@ -142,7 +159,9 @@ class DMsg(
                 flags = o.optInt("flags", 0),
                 interacaoUser = inter,
                 appId = o.s("application_id") ?: o.optJSONObject("webhook")?.s("id") ?: (if (bot) a.s("id") else null),
-                anexos = anexos
+                anexos = anexos,
+                bruto = if ((o.s("content") ?: "").isBlank() && embeds.isEmpty() && botoes.isEmpty() && anexos.isEmpty())
+                    o.toString().take(1500) else null
             )
         }
     }
@@ -350,6 +369,20 @@ class Discord(private val token: String, private val vendorId: String, private v
             .put("data", JSONObject().put("component_type", 2).put("custom_id", b.customId))
         if (m.guildId != null) corpo.put("guild_id", m.guildId)
         return req("POST", "/interactions", corpo, antes)
+    }
+
+    /** responde um formulário (modal) que a org abriu depois do clique */
+    fun enviarFormulario(appId: String, canalId: String, guildId: String?, modalId: String, customId: String,
+                         componentes: JSONArray, nonce: String = Snow.novo()): Resp {
+        val corpo = JSONObject()
+            .put("type", 5)
+            .put("nonce", nonce)
+            .put("channel_id", canalId)
+            .put("application_id", appId)
+            .put("session_id", sessao ?: "")
+            .put("data", JSONObject().put("id", modalId).put("custom_id", customId).put("components", componentes))
+        if (guildId != null) corpo.put("guild_id", guildId)
+        return req("POST", "/interactions", corpo)
     }
 
     // ------------------------------------------------------------------ gateway
