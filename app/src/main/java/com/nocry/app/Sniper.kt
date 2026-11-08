@@ -356,12 +356,59 @@ object Sniper {
 
     private fun mudou() { versao.incrementAndGet() }
 
+    // ---------------- registro completo (arquivo) ----------------
+    private val fmtArquivo = SimpleDateFormat("dd/MM HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("America/Sao_Paulo") }
+    private val travaArquivo = Object()
+
+    /** tudo que acontece desde que o bot liga fica aqui (Sniper/registro.txt nos arquivos do app) */
+    fun arquivoRegistro(): java.io.File {
+        val base = app.getExternalFilesDir(null) ?: app.filesDir
+        return java.io.File(base, "sniper/registro.txt")
+    }
+
+    private fun gravar(linha: String) {
+        if (!::app.isInitialized) return
+        try {
+            synchronized(travaArquivo) {
+                val f = arquivoRegistro()
+                f.parentFile?.mkdirs()
+                if (f.length() > 4_000_000) {
+                    // ficou grande: guarda o anterior e começa outro
+                    val velho = java.io.File(f.parentFile, "registro_anterior.txt")
+                    velho.delete()
+                    f.renameTo(velho)
+                }
+                f.appendText(synchronized(fmtArquivo) { fmtArquivo.format(Date()) } + " " + linha + "\n")
+            }
+        } catch (_: Throwable) {}
+    }
+
+    /** detalhe técnico: vai só pro arquivo (não aparece na tela) */
+    fun diag(texto: String) = gravar("[det] $texto")
+
+    fun apagarRegistro() {
+        synchronized(travaArquivo) {
+            try { arquivoRegistro().delete() } catch (_: Throwable) {}
+            try { java.io.File(arquivoRegistro().parentFile, "registro_anterior.txt").delete() } catch (_: Throwable) {}
+        }
+        synchronized(registro) { registro.clear() }
+        log("info", "registro apagado")
+    }
+
+    private fun cabecalhoSessao() {
+        gravar("==================================================================")
+        gravar("[sessao] SNIPER ligado · app ${BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE} (${android.os.Build.VERSION.SDK_INT}) · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+        gravar("[sessao] alvo: $org · modos ${modos.sorted().joinToString(" ")} · valores ${textoValores(valores)} · gelo $gelo")
+        gravar("[sessao] ajustes: limite ${if (maxFilas >= 300) "sem limite" else maxFilas} · responder em ${tempoResposta / 1000}s · sair ao abrir $sairAoAbrir · buscar ao ligar $buscarAoLigar")
+        gravar("[sessao] orgs com fila: ${orgs.keys.joinToString(", ")} · sem valor: ${semValor.joinToString(", ").ifEmpty { "nenhuma" }} · pendentes ${qtdPendentes()}")
+    }
+
     fun log(tipo: String, texto: String) {
+        gravar("[$tipo] $texto")
         synchronized(registro) {
             registro.add(SLinha(hora(), tipo, texto))
             while (registro.size > 160) registro.removeAt(0)
         }
-        NLog.add("sniper", texto)
         mudou()
     }
 
@@ -454,6 +501,7 @@ object Sniper {
         if (tk.isNullOrBlank()) { log("erro", "cole o token da conta primeiro"); return false }
         ligadoPref = true
         estado = "conectando"
+        cabecalhoSessao()
         val s = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "sniper-salas").apply { isDaemon = true } }
         // uma busca por org, todas ao mesmo tempo
         val f = Executors.newScheduledThreadPool(orgs.size.coerceIn(2, 20)) { r -> Thread(r, "sniper-filas").apply { isDaemon = true } }
@@ -464,6 +512,7 @@ object Sniper {
         exVigia = v
         exRapido = rp
         val d = Discord(tk.trim(), vendorId(), ouvinte)
+        d.aoErroHttp = { t -> diag(t) }
         dc = d
         log("info", "conectando no Discord...")
         s.execute { seguro { d.conectar() } }
@@ -524,6 +573,7 @@ object Sniper {
         }
 
         override fun caiu(motivo: String, fatal: Boolean) {
+            diag("conexão: $motivo (fatal=$fatal)")
             conectado = false
             log(if (fatal) "erro" else "info", motivo)
             if (fatal) {
@@ -587,6 +637,9 @@ object Sniper {
     }
 
     private fun aoEvento(t: String, d: JSONObject) {
+        if (t.startsWith("CHANNEL_") || t.startsWith("THREAD_") || t.startsWith("INTERACTION_")) {
+            diag("evento $t id=${d.s("id") ?: d.s("nonce")} nome=${d.s("name") ?: ""} servidor=${d.s("guild_id")?.let { guildas[it] ?: it } ?: ""}")
+        }
         when (t) {
             "RESUMED" -> { conectado = true; estado = "online"; log("info", "reconectado") }
             "GUILD_CREATE" -> guilda(d)
@@ -717,6 +770,7 @@ object Sniper {
         }
         val r = d.enviar(s.id, msgAuto, rapido = true)
         if (s.thread) Thread { try { d.entrarThread(s.id) } catch (_: Throwable) {} }.start()
+        diag("mensagem automática sala ${s.nome} -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(200) else ""}")
         if (r.ok) {
             s.msgEnviada = true
         } else if (r.codigo == 403 || r.erro() == 50013 || r.erro() == 50001) {
@@ -847,6 +901,7 @@ object Sniper {
             s.chat.add(linhaChat(m))
             while (s.chat.size > 120) s.chat.removeAt(0)
         }
+        diag("chat sala ${numeroSala(s.id)} (${s.org}) ${if (m.autorBot) "bot " else ""}${m.autorNome}: ${textoMsg(m).take(300)}")
         if (s.id != salaAtiva) {
             s.naoLidas++
             if (s.naoLidas == 1) log("info", "mensagem nova na sala ${numeroSala(s.id)} (${s.org})")
@@ -1343,6 +1398,7 @@ object Sniper {
                 val nonce = Snow.novo()
                 cliques[nonce] = arrayOf(fid, o, nome)
                 val r = d.clicar(m, botao, nonce) { buscando && filasEntradas.size < maxFilas }
+                diag("clique $nome botão '${botao.label}' -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(200) else ""}")
                 if (r.codigo == -2) { cliques.remove(nonce); return }
                 if (r.ok) {
                     filasEntradas.add(fid)
@@ -1391,6 +1447,25 @@ object Sniper {
             val semServidor = HashSet<String>()
             val semAchar = HashMap<String, Int>()
             try {
+                // confere as que já têm valor: ID com valor trocado é corrigido
+                var corrigidas = 0
+                for ((i, t) in conferir.withIndex()) {
+                    if (dc == null) break
+                    val (o, m, id) = t
+                    if (o in semServidor) continue
+                    progresso = "conferindo $o $m (${i + 1}/${conferir.size})"
+                    mudou()
+                    val msg = acharFila(id, o, forcar = true) ?: continue
+                    val lido = lerValor(msg) ?: continue
+                    val aceitos = orgs[o]?.filas?.get(m)?.filter { it.value == id }?.keys ?: emptySet()
+                    if (lido !in aceitos) {
+                        corrigirValor(id, lido)
+                        corrigidas++
+                        log("info", "$o $m: ID corrigido pra ${rotuloValor(lido)}")
+                    }
+                    Thread.sleep(250)
+                }
+                if (conferir.isNotEmpty()) log("ok", "conferência: $corrigidas filas estavam com valor trocado e foram corrigidas")
                 for ((i, t) in lista.withIndex()) {
                     if (dc == null) break
                     val (o, m, id) = t
@@ -1425,25 +1500,6 @@ object Sniper {
                     log("ok", "$o $m: fila de ${rotuloValor(v)} descoberta")
                     Thread.sleep(300)
                 }
-                // confere as que já têm valor: ID com valor trocado é corrigido
-                var corrigidas = 0
-                for ((i, t) in conferir.withIndex()) {
-                    if (dc == null) break
-                    val (o, m, id) = t
-                    if (o in semServidor) continue
-                    progresso = "conferindo $o $m (${i + 1}/${conferir.size})"
-                    mudou()
-                    val msg = acharFila(id, o, forcar = true) ?: continue
-                    val lido = lerValor(msg) ?: continue
-                    val aceitos = orgs[o]?.filas?.get(m)?.filter { it.value == id }?.keys ?: emptySet()
-                    if (lido !in aceitos) {
-                        corrigirValor(id, lido)
-                        corrigidas++
-                        log("info", "$o $m: ID corrigido pra ${rotuloValor(lido)}")
-                    }
-                    Thread.sleep(250)
-                }
-                if (conferir.isNotEmpty()) log("ok", "conferência: $corrigidas filas estavam com valor trocado e foram corrigidas")
             } catch (_: InterruptedException) {
             } catch (t: Throwable) {
                 log("erro", "descobrir: ${t.message ?: t.javaClass.simpleName}")

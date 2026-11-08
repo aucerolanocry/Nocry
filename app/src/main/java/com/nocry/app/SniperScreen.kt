@@ -630,7 +630,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         add(pedaco({ listOf(Sniper.estado, Sniper.nomeConta, Sniper.ligado(), Cofre.tem(act)).joinToString("|") }) { conta(it) }, 12)
         add(pedaco({ assinaturaAjustes() }) { ajustes(it) }, 12)
         add(pedaco({ assinaturaFerramentas() }) { ferramentas(it) }, 12)
-        add(pedaco({ val l = Sniper.logs(1).lastOrNull(); "${l?.hora}${l?.texto}" }) { registro(it) }, 12)
+        add(pedaco({ val l = Sniper.logs(1).lastOrNull(); "${l?.hora}${l?.texto}|${Sniper.logs(200).size}" }) { registro(it) }, 12)
     }
 
     private fun conta(b: LinearLayout) {
@@ -738,11 +738,43 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         b.addView(card)
     }
 
+    private fun compartilharRegistro() {
+        val c = act
+        val f = Sniper.arquivoRegistro()
+        if (!f.exists() || f.length() == 0L) { Ui.toast(c, "o registro ainda está vazio"); return }
+        try {
+            // junta o anterior (se o arquivo ficou grande e foi trocado) com o atual
+            val velho = java.io.File(f.parentFile, "registro_anterior.txt")
+            val saida = java.io.File(f.parentFile, "registro_sniper.txt")
+            saida.writeText((if (velho.exists()) velho.readText() else "") + f.readText())
+            val uri = androidx.core.content.FileProvider.getUriForFile(c, c.packageName + ".fileprovider", saida)
+            val i = Intent(Intent.ACTION_SEND)
+            i.type = "text/plain"
+            i.putExtra(Intent.EXTRA_STREAM, uri)
+            i.putExtra(Intent.EXTRA_SUBJECT, "registro do Sniper")
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            c.startActivity(Intent.createChooser(i, "Compartilhar registro"))
+        } catch (t: Throwable) {
+            Ui.toast(c, "não consegui compartilhar: ${t.message}")
+        }
+    }
+
     private fun registro(b: LinearLayout) {
         val c = act
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_log, "registro"))
-        card.addView(dica("Verde deu certo · vermelho deu erro · branco é aviso. Se algo falhar, manda print disso."), Ui.lp(top = 6, c = c))
+        card.addView(dica("Verde deu certo · vermelho deu erro · branco é aviso. O registro COMPLETO (tudo desde que liga, com data e detalhes) fica salvo num arquivo: toque em compartilhar e me manda."), Ui.lp(top = 6, c = c))
+        val f = Sniper.arquivoRegistro()
+        val tam = if (f.exists()) f.length() else 0L
+        card.addView(Ui.text(c, if (tam > 0) "arquivo: ${"%.1f".format(tam / 1024.0)} KB" else "arquivo ainda vazio", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
+        card.addView(Ui.button(c, "compartilhar registro completo", Ui.Kind.PRIMARY, R.drawable.ic_log) { compartilharRegistro() }, Ui.lp(top = 10, c = c))
+        val apagar = Ui.text(c, "apagar registro", 11f, Ui.MUTED, true, mono = true)
+        apagar.gravity = Gravity.CENTER
+        apagar.setPadding(0, Ui.dp(c, 10), 0, Ui.dp(c, 4))
+        Ui.clique(apagar) {
+            Ui.dialogConfirma(c, "APAGAR REGISTRO", "Apaga o arquivo do registro e a lista daqui. Começa do zero.", "APAGAR") { Sniper.apagarRegistro() }
+        }
+        card.addView(apagar)
         val ls = Sniper.logs(30)
         if (ls.isEmpty()) card.addView(Ui.text(c, "nada ainda", 11f, Ui.MUTED, code = true), Ui.lp(top = 8, c = c))
         for (l in ls.reversed()) {

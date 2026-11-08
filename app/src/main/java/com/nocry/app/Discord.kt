@@ -193,6 +193,8 @@ class Discord(private val token: String, private val vendorId: String, private v
     }
 
     private val ua = "Discord-Android/$BUILD;RNA"
+    /** erro de pedido (vai pro registro completo do Sniper) */
+    @Volatile var aoErroHttp: ((String) -> Unit)? = null
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -267,6 +269,10 @@ class Discord(private val token: String, private val vendorId: String, private v
                 http.newCall(b.build()).execute().use { x: Response -> Resp(x.code, x.body?.string() ?: "") }
             } catch (t: Throwable) {
                 Resp(-1, t.toString())
+            }
+            // erro que interessa pro registro completo (404/403 de procurar fila nos canais não: são muitos e normais)
+            if (!r.ok && !(metodo == "GET" && (r.codigo == 403 || r.codigo == 404))) {
+                aoErroHttp?.invoke("http $metodo ${caminho.substringBefore('?')} -> ${r.codigo} ${r.corpo.take(200)}")
             }
             if (r.codigo == 429 && tentativa < 3) {
                 // limite de velocidade: espera o que o Discord mandou e tenta de novo
