@@ -95,7 +95,7 @@ object Sniper {
     // ---------------- ajustes ----------------
     const val MAX_SALAS = 8
     const val COOLDOWN = 3_000L           // espera depois de entrar numa fila
-    const val PAUSA_ENTRE_FILAS = 400L
+    const val PAUSA_ENTRE_FILAS = 600L    // dentro da mesma org (as orgs rodam todas ao mesmo tempo)
     const val TIMEOUT_RESPOSTA = 30_000L  // sala sem resposta: sai
     const val TIMEOUT_INATIVA = 10 * 60_000L
     const val ESQUECER_SUMIDA = 10 * 60_000L
@@ -168,7 +168,8 @@ object Sniper {
     @Volatile private var dc: Discord? = null
     @Volatile private var exSalas: ScheduledExecutorService? = null
     @Volatile private var exFilas: ScheduledExecutorService? = null
-    @Volatile private var giro = 0
+    private val giroOrg = ConcurrentHashMap<String, Int>()
+    private val orgRodando: MutableSet<String> = ConcurrentHashMap.newKeySet()
     @Volatile private var ultimaVarredura = 0L
 
     private val fmtHora = SimpleDateFormat("HH:mm", Locale.US).apply { timeZone = TimeZone.getTimeZone("America/Sao_Paulo") }
@@ -381,7 +382,8 @@ object Sniper {
         ligadoPref = true
         estado = "conectando"
         val s = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "sniper-salas").apply { isDaemon = true } }
-        val f = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "sniper-filas").apply { isDaemon = true } }
+        // uma busca por org, todas ao mesmo tempo
+        val f = Executors.newScheduledThreadPool(orgs.size.coerceIn(2, 20)) { r -> Thread(r, "sniper-filas").apply { isDaemon = true } }
         exSalas = s
         exFilas = f
         val d = Discord(tk.trim(), vendorId(), ouvinte)
@@ -389,7 +391,7 @@ object Sniper {
         log("info", "conectando no Discord...")
         s.execute { seguro { d.conectar() } }
         s.scheduleWithFixedDelay({ seguro { vigiarSalas() } }, 4, 2, TimeUnit.SECONDS)
-        f.scheduleWithFixedDelay({ seguro { rodada() } }, 6, 2, TimeUnit.SECONDS)
+        f.scheduleWithFixedDelay({ seguro { distribuir() } }, 6, 1, TimeUnit.SECONDS)
         NocryService.sync(app)
         mudou()
         return true
@@ -402,6 +404,7 @@ object Sniper {
         dc = null
         exSalas?.shutdownNow(); exSalas = null
         exFilas?.shutdownNow(); exFilas = null
+        orgRodando.clear()
         if (estado != "token") estado = "desligado"
         if (!lembrar) ligadoPref = false
         salas.clear(); ordem.clear(); salaAtiva = null
@@ -999,15 +1002,31 @@ object Sniper {
         return b
     }
 
-    private fun rodada() {
+    /** a cada 1 s: toda org do alvo que não está rodando ganha uma rodada própria (todas ao mesmo tempo) */
+    private fun distribuir() {
+        val ex = exFilas ?: return
+        if (!buscando || !conectado || filasEntradas.size >= maxFilas) return
+        val porOrg = filasAlvo().groupBy { it[0] }
+        for ((o, lista) in porOrg) {
+            if (agora() < (orgPausada[o] ?: 0L)) continue
+            if (!orgRodando.add(o)) continue
+            try {
+                ex.execute {
+                    try { seguro { rodadaOrg(o, lista) } } finally { orgRodando.remove(o) }
+                }
+            } catch (_: Throwable) { orgRodando.remove(o) }
+        }
+    }
+
+    private fun rodadaOrg(org: String, alvo: List<Array<String>>) {
         val d = dc ?: return
         if (!buscando || !conectado || filasEntradas.size >= maxFilas) return
-        val alvo = filasAlvo()
         if (alvo.isEmpty()) return
         val n = alvo.size
-        val inicio = giro % n
+        val inicio = (giroOrg[org] ?: 0) % n
+        giroOrg[org] = (inicio + 1) % n
         for (k in 0 until n) {
-            if (!buscando || filasEntradas.size >= maxFilas) { giro = (inicio + k) % n; return }
+            if (!buscando || filasEntradas.size >= maxFilas) return
             val (o, modo, v, fid) = alvo[(inicio + k) % n]
             val nome = "$o $modo ${rotuloFila(o, v)}"
             if (fid in filasEntradas) continue
@@ -1062,7 +1081,6 @@ object Sniper {
             }
             Thread.sleep(PAUSA_ENTRE_FILAS)
         }
-        giro = (inicio + 1) % n
     }
 
     // ======================================================================== aviso no celular

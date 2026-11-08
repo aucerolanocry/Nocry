@@ -201,9 +201,22 @@ class Discord(private val token: String, private val vendorId: String, private v
     }
 
     // ------------------------------------------------------------------ REST
+    private val trava = Object()
+    @Volatile private var ultimoPedido = 0L
+
+    /** segura os pedidos em fila: no máximo ~16 por segundo, mesmo com todas as orgs buscando juntas */
+    private fun esperaVez() {
+        synchronized(trava) {
+            val falta = ultimoPedido + 60 - System.currentTimeMillis()
+            if (falta > 0) Thread.sleep(falta)
+            ultimoPedido = System.currentTimeMillis()
+        }
+    }
+
     fun req(metodo: String, caminho: String, corpo: JSONObject? = null): Resp {
         var tentativa = 0
         while (true) {
+            esperaVez()
             val b = Request.Builder().url(API + caminho)
                 .header("Authorization", token)
                 .header("User-Agent", ua)
