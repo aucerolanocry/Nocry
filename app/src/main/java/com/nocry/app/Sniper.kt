@@ -142,7 +142,16 @@ object Sniper {
     @Volatile var conectado = false
     @Volatile var estado = "desligado"     // desligado | conectando | online | caiu | token
     @Volatile var nomeConta = ""
+    @Volatile var usuario = ""
     @Volatile var eu = ""
+    /** abriu sala: sai das outras filas e pausa a busca (volta sozinho se a sala fechar sem aposta) */
+    @Volatile var sairAoAbrir = true
+    /** já começa a buscar quando o bot conecta */
+    @Volatile var buscarAoLigar = false
+    @Volatile private var pausadoPorSala = false
+    private val cliques = ConcurrentHashMap<String, Array<String>>()      // nonce -> (id da fila, org, nome)
+    private val esperaFila = ConcurrentHashMap<String, Long>()            // id da fila -> não tenta antes disso
+    @Volatile private var ultimaThreads = 0L
     @Volatile var apostas = 0
     @Volatile var entradas = 0
     val versao = AtomicLong()
@@ -194,6 +203,8 @@ object Sniper {
         gelo = sp.getString("gelo", "NORMAL") ?: "NORMAL"
         maxFilas = sp.getInt("max_filas", 20)
         msgAuto = sp.getString("msg_auto", MSG_PADRAO) ?: MSG_PADRAO
+        sairAoAbrir = sp.getBoolean("sair_ao_abrir", true)
+        buscarAoLigar = sp.getBoolean("buscar_ao_ligar", false)
         try {
             val o = JSONObject(sp.getString("cache_filas", "{}") ?: "{}")
             o.optJSONObject("filas")?.let { f -> f.keys().forEach { k -> f.s(k)?.let { canalDaFila[k] = it } } }
@@ -278,6 +289,8 @@ object Sniper {
             .putString("gelo", gelo)
             .putInt("max_filas", maxFilas)
             .putString("msg_auto", msgAuto)
+            .putBoolean("sair_ao_abrir", sairAoAbrir)
+            .putBoolean("buscar_ao_ligar", buscarAoLigar)
             .apply()
     }
 
@@ -382,6 +395,8 @@ object Sniper {
     fun escolherGelo(g: String) { gelo = g; salvarEscolha(); mudou() }
     fun definirMaxFilas(n: Int) { maxFilas = n.coerceIn(1, 40); salvarEscolha(); mudou() }
     fun definirMsgAuto(t: String) { msgAuto = t.ifBlank { MSG_PADRAO }; salvarEscolha(); mudou() }
+    fun definirSairAoAbrir(v: Boolean) { sairAoAbrir = v; salvarEscolha(); mudou() }
+    fun definirBuscarAoLigar(v: Boolean) { buscarAoLigar = v; salvarEscolha(); mudou() }
 
     fun alternarBusca() {
         if (!buscando) {
@@ -396,6 +411,7 @@ object Sniper {
             log("info", "busca iniciada · $org · ${modos.sorted().joinToString(" ")} · ${textoValores(valores)} · ${fs.size} filas")
         } else {
             buscando = false
+            pausadoPorSala = false
             log("info", "busca pausada (as filas em que já entrou continuam)")
         }
         mudou()
@@ -487,6 +503,7 @@ object Sniper {
     private fun aoPronto(id: String, nome: String, d: JSONObject) {
         eu = id
         nomeConta = nome
+        usuario = d.optJSONObject("user")?.s("username") ?: ""
         conectado = true
         estado = "online"
         log("ok", "conectado como $nome")
@@ -509,6 +526,7 @@ object Sniper {
             Thread.sleep(350)
         }
         log("info", "${guildas.size} servidores · ${dosOrgs.size} de org · escolha org, modo e valor e toque em INICIAR BUSCA")
+        if (buscarAoLigar && !buscando) alternarBusca()
         mudou()
     }
 
@@ -519,7 +537,7 @@ object Sniper {
         g.optJSONArray("channels")?.let { cs ->
             val ids = ArrayList<String>()
             for (i in 0 until cs.length()) {
-                val c = canalDe(cs.optJSONObject(i) ?: continue, gid)
+                val c = canalDe(cs.optJSONObject(i) ?: continue, gid, eu)
                 canais[c.id] = c
                 if (c.ehTexto) ids.add(c.id)
             }
@@ -538,7 +556,8 @@ object Sniper {
             "RESUMED" -> { conectado = true; estado = "online"; log("info", "reconectado") }
             "GUILD_CREATE" -> guilda(d)
             "CHANNEL_CREATE", "CHANNEL_UPDATE", "THREAD_CREATE", "THREAD_UPDATE" -> {
-                val c = canalDe(d)
+                // o Discord só avisa ao vivo de canal que você consegue ver
+                val c = canalDe(d, null, eu, aoVivo = true)
                 if (c.id.isEmpty()) return
                 val antes = canais[c.id]
                 if (antes != null && antes.membro) c.membro = true
@@ -555,7 +574,7 @@ object Sniper {
                 val gid = d.s("guild_id")
                 d.optJSONArray("threads")?.let { ts ->
                     for (i in 0 until ts.length()) {
-                        val c = canalDe(ts.optJSONObject(i) ?: continue, gid)
+                        val c = canalDe(ts.optJSONObject(i) ?: continue, gid, eu, aoVivo = true)
                         canais[c.id] = c
                         if (ehMinhaSala(c)) abrirSala(c)
                     }
@@ -573,6 +592,15 @@ object Sniper {
                 if (ehMinhaSala(c)) abrirSala(c)
             }
             "MESSAGE_CREATE" -> aoMsg(DMsg.de(d), true)
+            "INTERACTION_SUCCESS" -> { d.s("nonce")?.let { cliques.remove(it) } }
+            "INTERACTION_FAILURE" -> {
+                // a org não respondeu ao clique: não entrou nessa fila
+                val c = d.s("nonce")?.let { cliques.remove(it) } ?: return
+                filasEntradas.remove(c[0])
+                esperaFila[c[0]] = agora() + 20_000
+                log("erro", "${c[2]}: a org não respondeu ao clique (não entrou)")
+                status(c[1], "✗ a org não respondeu ao clique", "erro")
+            }
         }
     }
 
@@ -607,8 +635,10 @@ object Sniper {
         val novo = agora() - c.criadoMs < SALA_NOVA
         val nome = ehSala(c.nome)
         val naFila = agora() - (entrouEm[gid] ?: 0L) < SALA_NOVA
-        if (c.ehThread) return (nome && (c.membro || novo || naFila)) || (naFila && novo && (marcou || c.privado))
-        return c.tipo == 0 && novo && (nome || (naFila && (marcou || c.privado)))
+        // thread: só se você está nela (a org te colocou/marcou) ou é privada; thread pública de outro jogador não
+        if (c.ehThread) return (c.membro && (novo || nome)) || (novo && c.privado) || (novo && marcou && naFila)
+        // canal (tipo "partida-11" da TOKIO): novo, privado e com acesso seu; canal público não
+        return c.tipo == 0 && novo && ((c.privado && c.meuAcesso && (nome || naFila)) || (marcou && naFila))
     }
 
     fun numeroSala(id: String): Int = ordem.indexOf(id) + 1
@@ -620,9 +650,12 @@ object Sniper {
         val s = SSala(c.id, c.nome, o, c.guildId, c.ehThread)
         salas[c.id] = s
         ordem.add(c.id)
-        filasEntradas.clear()
         if (salaAtiva == null || !salas.containsKey(salaAtiva!!)) salaAtiva = c.id
         log("ok", "sala ${numeroSala(c.id)} aberta · $o · ${c.nome}")
+        if (sairAoAbrir) {
+            if (buscando) { buscando = false; pausadoPorSala = true; log("info", "busca pausada enquanto a sala está aberta") }
+            if (filasEntradas.isNotEmpty()) exSalas?.execute { seguro { sairDasFilas() } }
+        } else filasEntradas.clear()
         notificar("Sala aberta · $o", c.nome)
         mudou()
         exSalas?.schedule(Runnable { seguro { prepararSala(s) } }, 2, TimeUnit.SECONDS)
@@ -667,11 +700,36 @@ object Sniper {
         return SChat(m.id, hora(Snow.ms(m.id)), tipo, nome, textoMsg(m))
     }
 
-    fun fecharSala(id: String) {
+    fun fecharSala(id: String, aposta: Boolean = false) {
         largadas.add(id)
-        salas.remove(id)
+        val tinha = salas.remove(id) != null
         ordem.remove(id)
         if (salaAtiva == id) salaAtiva = ordem.lastOrNull()
+        if (tinha && salas.isEmpty() && pausadoPorSala) {
+            pausadoPorSala = false
+            if (aposta) log("info", "aposta confirmada: a busca continua pausada · toque em INICIAR quando acabar a partida")
+            else if (conectado && dc != null) {
+                buscando = true
+                inicioBusca = agora()
+                log("info", "nenhuma sala aberta: voltando a buscar")
+            }
+        }
+        mudou()
+    }
+
+    /** sai das filas em que está (clica em SAIR em cada uma) */
+    private fun sairDasFilas() {
+        val d = dc ?: return
+        val ids = filasEntradas.toList()
+        filasEntradas.clear()
+        var saiu = 0
+        for (fid in ids) {
+            val cid = canalDaFila[fid] ?: continue
+            val (m, _) = d.mensagem(cid, fid, gidDe(cid))
+            val b = m?.botoes?.firstOrNull { x -> !x.desativado && PALAVRAS_SAIR.any { x.label.uppercase().contains(it) } } ?: continue
+            if (d.clicar(m, b).ok) saiu++
+        }
+        if (ids.isNotEmpty()) log("info", "saiu de $saiu das ${ids.size} filas em que estava")
         mudou()
     }
 
@@ -696,7 +754,11 @@ object Sniper {
         var s = salas[m.canalId]
         if (s == null) {
             val marcou = meMarcou(m)
-            val c = canais[m.canalId] ?: (if (marcou) dc?.canal(m.canalId)?.obj()?.let { canalDe(it, m.guildId) } else null)
+            val c0 = canais[m.canalId]
+            // mensagem chegou ao vivo nesse canal: então você consegue ver ele
+            val c = if (c0 != null && viaGateway && !c0.meuAcesso)
+                DCanal(c0.id, c0.guildId, c0.nome, c0.tipo, c0.parentId, c0.privado, c0.membro, true)
+            else c0 ?: (if (marcou) dc?.canal(m.canalId)?.obj()?.let { canalDe(it, m.guildId, eu, aoVivo = viaGateway) } else null)
             if (c != null) {
                 canais[c.id] = c
                 if (ehMinhaSala(c, marcou)) s = abrirSala(c)
@@ -722,7 +784,7 @@ object Sniper {
             apostas++
             log("ganhou", "aposta confirmada · sala ${numeroSala(s.id)} · ${s.org}")
             notificar("Aposta confirmada · ${s.org}", s.nome)
-            fecharSala(s.id)
+            fecharSala(s.id, aposta = true)
         }
         mudou()
     }
@@ -761,13 +823,30 @@ object Sniper {
                 val a = r.arr() ?: continue
                 val ids = ArrayList<String>()
                 for (i in 0 until a.length()) {
-                    val c = canalDe(a.optJSONObject(i) ?: continue, gid)
+                    val c = canalDe(a.optJSONObject(i) ?: continue, gid, eu)
                     val novo = !canais.containsKey(c.id)
                     canais[c.id] = c
                     if (c.ehTexto) ids.add(c.id)
                     if (novo && ehMinhaSala(c)) abrirSala(c)
                 }
                 if (ids.isNotEmpty()) canaisPorGuilda[gid] = ordenarCanais(ids)
+            }
+        }
+        // threads ativas desses servidores (sala "aguardando" mesmo se o Discord não avisar ao vivo)
+        if (t - ultimaThreads > 10_000) {
+            ultimaThreads = t
+            for ((gid, quando) in entrouEm) {
+                if (t - quando > SALA_NOVA) continue
+                val o = d.threadsAtivas(gid).obj() ?: continue
+                val minhas = HashSet<String>()
+                o.optJSONArray("members")?.let { ms -> for (i in 0 until ms.length()) ms.optJSONObject(i)?.s("id")?.let { minhas.add(it) } }
+                val ts = o.optJSONArray("threads") ?: continue
+                for (i in 0 until ts.length()) {
+                    val c = canalDe(ts.optJSONObject(i) ?: continue, gid, eu)
+                    if (c.id in minhas) c.membro = true
+                    canais[c.id] = c
+                    if (ehMinhaSala(c)) abrirSala(c)
+                }
             }
         }
     }
@@ -1020,6 +1099,14 @@ object Sniper {
         return null
     }
 
+    /** você já aparece na lista de jogadores da fila (por @menção ou pelo nome) */
+    private fun jaEstou(jogadores: String): Boolean {
+        if (jogadores.isEmpty()) return false
+        if (eu.isNotEmpty() && jogadores.contains(eu)) return true
+        if (usuario.length >= 3 && jogadores.contains(usuario, ignoreCase = true)) return true
+        return nomeConta.length >= 3 && jogadores.contains(nomeConta, ignoreCase = true)
+    }
+
     private fun acharBotao(m: DMsg, o: String, modo: String): DBotao? {
         val botoes = m.botoes.filter { b -> NUNCA_CLICAR.none { b.label.uppercase().contains(it) } }
         val cfg = orgs[o]?.botoes
@@ -1070,6 +1157,7 @@ object Sniper {
             if (fid in filasEntradas) continue
             val pausa = orgPausada[o] ?: 0L
             if (agora() < pausa) continue
+            if (agora() < (esperaFila[fid] ?: 0L)) continue
             val m = acharFila(fid, o)
             if (m == null) { Thread.sleep(PAUSA_ENTRE_FILAS); continue }
             var jogadores = ""
@@ -1080,6 +1168,7 @@ object Sniper {
             if (lido == null && "JOGADOR" !in texto && "FILA" !in texto && !botaoConhecido) {
                 avisarUmaVez("naofila|$fid", "erro", "$nome: esse ID não parece uma fila (sem valor/jogadores) · não cliquei")
                 status(o, "✗ ID de $modo ${rotuloFila(o, v)} não é fila", "erro")
+                esperaFila[fid] = agora() + 5 * 60_000
                 Thread.sleep(PAUSA_ENTRE_FILAS)
                 continue
             }
@@ -1092,14 +1181,17 @@ object Sniper {
                 val labels = m.botoes.joinToString(", ") { it.label.uppercase() }.ifEmpty { "nenhum" }
                 avisarUmaVez("botao|$fid|$gelo", "erro", "fila $nome: não achei o botão de entrar · botões: $labels")
                 status(o, "✗ botão diferente: $labels".take(70), "erro")
-            } else if (eu.isNotEmpty() && jogadores.contains(eu)) {
+                esperaFila[fid] = agora() + 60_000
+            } else if (jaEstou(jogadores)) {
                 // você já está nessa fila (entrou antes ou pelo Discord)
                 filasEntradas.add(fid)
                 status(o, "✓ na fila $modo ${rotuloFila(o, v)}", "ok")
             } else if (botao.desativado) {
                 status(o, "fila $modo ${rotuloFila(o, v)} fechada agora", "info")
             } else {
-                val r = d.clicar(m, botao)
+                val nonce = Snow.novo()
+                cliques[nonce] = arrayOf(fid, o, nome)
+                val r = d.clicar(m, botao, nonce)
                 if (r.ok) {
                     filasEntradas.add(fid)
                     ultimaFila[o] = fid to nome
@@ -1109,6 +1201,9 @@ object Sniper {
                     status(o, "✓ na fila $modo ${rotuloFila(o, v)}", "ok")
                     Thread.sleep(COOLDOWN)
                 } else {
+                    cliques.remove(nonce)
+                    // não tenta essa fila de novo na hora (antes repetia a cada segundo)
+                    esperaFila[fid] = agora() + 30_000
                     log("erro", "não deu pra entrar na fila $nome (${motivo(r)})")
                     status(o, "✗ ${motivo(r)}", "erro")
                     if (r.captcha()) {

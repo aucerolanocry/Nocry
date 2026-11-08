@@ -35,7 +35,9 @@ class DCanal(
     val tipo: Int,
     val parentId: String?,
     val privado: Boolean,
-    var membro: Boolean
+    var membro: Boolean,
+    /** você tem acesso garantido (o Discord avisou ao vivo, ou tem permissão com o seu id no canal) */
+    val meuAcesso: Boolean = false
 ) {
     /** 10, 11, 12 = threads */
     val ehThread: Boolean get() = tipo in 10..12
@@ -129,23 +131,22 @@ class DMsg(
     }
 }
 
-fun canalDe(o: JSONObject, guildPadrao: String? = null): DCanal {
+fun canalDe(o: JSONObject, guildPadrao: String? = null, eu: String? = null, aoVivo: Boolean = false): DCanal {
     val gid = o.s("guild_id") ?: guildPadrao
     val tipo = o.optInt("type", 0)
     var privado = tipo == 12
-    if (!privado && gid != null) {
-        // canal escondido de @everyone (o id do cargo @everyone é o id do servidor)
-        o.optJSONArray("permission_overwrites")?.let { ows ->
-            for (i in 0 until ows.length()) {
-                val ow = ows.optJSONObject(i) ?: continue
-                if (ow.s("id") == gid) {
-                    val deny = ow.s("deny")?.toLongOrNull() ?: 0L
-                    if (deny and 1024L != 0L) privado = true
-                }
-            }
+    var meu = aoVivo
+    o.optJSONArray("permission_overwrites")?.let { ows ->
+        for (i in 0 until ows.length()) {
+            val ow = ows.optJSONObject(i) ?: continue
+            val id = ow.s("id")
+            // canal escondido de @everyone (o id do cargo @everyone é o id do servidor)
+            if (gid != null && id == gid && ((ow.s("deny")?.toLongOrNull() ?: 0L) and 1024L) != 0L) privado = true
+            // permissão de ver o canal dada pro seu usuário (sala privada sua)
+            if (eu != null && eu.isNotEmpty() && id == eu && ((ow.s("allow")?.toLongOrNull() ?: 0L) and 1024L) != 0L) meu = true
         }
     }
-    return DCanal(o.s("id") ?: "", gid, o.s("name") ?: "", tipo, o.s("parent_id"), privado, o.has("member"))
+    return DCanal(o.s("id") ?: "", gid, o.s("name") ?: "", tipo, o.s("parent_id"), privado, o.has("member"), meu)
 }
 
 class Resp(val codigo: Int, val corpo: String) {
@@ -251,6 +252,7 @@ class Discord(private val token: String, private val vendorId: String, private v
     fun servidores(): Resp = req("GET", "/users/@me/guilds")
     fun canais(gid: String): Resp = req("GET", "/guilds/$gid/channels")
     fun canal(cid: String): Resp = req("GET", "/channels/$cid")
+    fun threadsAtivas(gid: String): Resp = req("GET", "/guilds/$gid/threads/active")
 
     /** busca uma mensagem pelo id (conta de usuário usa o "around"). null se não estiver nesse canal */
     fun mensagem(cid: String, mid: String, gid: String? = null): Pair<DMsg?, Resp> {
@@ -284,10 +286,10 @@ class Discord(private val token: String, private val vendorId: String, private v
     fun entrarThread(tid: String): Resp = req("PUT", "/channels/$tid/thread-members/@me")
 
     /** clica num botão de mensagem (o mesmo que tocar no botão no app) */
-    fun clicar(m: DMsg, b: DBotao): Resp {
+    fun clicar(m: DMsg, b: DBotao, nonce: String = Snow.novo()): Resp {
         val corpo = JSONObject()
             .put("type", 3)
-            .put("nonce", Snow.novo())
+            .put("nonce", nonce)
             .put("channel_id", m.canalId)
             .put("message_flags", m.flags)
             .put("message_id", m.id)

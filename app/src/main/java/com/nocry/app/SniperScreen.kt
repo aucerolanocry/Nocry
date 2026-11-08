@@ -353,6 +353,12 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         card.addView(Ui.item(c, "Filas ao mesmo tempo", "Quantas filas ele segura de uma vez (todas as orgs juntas).", 0, "${Sniper.maxFilas}") {
             Ui.dialogNumero(c, "FILAS AO MESMO TEMPO", "de 1 a 40", 1, 40, Sniper.maxFilas) { n -> Sniper.definirMaxFilas(n) }
         }, Ui.lp(top = 8, c = c))
+        card.addView(Ui.toggle(c, "Sair das outras filas ao abrir sala", "Abriu sala: sai das outras filas e pausa a busca. Se a sala fechar sem aposta, volta a buscar sozinho.", Sniper.sairAoAbrir) { v ->
+            Sniper.definirSairAoAbrir(v)
+        }, Ui.lp(top = 8, c = c))
+        card.addView(Ui.toggle(c, "Começar a buscar ao ligar", "Assim que conectar, já inicia a busca com o alvo escolhido.", Sniper.buscarAoLigar) { v ->
+            Sniper.definirBuscarAoLigar(v)
+        }, Ui.lp(top = 8, c = c))
         card.addView(Ui.item(c, "Mensagem automática", Sniper.msgAuto, 0, null) {
             Ui.dialogTexto(c, "MENSAGEM AUTOMÁTICA", Sniper.msgAuto) { t -> if (t.isNotBlank()) Sniper.definirMsgAuto(t) }
         }, Ui.lp(top = 8, c = c))
