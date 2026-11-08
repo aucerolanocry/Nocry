@@ -184,7 +184,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             val cor = when {
                 sel -> Theme.sobreGrad()
                 s.respondida -> Ui.OK
-                System.currentTimeMillis() - s.aberta > 20_000 -> Ui.BAD
+                System.currentTimeMillis() - s.aberta > Sniper.tempoResposta - 10_000 -> Ui.BAD
                 else -> Ui.WARN
             }
             val tv = Ui.text(c, rot, 14f, cor, true, mono = true)
@@ -358,6 +358,9 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         }, Ui.lp(top = 8, c = c))
         card.addView(Ui.toggle(c, "Começar a buscar ao ligar", "Assim que conectar, já inicia a busca com o alvo escolhido.", Sniper.buscarAoLigar) { v ->
             Sniper.definirBuscarAoLigar(v)
+        }, Ui.lp(top = 8, c = c))
+        card.addView(Ui.item(c, "Tempo pra responder", "Sala sem resposta de pessoa nesse tempo: ele cancela e volta a procurar.", 0, "${Sniper.tempoResposta / 1000}s") {
+            Ui.dialogNumero(c, "TEMPO PRA RESPONDER (s)", "de 10 a 300 segundos", 10, 300, (Sniper.tempoResposta / 1000).toInt()) { n -> Sniper.definirTempoResposta(n) }
         }, Ui.lp(top = 8, c = c))
         card.addView(Ui.item(c, "Mensagem automática", Sniper.msgAuto, 0, null) {
             Ui.dialogTexto(c, "MENSAGEM AUTOMÁTICA", Sniper.msgAuto) { t -> if (t.isNotBlank()) Sniper.definirMsgAuto(t) }

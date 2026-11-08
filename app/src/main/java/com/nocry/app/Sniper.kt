@@ -98,7 +98,7 @@ object Sniper {
     const val MAX_SALAS = 8
     const val COOLDOWN = 3_000L           // espera depois de entrar numa fila
     const val PAUSA_ENTRE_FILAS = 600L    // dentro da mesma org (as orgs rodam todas ao mesmo tempo)
-    const val TIMEOUT_RESPOSTA = 30_000L  // sala sem resposta: sai
+    const val TIMEOUT_RESPOSTA = 30_000L  // padrão do "tempo pra responder" (dá pra mudar em Ajustes)
     const val TIMEOUT_INATIVA = 10 * 60_000L
     const val ESQUECER_SUMIDA = 10 * 60_000L
     const val SALA_NOVA = 30 * 60_000L
@@ -141,6 +141,8 @@ object Sniper {
     @Volatile var gelo = "NORMAL"
     @Volatile var maxFilas = 60
     @Volatile var msgAuto = MSG_PADRAO
+    /** sala sem resposta de PESSOA nesse tempo: clica em sair/cancelar e volta a procurar */
+    @Volatile var tempoResposta = TIMEOUT_RESPOSTA
 
     // ---------------- estado ----------------
     @Volatile var buscando = false
@@ -210,6 +212,7 @@ object Sniper {
         maxFilas = sp.getInt("max_filas2", 60)
         msgAuto = sp.getString("msg_auto", MSG_PADRAO) ?: MSG_PADRAO
         sairAoAbrir = sp.getBoolean("sair_ao_abrir2", false)
+        tempoResposta = sp.getLong("tempo_resposta", TIMEOUT_RESPOSTA)
         buscarAoLigar = sp.getBoolean("buscar_ao_ligar", false)
         try {
             val o = JSONObject(sp.getString("cache_filas", "{}") ?: "{}")
@@ -296,6 +299,7 @@ object Sniper {
             .putInt("max_filas2", maxFilas)
             .putString("msg_auto", msgAuto)
             .putBoolean("sair_ao_abrir2", sairAoAbrir)
+            .putLong("tempo_resposta", tempoResposta)
             .putBoolean("buscar_ao_ligar", buscarAoLigar)
             .apply()
     }
@@ -402,6 +406,7 @@ object Sniper {
     fun definirMaxFilas(n: Int) { maxFilas = n.coerceIn(1, 100); salvarEscolha(); mudou() }
     fun definirMsgAuto(t: String) { msgAuto = t.ifBlank { MSG_PADRAO }; salvarEscolha(); mudou() }
     fun definirSairAoAbrir(v: Boolean) { sairAoAbrir = v; salvarEscolha(); mudou() }
+    fun definirTempoResposta(seg: Int) { tempoResposta = seg.coerceIn(10, 300) * 1000L; salvarEscolha(); mudou() }
     fun definirBuscarAoLigar(v: Boolean) { buscarAoLigar = v; salvarEscolha(); mudou() }
 
     fun alternarBusca() {
@@ -798,7 +803,7 @@ object Sniper {
         if (viaGateway) s.gatewayEm = agora()
         s.ultimoId = maior(s.ultimoId, m.id)
         s.ultima = agora()
-        s.respondida = true
+        if (!m.autorBot) s.respondida = true
         s.inativa = false
         synchronized(s.chat) {
             s.chat.add(linhaChat(m))
@@ -837,8 +842,8 @@ object Sniper {
             if (s.somenteLeitura) {
                 // sala só pra ver: some sozinha depois de 3 min parada (não clica em nada)
                 if (t - s.ultima > 3 * 60_000) { fecharSala(s.id); continue }
-            } else if (!s.respondida && t - s.aberta > TIMEOUT_RESPOSTA) {
-                log("info", "ninguém respondeu em 30s na sala $n (${s.org}), saindo")
+            } else if (!s.respondida && t - s.aberta > tempoResposta) {
+                log("info", "ninguém respondeu em ${tempoResposta / 1000}s na sala $n (${s.org}), cancelando e voltando a procurar")
                 clicarSair(s)
                 fecharSala(s.id)
                 liberarFilasDa(s.org)
