@@ -17,6 +17,10 @@ on:
         description: "Publicar em Releases?"
         type: boolean
         default: true
+      rascunho:
+        description: "Só pra mim: guardar como rascunho (não vira atualização pros usuários)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -93,6 +97,16 @@ jobs:
         with:
           name: Nocry-apk
           path: dist/Nocry.apk
+
+      - name: Guardar como rascunho (só o dono vê)
+        if: github.event.inputs.rascunho == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: sniper-v${{ steps.v.outputs.name }}
+        run: |
+          gh release delete "$TAG" -y >/dev/null 2>&1 || true
+          gh release create "$TAG" dist/Nocry.apk --draft --title "Nocry $TAG (só dono)" \
+            --notes "Versão com o SNIPER. Rascunho: não aparece pros usuários e não vira atualização." --target "${GITHUB_SHA}"
 
       - name: Publicar em Releases
         if: github.event_name == 'push' || github.event.inputs.publicar == 'true'
