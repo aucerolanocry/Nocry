@@ -242,6 +242,11 @@ object Sniper {
         app = c.applicationContext
         sp = app.getSharedPreferences("sniper", Context.MODE_PRIVATE)
         carregarOrgs()
+        lerEscolha()
+        lerCache()
+    }
+
+    private fun lerEscolha() {
         org = sp.getString("org", "TODAS")?.takeIf { it == "TODAS" || orgs.containsKey(it) } ?: "TODAS"
         modos.clear(); modos.addAll((sp.getString("modos", "3X3") ?: "3X3").split(",").filter { it in MODOS })
         valores.clear(); valores.addAll((sp.getString("valores", "300") ?: "300").split(",").filter { it in todosValores })
@@ -252,6 +257,9 @@ object Sniper {
         sairAoAbrir = sp.getBoolean("sair_ao_abrir2", false)
         tempoResposta = sp.getLong("tempo_resposta", TIMEOUT_RESPOSTA)
         buscarAoLigar = sp.getBoolean("buscar_ao_ligar", false)
+    }
+
+    private fun lerCache() {
         try {
             val o = JSONObject(sp.getString("cache_filas", "{}") ?: "{}")
             o.optJSONObject("filas")?.let { f -> f.keys().forEach { k -> f.s(k)?.let { canalDaFila[k] = it } } }
@@ -265,6 +273,109 @@ object Sniper {
                 }
             }
         } catch (_: Throwable) {}
+    }
+
+    // ======================================================================== backup (sobrevive a desinstalar)
+    private val CHAVES_BACKUP = listOf("aprendidos", "corrigidos", "respostas_form", "cache_filas", "nao_achou")
+    @Volatile private var backupMarcado = 0L
+
+    /** tudo que o bot aprendeu + ajustes. O token NÃO vai (fica só no cofre do celular) */
+    fun exportarDados(): JSONObject {
+        val o = JSONObject().put("app", "nocry-sniper").put("versao", 1).put("quando", agora())
+        for (k in CHAVES_BACKUP) sp.getString(k, null)?.let { v -> try { o.put(k, JSONObject(v)) } catch (_: Throwable) {} }
+        o.put("escolha", JSONObject()
+            .put("org", org).put("modos", modos.joinToString(",")).put("valores", valores.joinToString(","))
+            .put("gelo", gelo).put("max_filas3", maxFilas).put("msg_auto", msgAuto)
+            .put("sair_ao_abrir2", sairAoAbrir).put("tempo_resposta", tempoResposta).put("buscar_ao_ligar", buscarAoLigar))
+        return o
+    }
+
+    private fun juntar(a: JSONObject, b: JSONObject) {
+        for (k in b.keys()) {
+            val vb = b.get(k)
+            val va = a.opt(k)
+            if (va is JSONObject && vb is JSONObject) juntar(va, vb) else a.put(k, vb)
+        }
+    }
+
+    /** volta o backup (junta com o que já tem). null = deu certo, senão o motivo */
+    fun importarDados(o: JSONObject): String? {
+        if (o.s("app") != "nocry-sniper") return "esse arquivo não é backup do Sniper"
+        val ed = sp.edit()
+        for (k in CHAVES_BACKUP) {
+            val novo = o.optJSONObject(k) ?: continue
+            val atual = try { JSONObject(sp.getString(k, "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
+            juntar(atual, novo)
+            ed.putString(k, atual.toString())
+        }
+        o.optJSONObject("escolha")?.let { e ->
+            e.s("org")?.let { ed.putString("org", it) }
+            e.s("modos")?.let { ed.putString("modos", it) }
+            e.s("valores")?.let { ed.putString("valores", it) }
+            e.s("gelo")?.let { ed.putString("gelo", it) }
+            e.s("msg_auto")?.let { ed.putString("msg_auto", it) }
+            if (e.has("max_filas3")) ed.putInt("max_filas3", e.optInt("max_filas3", 300))
+            if (e.has("sair_ao_abrir2")) ed.putBoolean("sair_ao_abrir2", e.optBoolean("sair_ao_abrir2"))
+            if (e.has("tempo_resposta")) ed.putLong("tempo_resposta", e.optLong("tempo_resposta", TIMEOUT_RESPOSTA))
+            if (e.has("buscar_ao_ligar")) ed.putBoolean("buscar_ao_ligar", e.optBoolean("buscar_ao_ligar"))
+        }
+        ed.commit()
+        carregarOrgs()
+        lerEscolha()
+        lerCache()
+        val nv = o.optJSONObject("aprendidos")?.let { a -> a.keys().asSequence().sumOf { k -> a.optJSONObject(k)?.let { m -> m.keys().asSequence().sumOf { x -> m.optJSONObject(x)?.length() ?: 0 } } ?: 0 } } ?: 0
+        val nr = o.optJSONObject("respostas_form")?.length() ?: 0
+        log("ok", "backup restaurado · $nv valores descobertos · $nr respostas de formulário · ajustes")
+        marcarBackup()
+        mudou()
+        return null
+    }
+
+    /** pede um backup (sai uns segundos depois e junta várias mudanças numa gravação só) */
+    private fun marcarBackup() {
+        if (!::app.isInitialized) return
+        val m = agora()
+        backupMarcado = m
+        val t = Thread {
+            try {
+                Thread.sleep(4000)
+                if (backupMarcado == m) salvarBackup()
+            } catch (_: Throwable) {}
+        }
+        t.isDaemon = true
+        t.start()
+    }
+
+    fun temBackup(): Boolean = ::sp.isInitialized && sp.getString("backup_uri", null) != null
+
+    /** grava em Download/Nocry/sniper_backup.json (fora do app: não some se desinstalar) */
+    fun salvarBackup(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < 29) return false
+        val bytes = exportarDados().toString(1).toByteArray()
+        val cr = app.contentResolver
+        synchronized(travaArquivo) {
+            sp.getString("backup_uri", null)?.let { u ->
+                val os = try { cr.openOutputStream(android.net.Uri.parse(u), "wt") } catch (_: Throwable) { null }
+                if (os != null) {
+                    try { os.use { it.write(bytes) }; return true } catch (_: Throwable) {}
+                }
+            }
+            return try {
+                val cv = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "sniper_backup.json")
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/json")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/Nocry")
+                }
+                val uri = cr.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: return false
+                cr.openOutputStream(uri, "wt")?.use { it.write(bytes) }
+                sp.edit().putString("backup_uri", uri.toString()).apply()
+                diag("backup criado em Download/Nocry")
+                true
+            } catch (t: Throwable) {
+                diag("backup: falhou ${t.javaClass.simpleName}: ${t.message}")
+                false
+            }
+        }
     }
 
     /** o bot estava ligado (o Android fechou o app e o serviço voltou): liga de novo */
@@ -351,6 +462,7 @@ object Sniper {
             .putLong("tempo_resposta", tempoResposta)
             .putBoolean("buscar_ao_ligar", buscarAoLigar)
             .apply()
+        marcarBackup()
     }
 
     private fun salvarCache() {
@@ -431,6 +543,8 @@ object Sniper {
         gravar("[sessao] SNIPER ligado · app ${BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE} (${android.os.Build.VERSION.SDK_INT}) · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
         gravar("[sessao] alvo: $org · modos ${modos.sorted().joinToString(" ")} · valores ${textoValores(valores)} · gelo $gelo")
         gravar("[sessao] ajustes: limite ${if (maxFilas >= 300) "sem limite" else maxFilas} · responder em ${tempoResposta / 1000}s · sair ao abrir $sairAoAbrir · buscar ao ligar $buscarAoLigar")
+        gravar("[sessao] aprendidos: ${sp.getString("aprendidos", "{}")}")
+        gravar("[sessao] corrigidos: ${sp.getString("corrigidos", "{}")}")
         gravar("[sessao] orgs com fila: ${orgs.keys.joinToString(", ")} · sem valor: ${semValor.joinToString(", ").ifEmpty { "nenhuma" }} · pendentes ${qtdPendentes()}")
     }
 
@@ -550,6 +664,7 @@ object Sniper {
         v.scheduleWithFixedDelay({ seguro { vigiarSalas() } }, 4, 2, TimeUnit.SECONDS)
         f.scheduleWithFixedDelay({ seguro { distribuir() } }, 6, 1, TimeUnit.SECONDS)
         NocryService.sync(app)
+        marcarBackup()
         mudou()
         return true
     }
@@ -1447,6 +1562,7 @@ object Sniper {
         if (cor.s(fid) == valor) return
         cor.put(fid, valor)
         sp.edit().putString("corrigidos", cor.toString()).apply()
+        marcarBackup()
         carregarOrgs()
     }
 
@@ -1754,6 +1870,7 @@ object Sniper {
                 sv.put(c.chave, JSONArray(v))
             }
             sp.edit().putString("respostas_form", sv.toString()).apply()
+            marcarBackup()
         }
         val n = Snow.novo()
         enviosForm[n] = f
@@ -1802,6 +1919,7 @@ object Sniper {
 
     fun apagarRespostas() {
         sp.edit().remove("respostas_form").apply()
+        marcarBackup()
         log("info", "respostas dos formulários apagadas")
         mudou()
     }
@@ -1900,6 +2018,7 @@ object Sniper {
                 log("erro", "descobrir: ${t.message ?: t.javaClass.simpleName}")
             } finally {
                 sp.edit().putString("aprendidos", apr.toString()).putString("nao_achou", naoAchou.toString()).apply()
+                marcarBackup()
                 carregarOrgs()
                 descobrindo = false
                 progresso = ""

@@ -621,6 +621,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     companion object {
         private const val REQ_IMAGEM = 4301
+        private const val REQ_BACKUP = 4302
 
         /** imagens do chat já baixadas (até ~16 MB) */
         private val cacheImg = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {
@@ -738,6 +739,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         add(pedaco({ listOf(Sniper.estado, Sniper.nomeConta, Sniper.ligado(), Cofre.tem(act)).joinToString("|") }) { conta(it) }, 12)
         add(pedaco({ assinaturaAjustes() }) { ajustes(it) }, 12)
         add(pedaco({ assinaturaFerramentas() }) { ferramentas(it) }, 12)
+        add(pedaco({ "${Sniper.temBackup()}|${Sniper.qtdRespostasSalvas()}|${Sniper.orgs.size}" }) { backup(it) }, 12)
         add(pedaco({ val l = Sniper.logs(1).lastOrNull(); "${l?.hora}${l?.texto}|${Sniper.logs(200).size}" }) { registro(it) }, 12)
     }
 
@@ -852,6 +854,51 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         b.addView(card)
     }
 
+    private fun backup(b: LinearLayout) {
+        val c = act
+        val card = Ui.card(c)
+        card.addView(Ui.labelIcone(c, R.drawable.ic_bolt, "backup"))
+        card.addView(dica("O bot salva sozinho tudo que aprendeu (valores das filas, respostas dos formulários e ajustes) em " +
+            "Download/Nocry/sniper_backup.json. Esse arquivo fica mesmo se desinstalar o app. Instalou de novo? Toque em restaurar e escolha ele. " +
+            "O token não vai no backup: esse você cola de novo."), Ui.lp(top = 6, c = c))
+        card.addView(Ui.text(c, if (Sniper.temBackup()) "✓ backup ligado" else "backup ainda não foi salvo", 10.5f,
+            if (Sniper.temBackup()) Ui.OK else Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
+        val linha = Ui.hbox(c)
+        linha.addView(Ui.button(c, "restaurar", Ui.Kind.PRIMARY) { restaurarBackup() }, pesoUm())
+        linha.addView(Ui.button(c, "salvar agora", Ui.Kind.GHOST) {
+            Bg.io {
+                val ok = Sniper.salvarBackup()
+                Bg.ui { Ui.toast(c, if (ok) "backup salvo em Download/Nocry" else "não consegui salvar o backup") }
+            }
+        }, pesoUm(8))
+        card.addView(linha, Ui.lp(top = 10, c = c))
+        b.addView(card)
+    }
+
+    private fun restaurarBackup() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        i.addCategory(Intent.CATEGORY_OPENABLE)
+        i.type = "*/*"
+        act.aoResultado = { req, res, data ->
+            val u = data?.data
+            if (req == REQ_BACKUP && res == Activity.RESULT_OK && u != null) {
+                val ctx = act.applicationContext
+                Bg.io {
+                    val txt = try { ctx.contentResolver.openInputStream(u)?.use { it.readBytes().toString(Charsets.UTF_8) } } catch (_: Throwable) { null }
+                    val erro = if (txt == null) "não consegui abrir o arquivo"
+                        else try { Sniper.importarDados(org.json.JSONObject(txt)) } catch (_: Throwable) { "esse arquivo não é um backup válido" }
+                    Bg.ui { Ui.toast(act, erro ?: "backup restaurado"); render() }
+                }
+            }
+        }
+        try {
+            @Suppress("DEPRECATION")
+            act.startActivityForResult(i, REQ_BACKUP)
+        } catch (_: Exception) {
+            Ui.toast(act, "não consegui abrir os arquivos")
+        }
+    }
+
     private fun compartilharRegistro() {
         val c = act
         val f = Sniper.arquivoRegistro()
@@ -882,13 +929,9 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val tam = if (f.exists()) f.length() else 0L
         card.addView(Ui.text(c, if (tam > 0) "arquivo: ${"%.1f".format(tam / 1024.0)} KB" else "arquivo ainda vazio", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
         card.addView(Ui.button(c, "compartilhar registro completo", Ui.Kind.PRIMARY, R.drawable.ic_log) { compartilharRegistro() }, Ui.lp(top = 10, c = c))
-        val apagar = Ui.text(c, "apagar registro", 11f, Ui.MUTED, true, mono = true)
-        apagar.gravity = Gravity.CENTER
-        apagar.setPadding(0, Ui.dp(c, 10), 0, Ui.dp(c, 4))
-        Ui.clique(apagar) {
+        card.addView(Ui.button(c, "apagar registro", Ui.Kind.DANGER) {
             Ui.dialogConfirma(c, "APAGAR REGISTRO", "Apaga o arquivo do registro e a lista daqui. Começa do zero.", "APAGAR") { Sniper.apagarRegistro() }
-        }
-        card.addView(apagar)
+        }, Ui.lp(top = 8, c = c))
         val ls = Sniper.logs(30)
         if (ls.isEmpty()) card.addView(Ui.text(c, "nada ainda", 11f, Ui.MUTED, code = true), Ui.lp(top = 8, c = c))
         for (l in ls.reversed()) {
