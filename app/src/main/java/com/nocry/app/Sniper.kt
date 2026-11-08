@@ -84,6 +84,10 @@ class SSala(val id: String, val nome: String, val org: String, val guildId: Stri
     @Volatile var gatewayEm = 0L
     /** a sala não deixa escrever (fica no painel só pra ver) */
     @Volatile var somenteLeitura = false
+    /** saiu "aposta confirmada": a sala fica no painel até a org apagar ou você tirar */
+    @Volatile var apostaOk = false
+    /** confirmada (aposta ou você tocou em confirmar): nada de sumir sozinha */
+    val protegida: Boolean get() = apostaOk || confirmada
     val vistos: MutableSet<String> = ConcurrentHashMap.newKeySet()
     val chat = ArrayList<SChat>()
 }
@@ -730,8 +734,9 @@ object Sniper {
         return SChat(m.id, hora(Snow.ms(m.id)), tipo, nome, textoMsg(m))
     }
 
-    fun fecharSala(id: String, aposta: Boolean = false) {
+    fun fecharSala(id: String, apostaPedida: Boolean = false) {
         largadas.add(id)
+        val aposta = apostaPedida || salas[id]?.apostaOk == true
         val tinha = salas.remove(id) != null
         ordem.remove(id)
         if (salaAtiva == id) salaAtiva = ordem.lastOrNull()
@@ -826,11 +831,11 @@ object Sniper {
             mudou()
             return
         }
-        if (PALAVRAS_APOSTA.any { it in txt }) {
+        if (!s.apostaOk && PALAVRAS_APOSTA.any { it in txt }) {
+            s.apostaOk = true
             apostas++
-            log("ganhou", "aposta confirmada · sala ${numeroSala(s.id)} · ${s.org}")
+            log("ganhou", "aposta confirmada · sala ${numeroSala(s.id)} · ${s.org} · a sala fica no painel")
             notificar("Aposta confirmada · ${s.org}", s.nome)
-            fecharSala(s.id, aposta = true)
         }
         mudou()
     }
@@ -843,14 +848,14 @@ object Sniper {
             if (s.somenteLeitura) {
                 // sala só pra ver: some sozinha depois de 3 min parada (não clica em nada)
                 if (t - s.ultima > 3 * 60_000) { fecharSala(s.id); continue }
-            } else if (!s.respondida && t - s.aberta > tempoResposta) {
+            } else if (!s.protegida && !s.respondida && t - s.aberta > tempoResposta) {
                 log("info", "ninguém respondeu em ${tempoResposta / 1000}s na sala $n (${s.org}), cancelando e voltando a procurar")
                 if (!clicarSair(s)) log("info", "sala $n: não achei botão de sair/cancelar, só larguei a sala")
                 fecharSala(s.id)
                 liberarFilasDa(s.org)
                 continue
             }
-            if (t - s.ultima > TIMEOUT_INATIVA && !s.inativa) {
+            if (!s.protegida && t - s.ultima > TIMEOUT_INATIVA && !s.inativa) {
                 s.inativa = true
                 liberarFilasDa(s.org)
                 fecharSala(s.id)
@@ -968,11 +973,13 @@ object Sniper {
         }
     }
 
-    /** larga a sala sem clicar em nada (some do painel) */
+    /** tira a sala do painel sem clicar em nada no Discord */
     fun largar() {
-        val s = salaAtual() ?: return
-        fecharSala(s.id)
-        log("info", "sala largada: ${s.nome}")
+        naFila {
+            val s = salaAtual() ?: return@naFila
+            fecharSala(s.id)
+            log("info", "sala ${s.nome} tirada do painel")
+        }
     }
 
     // ======================================================================== mensagens da fila

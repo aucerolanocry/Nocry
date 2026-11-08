@@ -180,9 +180,10 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             if (i >= Sniper.MAX_SALAS) break
             val s = Sniper.salas[id] ?: continue
             val sel = id == Sniper.salaAtiva
-            val rot = "${i + 1}" + (if (s.naoLidas > 0) "·${s.naoLidas}" else "")
+            val rot = (if (s.apostaOk) "★" else "") + "${i + 1}" + (if (s.naoLidas > 0) "·${s.naoLidas}" else "")
             val cor = when {
                 sel -> Theme.sobreGrad()
+                s.protegida -> Ui.OK
                 s.respondida -> Ui.OK
                 System.currentTimeMillis() - s.aberta > Sniper.tempoResposta - 10_000 -> Ui.BAD
                 else -> Ui.WARN
@@ -198,7 +199,13 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         }
         secSalasTopo.addView(linha)
         Sniper.salaAtiva?.let { Sniper.salas[it] }?.let { s ->
-            secSalasTopo.addView(Ui.text(c, "SALA ${Sniper.numeroSala(s.id)} · ${s.org} · ${s.nome}" + (if (s.somenteLeitura) " · SÓ LEITURA" else ""), 11f, Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
+            val extra = when {
+                s.apostaOk -> " · ★ APOSTA CONFIRMADA"
+                s.confirmada -> " · ✓ VOCÊ CONFIRMOU"
+                s.somenteLeitura -> " · SÓ LEITURA"
+                else -> ""
+            }
+            secSalasTopo.addView(Ui.text(c, "SALA ${Sniper.numeroSala(s.id)} · ${s.org} · ${s.nome}$extra", 11f, if (s.protegida) Ui.OK else Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
         }
     }
 
@@ -258,6 +265,11 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             Ui.dialogConfirma(c, "CANCELAR", "Clica em cancelar/sair na sala aberta no chat e libera a vaga.", "CANCELAR SALA") { Sniper.cancelar() }
         }, l2)
         secSalasBotoes.addView(linha)
+        if (Sniper.salas.isNotEmpty()) {
+            secSalasBotoes.addView(Ui.button(c, "tirar essa sala do painel", Ui.Kind.GHOST) {
+                Ui.dialogConfirma(c, "TIRAR DO PAINEL", "A sala só some daqui. No Discord nada muda (não clica em nada).", "TIRAR") { Sniper.largar() }
+            }, Ui.lp(top = 8, c = c))
+        }
     }
 
     // ---------------- status de cada org ----------------
