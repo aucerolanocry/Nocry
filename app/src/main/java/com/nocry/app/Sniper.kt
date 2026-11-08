@@ -80,7 +80,9 @@ class SCampo(val chave: String, val rotulo: String, val dica: String, val tipo: 
 /** formulário que a org abriu depois de um clique (DUCK, FURIA, HELIPA...) */
 class SForm(val nonce: String, val modalId: String, val customId: String, val appId: String, val canalId: String, val guildId: String?,
             val titulo: String, val org: String, val nome: String, val fid: String?, val salaId: String?,
-            val textos: List<String>, val campos: List<SCampo>, val bruto: org.json.JSONArray) {
+            val textos: List<String>, val campos: List<SCampo>, val bruto: org.json.JSONArray,
+            /** "verificação de segurança" (conta, pergunta): só você responde, o bot nunca responde nem guarda */
+            val verificacao: Boolean = false) {
     val chegou = System.currentTimeMillis()
 }
 
@@ -1840,6 +1842,10 @@ object Sniper {
             if (tipo == 4) {
                 campos.add(SCampo(chaveCampo(rot, cid), rot, dica, 4, cid, x.optBoolean("required", true), x.s("value") ?: "",
                     emptyList(), emptyList(), x.optInt("min_length", 0), x.optInt("max_length", 4000)))
+            } else if (tipo == 23) {
+                // uma caixinha só (marcar ou não)
+                campos.add(SCampo(chaveCampo(rot, cid), rot, dica, 23, cid, x.optBoolean("required", false), "",
+                    listOf("marcar" to "true"), if (x.optBoolean("default", false)) listOf("true") else emptyList(), 0, 1))
             } else {
                 val ops = ArrayList<Pair<String, String>>()
                 val pad = ArrayList<String>()
@@ -1852,8 +1858,9 @@ object Sniper {
                     }
                 }
                 val obrig = x.optBoolean("required", true) && x.optInt("min_values", 1) > 0
+                val max = when (tipo) { 21 -> 1; 22 -> x.optInt("max_values", ops.size.coerceAtLeast(1)); else -> x.optInt("max_values", 1) }
                 campos.add(SCampo(chaveCampo(rot, cid), rot, dica, tipo, cid, obrig, "", ops, pad,
-                    x.optInt("min_values", 1), x.optInt("max_values", 1)))
+                    x.optInt("min_values", 1), max))
             }
         }
         for (i in 0 until bruto.length()) {
@@ -1864,8 +1871,15 @@ object Sniper {
                 10 -> c.s("content")?.let { textos.add(it) }
             }
         }
-        return SForm(nonce, modalId, custom, appId, canalId, gid, d.s("title") ?: "formulário", org, nome, fid, salaId, textos, campos, bruto)
+        val titulo = d.s("title") ?: "formulário"
+        val tudo = semAcento((titulo + " " + textos.joinToString(" ") + " " + campos.joinToString(" ") { it.rotulo + " " + it.dica }).lowercase())
+        val verif = VERIFICACAO.any { it in tudo }
+        return SForm(nonce, modalId, custom, appId, canalId, gid, titulo, org, nome, fid, salaId, textos, campos, bruto, verif)
     }
+
+    /** formulário anti-robô das orgs: quem responde é você (o bot não tenta adivinhar) */
+    private val VERIFICACAO = listOf("verificacao", "seguranca", "captcha", "resposta correta", "quanto e", "conte os", "conte as",
+        "robo", "humano", "selecione uma comida")
 
     private fun respostasSalvas(): JSONObject = try { JSONObject(sp.getString("respostas_form", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
 
@@ -1877,7 +1891,7 @@ object Sniper {
             if (f.inicial.isNotEmpty()) return listOf(f.inicial)
             return if (!f.obrigatorio) listOf("") else null
         }
-        if (f.tipo == 3) {
+        if (f.tipo == 3 || f.tipo == 21 || f.tipo == 22 || f.tipo == 23) {
             val validos = f.opcoes.map { it.second }
             salvo?.filter { it in validos }?.takeIf { it.isNotEmpty() }?.let { return it }
             if (f.padrao.isNotEmpty()) return f.padrao
@@ -1890,6 +1904,7 @@ object Sniper {
     }
 
     private fun respostasAuto(f: SForm): Map<String, List<String>>? {
+        if (f.verificacao) return null
         val out = HashMap<String, List<String>>()
         for (c in f.campos) out[c.customId] = respostaConhecida(c) ?: return null
         return out
@@ -1903,7 +1918,12 @@ object Sniper {
             val o = JSONObject().put("type", tipo).put("custom_id", cid)
             if (x.has("id")) o.put("id", x.optInt("id"))
             val v = valores[cid] ?: emptyList()
-            if (tipo == 4) o.put("value", v.firstOrNull() ?: "") else o.put("values", JSONArray(v))
+            when (tipo) {
+                4 -> o.put("value", v.firstOrNull() ?: "")
+                21 -> o.put("value", v.firstOrNull() ?: JSONObject.NULL)          // radio: uma opção
+                23 -> o.put("value", v.firstOrNull() == "true")                   // caixinha: marcou ou não
+                else -> o.put("values", JSONArray(v))                              // lista / várias caixas
+            }
             return o
         }
         val out = JSONArray()
@@ -1956,9 +1976,16 @@ object Sniper {
         // não clica nas outras filas dessa org até você responder (senão cada valor abre outro formulário)
         orgPausada[o] = agora() + FORM_VALIDO
         val campos = f.campos.joinToString(" · ") { it.rotulo }
-        avisarUmaVez("form|$o|${f.titulo}", "erro", "$o pediu um formulário ('${f.titulo}': $campos) · responda uma vez lá em cima que o bot lembra e responde sozinho nas próximas")
-        status(o, "📝 pediu formulário: responda no app", "pausa")
-        notificar("$o pediu um formulário", "${f.titulo}: $campos")
+        if (f.verificacao) {
+            val pergunta = f.campos.firstOrNull()?.dica?.ifEmpty { null } ?: f.textos.firstOrNull() ?: f.titulo
+            log("info", "${f.nome}: a org pediu verificação de segurança ('$pergunta') · responda lá em cima pra entrar")
+            status(o, "🛡 verificação: responda no app", "pausa")
+            notificar("$o: verificação pra entrar na fila", pergunta)
+        } else {
+            avisarUmaVez("form|$o|${f.titulo}", "erro", "$o pediu um formulário ('${f.titulo}': $campos) · responda uma vez lá em cima que o bot lembra e responde sozinho nas próximas")
+            status(o, "📝 pediu formulário: responda no app", "pausa")
+            notificar("$o pediu um formulário", "${f.titulo}: $campos")
+        }
         mudou()
     }
 
@@ -1973,7 +2000,7 @@ object Sniper {
             mudou()
             return
         }
-        if (doUsuario) {
+        if (doUsuario && !f.verificacao) {
             val sv = respostasSalvas()
             for (c in f.campos) {
                 val v = valores[c.customId] ?: continue
@@ -1992,6 +2019,8 @@ object Sniper {
             enviosForm.remove(n)
             f.fid?.let { esperaFila[it] = agora() + 30_000 }
             log("erro", "${f.nome}: não deu pra mandar o formulário (${motivo(r)})")
+        } else if (doUsuario && f.verificacao) {
+            log("ok", "${f.nome}: verificação respondida")
         } else if (doUsuario) {
             log("ok", "${f.nome}: formulário enviado · as próximas a org responde sozinha")
             // os outros formulários parados que agora o bot sabe responder

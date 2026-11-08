@@ -230,20 +230,29 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val fs = Sniper.formularios.toList()
         if (fs.isEmpty()) return
         val card = Ui.card(c, forte = true)
-        card.addView(Ui.text(c, "📝 ${if (fs.size == 1) "a org pediu um formulário" else "${fs.size} formulários esperando"}", 13f, Ui.WARN, true, mono = true))
-        card.addView(dica("Algumas orgs (DUCK, FURIA, HELIPA...) abrem um formulário quando clica pra entrar. Sem responder, NÃO entra na fila. Responda uma vez: o bot guarda e responde sozinho nas próximas."), Ui.lp(top = 6, c = c))
+        val verif = fs.count { it.verificacao }
+        card.addView(Ui.text(c, when {
+            fs.size == 1 && verif == 1 -> "🛡 verificação pra entrar na fila"
+            fs.size == 1 -> "📝 a org pediu um formulário"
+            else -> "📝 ${fs.size} esperando resposta"
+        }, 13f, Ui.WARN, true, mono = true))
+        card.addView(dica(if (verif > 0)
+            "Essas orgs mostram uma pergunta anti-robô (conta, comida, emoji) quando clica pra entrar. Sem responder, NÃO entra na fila. Toque em responder e escolha: um toque e já vai."
+            else "A org abre um formulário quando clica pra entrar. Sem responder, NÃO entra na fila. Responda uma vez: o bot guarda e responde sozinho nas próximas."), Ui.lp(top = 6, c = c))
         for (f in fs.take(3)) {
             val linha = Ui.hbox(c)
             linha.gravity = Gravity.CENTER_VERTICAL
             val info = Ui.vbox(c)
             info.addView(Ui.text(c, "${f.org} · ${f.titulo}", 12.5f, Ui.TEXT, true, mono = true))
-            info.addView(texto(f.campos.joinToString(" · ") { it.rotulo }.ifEmpty { "sem campos" }, 11f, Ui.MUTED))
+            val sub = if (f.verificacao) f.campos.firstOrNull()?.dica?.ifEmpty { null } ?: f.campos.joinToString(" · ") { it.rotulo }
+                else f.campos.joinToString(" · ") { it.rotulo }
+            info.addView(texto(sub.ifEmpty { "sem campos" }, 11f, Ui.MUTED))
             linha.addView(info, pesoUm())
             linha.addView(Ui.button(c, "responder", Ui.Kind.PRIMARY) { dialogFormulario(f) }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 8) })
             card.addView(linha, Ui.lp(top = 12, c = c))
         }
-        if (fs.size > 3) card.addView(dica("+ ${fs.size - 3} (respondendo um, os iguais vão sozinhos)"), Ui.lp(top = 8, c = c))
+        if (fs.size > 3) card.addView(dica("+ ${fs.size - 3} esperando" + if (verif > 0) "" else " (respondendo um, os iguais vão sozinhos)"), Ui.lp(top = 8, c = c))
         b.addView(card, Ui.lp(top = 12, c = c))
     }
 
@@ -256,10 +265,20 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         for (t in f.textos) box.addView(texto(t.replace(Regex("[#*_`>]+"), "").trim(), 12.5f, Ui.TEXT), Ui.lp(top = 8, c = c))
         // customId -> como ler a resposta
         val leitores = LinkedHashMap<String, () -> List<String>>()
+        // verificação com 1 pergunta de escolha: tocou na resposta, já envia
+        val umToque = f.verificacao && f.campos.size == 1 && f.campos[0].tipo in listOf(3, 21) && f.campos[0].maximo <= 1
+        var enviarAgora: ((Map<String, List<String>>) -> Unit)? = null
         for (campo in f.campos) {
             box.addView(Ui.text(c, campo.rotulo + if (campo.obrigatorio) " *" else "", 12.5f, Ui.TEXT, true), Ui.lp(top = 14, c = c))
             if (campo.dica.isNotEmpty() && campo.dica != campo.rotulo) box.addView(texto(campo.dica, 11f, Ui.MUTED), Ui.lp(top = 2, c = c))
-            val conhecida = Sniper.respostaConhecida(campo)
+            val conhecida = if (f.verificacao) null else Sniper.respostaConhecida(campo)
+            if (f.verificacao && campo.dica.isNotEmpty()) {
+                // a pergunta em destaque
+                (box.getChildAt(box.childCount - 1) as? TextView)?.let { tv ->
+                    tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f * Theme.escalaTexto())
+                    tv.setTextColor(Ui.TEXT)
+                }
+            }
             when (campo.tipo) {
                 4 -> {
                     val e = Ui.field(c, campo.dica.ifEmpty { "resposta" }, false)
@@ -268,7 +287,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                     box.addView(e, Ui.lp(top = 6, c = c))
                     leitores[campo.customId] = { listOf(e.text.toString().trim()) }
                 }
-                3 -> {
+                3, 21, 22, 23 -> {
                     val escolhidos = LinkedHashSet<String>(conhecida ?: campo.padrao)
                     val botoes = ArrayList<Pair<String, TextView>>()
                     fun pinta() {
@@ -279,12 +298,16 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                         }
                     }
                     for ((rot, v) in campo.opcoes) {
-                        val tv = Ui.text(c, rot, 12.5f, Ui.TEXT, true)
-                        tv.setPadding(Ui.dp(c, 14), Ui.dp(c, 12), Ui.dp(c, 14), Ui.dp(c, 12))
+                        val tv = texto(rot, 16f, Ui.TEXT, true)
+                        tv.gravity = Gravity.CENTER_VERTICAL
+                        tv.minHeight = Ui.dp(c, 50)
+                        tv.setPadding(Ui.dp(c, 16), Ui.dp(c, 12), Ui.dp(c, 16), Ui.dp(c, 12))
                         Ui.clique(tv) {
-                            if (campo.maximo <= 1) { escolhidos.clear(); escolhidos.add(v) }
+                            if (campo.tipo == 23) { if (!escolhidos.remove(v)) escolhidos.add(v) }
+                            else if (campo.maximo <= 1) { escolhidos.clear(); escolhidos.add(v) }
                             else if (!escolhidos.remove(v) && escolhidos.size < campo.maximo) escolhidos.add(v)
                             pinta()
+                            if (umToque) enviarAgora?.invoke(mapOf(campo.customId to listOf(v)))
                         }
                         botoes.add(v to tv)
                         box.addView(tv, Ui.lp(top = 6, c = c))
@@ -303,10 +326,14 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val dlg = android.app.AlertDialog.Builder(c, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
             .setTitle(f.titulo)
             .setView(rola)
-            .setPositiveButton("ENVIAR E LEMBRAR", null)
+            .setPositiveButton(if (f.verificacao) "ENVIAR" else "ENVIAR E LEMBRAR", null)
             .setNegativeButton("DEPOIS", null)
             .setNeutralButton("IGNORAR") { _, _ -> Sniper.ignorarFormulario(f) }
             .create()
+        enviarAgora = { valores ->
+            Sniper.responderPeloApp(f, valores)
+            dlg.dismiss()
+        }
         dlg.setOnShowListener {
             dlg.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val valores = HashMap<String, List<String>>()
