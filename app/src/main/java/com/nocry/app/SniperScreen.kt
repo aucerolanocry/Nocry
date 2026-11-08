@@ -350,10 +350,10 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         secAjustes.removeAllViews()
         val card = Ui.card(c)
         card.addView(Ui.labelIcone(c, R.drawable.ic_sliders, "ajustes"))
-        card.addView(Ui.item(c, "Filas ao mesmo tempo", "Quantas filas ele segura de uma vez (todas as orgs juntas).", 0, "${Sniper.maxFilas}") {
-            Ui.dialogNumero(c, "FILAS AO MESMO TEMPO", "de 1 a 40", 1, 40, Sniper.maxFilas) { n -> Sniper.definirMaxFilas(n) }
+        card.addView(Ui.item(c, "Limite de filas do bot", "Teto do próprio bot (todas as orgs juntas). Cada org já segura o limite dela e avisa; ele respeita e tenta de novo depois.", 0, "${Sniper.maxFilas}") {
+            Ui.dialogNumero(c, "LIMITE DE FILAS DO BOT", "de 1 a 100", 1, 100, Sniper.maxFilas) { n -> Sniper.definirMaxFilas(n) }
         }, Ui.lp(top = 8, c = c))
-        card.addView(Ui.toggle(c, "Sair das outras filas ao abrir sala", "Abriu sala: sai das outras filas e pausa a busca. Se a sala fechar sem aposta, volta a buscar sozinho.", Sniper.sairAoAbrir) { v ->
+        card.addView(Ui.toggle(c, "Sair das outras filas ao abrir sala", "Desligado (padrão): continua entrando nas filas até o limite de cada org. Ligado: abriu sala, sai das outras filas e pausa a busca.", Sniper.sairAoAbrir) { v ->
             Sniper.definirSairAoAbrir(v)
         }, Ui.lp(top = 8, c = c))
         card.addView(Ui.toggle(c, "Começar a buscar ao ligar", "Assim que conectar, já inicia a busca com o alvo escolhido.", Sniper.buscarAoLigar) { v ->

@@ -102,6 +102,7 @@ object Sniper {
     const val SALA_NOVA = 30 * 60_000L
     const val PAUSA_SEM_MEDIADOR = 5 * 60_000L
     const val PAUSA_BLOQUEIO = 15 * 60_000L
+    const val PAUSA_LIMITE = 45_000L      // org disse "limite máximo de filas": espera isso e tenta de novo
     const val MSG_PADRAO = "# FULL UMP E XM8 SEM MOBILADOR E SEM BUG DE KIT"
     val MODOS = listOf("1X1", "2X2", "3X3", "4X4")
     private val PALAVRAS_SALA = listOf("aguardando", "partida", "match", "vs", "sala", "duelo", "confronto")
@@ -133,7 +134,7 @@ object Sniper {
     val modos: MutableSet<String> = ConcurrentHashMap.newKeySet()
     val valores: MutableSet<String> = ConcurrentHashMap.newKeySet()
     @Volatile var gelo = "NORMAL"
-    @Volatile var maxFilas = 20
+    @Volatile var maxFilas = 60
     @Volatile var msgAuto = MSG_PADRAO
 
     // ---------------- estado ----------------
@@ -145,7 +146,7 @@ object Sniper {
     @Volatile var usuario = ""
     @Volatile var eu = ""
     /** abriu sala: sai das outras filas e pausa a busca (volta sozinho se a sala fechar sem aposta) */
-    @Volatile var sairAoAbrir = true
+    @Volatile var sairAoAbrir = false
     /** já começa a buscar quando o bot conecta */
     @Volatile var buscarAoLigar = false
     @Volatile private var pausadoPorSala = false
@@ -201,9 +202,9 @@ object Sniper {
         valores.clear(); valores.addAll((sp.getString("valores", "300") ?: "300").split(",").filter { it in todosValores })
         if (valores.isEmpty() && todosValores.isNotEmpty()) valores.add(if ("300" in todosValores) "300" else todosValores[0])
         gelo = sp.getString("gelo", "NORMAL") ?: "NORMAL"
-        maxFilas = sp.getInt("max_filas", 20)
+        maxFilas = sp.getInt("max_filas2", 60)
         msgAuto = sp.getString("msg_auto", MSG_PADRAO) ?: MSG_PADRAO
-        sairAoAbrir = sp.getBoolean("sair_ao_abrir", true)
+        sairAoAbrir = sp.getBoolean("sair_ao_abrir2", false)
         buscarAoLigar = sp.getBoolean("buscar_ao_ligar", false)
         try {
             val o = JSONObject(sp.getString("cache_filas", "{}") ?: "{}")
@@ -287,9 +288,9 @@ object Sniper {
             .putString("modos", modos.joinToString(","))
             .putString("valores", valores.joinToString(","))
             .putString("gelo", gelo)
-            .putInt("max_filas", maxFilas)
+            .putInt("max_filas2", maxFilas)
             .putString("msg_auto", msgAuto)
-            .putBoolean("sair_ao_abrir", sairAoAbrir)
+            .putBoolean("sair_ao_abrir2", sairAoAbrir)
             .putBoolean("buscar_ao_ligar", buscarAoLigar)
             .apply()
     }
@@ -393,7 +394,7 @@ object Sniper {
     }
 
     fun escolherGelo(g: String) { gelo = g; salvarEscolha(); mudou() }
-    fun definirMaxFilas(n: Int) { maxFilas = n.coerceIn(1, 40); salvarEscolha(); mudou() }
+    fun definirMaxFilas(n: Int) { maxFilas = n.coerceIn(1, 100); salvarEscolha(); mudou() }
     fun definirMsgAuto(t: String) { msgAuto = t.ifBlank { MSG_PADRAO }; salvarEscolha(); mudou() }
     fun definirSairAoAbrir(v: Boolean) { sairAoAbrir = v; salvarEscolha(); mudou() }
     fun definirBuscarAoLigar(v: Boolean) { buscarAoLigar = v; salvarEscolha(); mudou() }
@@ -655,7 +656,9 @@ object Sniper {
         if (sairAoAbrir) {
             if (buscando) { buscando = false; pausadoPorSala = true; log("info", "busca pausada enquanto a sala está aberta") }
             if (filasEntradas.isNotEmpty()) exSalas?.execute { seguro { sairDasFilas() } }
-        } else filasEntradas.clear()
+        } else {
+            orgs[o]?.filas?.values?.forEach { f -> f.values.forEach { filasEntradas.remove(it) } }
+        }
         notificar("Sala aberta · $o", c.nome)
         mudou()
         exSalas?.schedule(Runnable { seguro { prepararSala(s) } }, 2, TimeUnit.SECONDS)
@@ -780,6 +783,17 @@ object Sniper {
             if (s.naoLidas == 1) log("info", "mensagem nova na sala ${numeroSala(s.id)} (${s.org})")
         }
         val txt = (m.conteudo + " " + m.embeds.joinToString(" ") { it.titulo }).lowercase()
+        val aviso = semAcento((txt + " " + m.embeds.joinToString(" ") { it.descricao }).lowercase())
+        if (m.autorBot && LIMITE_SALA.any { it.containsMatchIn(aviso) } && !PALAVRAS_APOSTA.any { it in txt }) {
+            // a org avisou na thread que você bateu o limite de filas: não é partida
+            limiteDaOrg(s.org, ultimaFila[s.org])
+            if (agora() - s.aberta < 90_000 && synchronized(s.chat) { s.chat.none { it.tipo == "pessoa" } }) {
+                fecharSala(s.id)
+                log("info", "${s.nome}: era só o aviso de limite de filas, largou a thread")
+            }
+            mudou()
+            return
+        }
         if (PALAVRAS_APOSTA.any { it in txt }) {
             apostas++
             log("ganhou", "aposta confirmada · sala ${numeroSala(s.id)} · ${s.org}")
@@ -945,14 +959,47 @@ object Sniper {
             status(o, "⏸ $motivo (${pausa / 60_000} min)", "pausa")
         }
         log("info", "$o diz: ${texto.take(160)}")
-        if ("mediador" in baixo && listOf("sem ", "não", "nao", "nenhum", "offline").any { it in baixo }) {
+        val sa = semAcento(baixo)
+        if (JA_NESSA.containsMatchIn(sa)) {
+            // já está nessa mesma fila: então entrou
+            ultima?.let { filasEntradas.add(it.first) }
+            status(o, "✓ na fila (a org disse que você já está nela)", "ok")
+        } else if (ehAvisoLimite(sa)) {
+            limiteDaOrg(o, ultima)
+        } else if ("mediador" in baixo && listOf("sem ", "não", "nao", "nenhum", "offline").any { it in baixo }) {
             largarOrg(PAUSA_SEM_MEDIADOR, "sem mediador online")
         } else if (listOf("saldo", "insuficiente", "bloque", "banido", "cargo", "verifica", "registr", "permiss").any { it in baixo }) {
             largarOrg(PAUSA_BLOQUEIO, "a org não deixou entrar")
-        } else if (listOf("já está", "ja esta", "já se encontra", "ja se encontra", "outra fila").any { it in baixo }) {
-            log("info", "$nome: a org diz que você já está em fila")
         }
         mudou()
+    }
+
+    private fun semAcento(t: String): String =
+        java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+
+    private val JA_NESSA = Regex("ja (esta|se encontra|entrou) (nesta|nessa|neste|nesse) fila")
+    private val LIMITE = listOf(
+        Regex("limite"), Regex("maxim[oa]"), Regex("\\bmax\\.?\\s"), Regex("muitas filas"), Regex("mais (de \\d+ )?filas"),
+        Regex("outras? filas?"), Regex("em \\d+ filas"), Regex("atingiu"), Regex("excedeu"), Regex("ja (esta|se encontra) em (uma|alguma|outra|\\d+)"),
+        Regex("nao (pode|consegue) entrar em mais"), Regex("sai(a)? de (uma|alguma) (das )?filas?")
+    )
+
+    /** dentro de uma sala o aviso precisa ser bem claro (pra não largar partida de verdade) */
+    private val LIMITE_SALA = listOf(
+        Regex("limite (maximo )?de (\\d+ )?filas"), Regex("maximo de (\\d+ )?filas"), Regex("muitas filas"),
+        Regex("mais filas"), Regex("em \\d+ filas"), Regex("limite de filas")
+    )
+
+    /** aviso de "limite máximo de filas" (cada org escreve de um jeito) */
+    private fun ehAvisoLimite(semAcentoMinusculo: String): Boolean = LIMITE.any { it.containsMatchIn(semAcentoMinusculo) }
+
+    /** a org disse que você está no limite de filas dela: o clique não entrou; espera um pouco e tenta de novo */
+    private fun limiteDaOrg(o: String, ultima: Pair<String, String>?) {
+        if (ultima != null) filasEntradas.remove(ultima.first)
+        if (orgs.containsKey(o)) orgPausada[o] = agora() + PAUSA_LIMITE
+        val n = filasEntradas.count { fid -> orgs[o]?.filas?.values?.any { it.containsValue(fid) } == true }
+        log("info", "$o: no limite de filas da org ($n) · tenta de novo em ${PAUSA_LIMITE / 1000}s")
+        status(o, "✓ no limite de filas da org ($n)", "ok")
     }
 
     private fun textoCard(m: DMsg): String {
