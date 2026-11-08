@@ -198,7 +198,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         }
         secSalasTopo.addView(linha)
         Sniper.salaAtiva?.let { Sniper.salas[it] }?.let { s ->
-            secSalasTopo.addView(Ui.text(c, "SALA ${Sniper.numeroSala(s.id)} · ${s.org} · ${s.nome}", 11f, Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
+            secSalasTopo.addView(Ui.text(c, "SALA ${Sniper.numeroSala(s.id)} · ${s.org} · ${s.nome}" + (if (s.somenteLeitura) " · SÓ LEITURA" else ""), 11f, Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
         }
     }
 

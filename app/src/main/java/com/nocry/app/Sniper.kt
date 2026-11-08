@@ -82,6 +82,8 @@ class SSala(val id: String, val nome: String, val org: String, val guildId: Stri
     @Volatile var ultimoId: String? = null
     @Volatile var ultimoPoll = 0L
     @Volatile var gatewayEm = 0L
+    /** a sala não deixa escrever (fica no painel só pra ver) */
+    @Volatile var somenteLeitura = false
     val vistos: MutableSet<String> = ConcurrentHashMap.newKeySet()
     val chat = ArrayList<SChat>()
 }
@@ -106,6 +108,9 @@ object Sniper {
     const val MSG_PADRAO = "# FULL UMP E XM8 SEM MOBILADOR E SEM BUG DE KIT"
     val MODOS = listOf("1X1", "2X2", "3X3", "4X4")
     private val PALAVRAS_SALA = listOf("aguardando", "partida", "match", "vs", "sala", "duelo", "confronto")
+    /** canal com esse nome nunca é sala de partida */
+    private val NAO_SALA = listOf("ticket", "suporte", "atendimento", "denuncia", "denúncia", "saque", "pix", "duvida", "dúvida",
+        "parceria", "compra", "loja", "log", "regra", "anuncio", "anúncio", "verifica", "registro", "ranking")
     private val PALAVRAS_APOSTA = listOf("aposta confirmada", "aposta gerada", "aposta criada")
     private val PALAVRAS_SAIR = listOf("SAIR", "CANCEL")
     private val NUNCA_CLICAR = listOf("TICKET", "SUPORTE", "ATENDIMENTO", "REGRA", "DENUN", "AJUDA", "SAQUE", "SACAR",
@@ -633,13 +638,15 @@ object Sniper {
         if (salas.containsKey(c.id) || largadas.contains(c.id)) return false
         if (canalDaFila.containsValue(c.id)) return false
         if (adivinharOrg(gid) == "?") return false
+        val baixo = c.nome.lowercase()
+        if (NAO_SALA.any { it in baixo }) return false
         val novo = agora() - c.criadoMs < SALA_NOVA
         val nome = ehSala(c.nome)
         val naFila = agora() - (entrouEm[gid] ?: 0L) < SALA_NOVA
         // thread: só se você está nela (a org te colocou/marcou) ou é privada; thread pública de outro jogador não
         if (c.ehThread) return (c.membro && (novo || nome)) || (novo && c.privado) || (novo && marcou && naFila)
-        // canal (tipo "partida-11" da TOKIO): novo, privado e com acesso seu; canal público não
-        return c.tipo == 0 && novo && ((c.privado && c.meuAcesso && (nome || naFila)) || (marcou && naFila))
+        // canal (tipo "partida-11" da TOKIO): novo, privado, com acesso seu e nome de sala; canal público não
+        return c.tipo == 0 && novo && ((nome && c.privado && c.meuAcesso) || (marcou && naFila))
     }
 
     fun numeroSala(id: String): Int = ordem.indexOf(id) + 1
@@ -657,7 +664,7 @@ object Sniper {
             if (buscando) { buscando = false; pausadoPorSala = true; log("info", "busca pausada enquanto a sala está aberta") }
             if (filasEntradas.isNotEmpty()) exSalas?.execute { seguro { sairDasFilas() } }
         } else {
-            orgs[o]?.filas?.values?.forEach { f -> f.values.forEach { filasEntradas.remove(it) } }
+            liberarFilasDa(o)
         }
         notificar("Sala aberta · $o", c.nome)
         mudou()
@@ -669,12 +676,26 @@ object Sniper {
         val d = dc ?: return
         if (!salas.containsKey(s.id)) return
         if (s.thread) d.entrarThread(s.id)
+        val (antes, _) = d.historico(s.id, 25, null, s.guildId)
+        if (antes.any { it.autorId == eu && it.conteudo.trim() == msgAuto.trim() }) {
+            s.msgEnviada = true
+            log("info", "sala ${numeroSala(s.id)}: a mensagem automática já estava lá, não mandei de novo")
+            carregarHistorico(s)
+            return
+        }
         val r = d.enviar(s.id, msgAuto)
         if (r.ok) {
             s.msgEnviada = true
         } else if (r.codigo == 403 || r.erro() == 50013 || r.erro() == 50001) {
-            log("info", "${s.nome}: sem permissão de escrever · não é sala de partida, ignorando")
-            fecharSala(s.id)
+            if (ehSala(s.nome)) {
+                // pode ser partida sua que ainda não libera o chat: fica no painel só pra ver
+                s.somenteLeitura = true
+                log("info", "sala ${numeroSala(s.id)} (${s.nome}): não deixa escrever · fica só pra ver")
+                carregarHistorico(s)
+            } else {
+                log("info", "${s.nome}: sem permissão de escrever · não é sala de partida, ignorando")
+                fecharSala(s.id)
+            }
             return
         } else {
             log("erro", "não deu pra mandar a mensagem automática na sala ${numeroSala(s.id)} (${motivo(r)})")
@@ -718,6 +739,11 @@ object Sniper {
             }
         }
         mudou()
+    }
+
+    /** esquece as filas dessa org (o bot confere de novo se ainda está nelas; as outras orgs ficam como estão) */
+    private fun liberarFilasDa(o: String) {
+        orgs[o]?.filas?.values?.forEach { f -> f.values.forEach { filasEntradas.remove(it) } }
     }
 
     /** sai das filas em que está (clica em SAIR em cada uma) */
@@ -808,16 +834,19 @@ object Sniper {
         val t = agora()
         for (s in salas.values.toList()) {
             val n = numeroSala(s.id)
-            if (!s.respondida && t - s.aberta > TIMEOUT_RESPOSTA) {
+            if (s.somenteLeitura) {
+                // sala só pra ver: some sozinha depois de 3 min parada (não clica em nada)
+                if (t - s.ultima > 3 * 60_000) { fecharSala(s.id); continue }
+            } else if (!s.respondida && t - s.aberta > TIMEOUT_RESPOSTA) {
                 log("info", "ninguém respondeu em 30s na sala $n (${s.org}), saindo")
                 clicarSair(s)
                 fecharSala(s.id)
-                filasEntradas.clear()
+                liberarFilasDa(s.org)
                 continue
             }
             if (t - s.ultima > TIMEOUT_INATIVA && !s.inativa) {
                 s.inativa = true
-                filasEntradas.clear()
+                liberarFilasDa(s.org)
                 log("info", "sala $n parada há 10 min, liberando a vaga")
             }
             // o Discord não mandou nada dessa sala há um tempo: busca as mensagens novas direto
@@ -926,7 +955,7 @@ object Sniper {
             if (clicarSair(s)) {
                 log("info", "cancelado na sala $n (${s.org})")
                 fecharSala(s.id)
-                filasEntradas.clear()
+                liberarFilasDa(s.org)
             } else log("erro", "botão de cancelar/sair não encontrado nessa sala")
         }
     }

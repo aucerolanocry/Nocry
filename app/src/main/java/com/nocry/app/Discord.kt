@@ -203,12 +203,22 @@ class Discord(private val token: String, private val vendorId: String, private v
 
     // ------------------------------------------------------------------ REST
     private val trava = Object()
+    private val travaClique = Object()
     @Volatile private var ultimoPedido = 0L
+    @Volatile private var ultimoClique = 0L
 
-    /** segura os pedidos em fila: no máximo ~16 por segundo, mesmo com todas as orgs buscando juntas */
-    private fun esperaVez() {
+    /** segura os pedidos em fila: no máximo ~10 por segundo, mesmo com todas as orgs buscando juntas */
+    private fun esperaVez(caminho: String) {
+        if (caminho == "/interactions") {
+            // o Discord limita os cliques em botão por conta (dava 429): um a cada 1,3 s
+            synchronized(travaClique) {
+                val falta = ultimoClique + 1300 - System.currentTimeMillis()
+                if (falta > 0) Thread.sleep(falta)
+                ultimoClique = System.currentTimeMillis()
+            }
+        }
         synchronized(trava) {
-            val falta = ultimoPedido + 60 - System.currentTimeMillis()
+            val falta = ultimoPedido + 100 - System.currentTimeMillis()
             if (falta > 0) Thread.sleep(falta)
             ultimoPedido = System.currentTimeMillis()
         }
@@ -217,7 +227,7 @@ class Discord(private val token: String, private val vendorId: String, private v
     fun req(metodo: String, caminho: String, corpo: JSONObject? = null): Resp {
         var tentativa = 0
         while (true) {
-            esperaVez()
+            esperaVez(caminho)
             val b = Request.Builder().url(API + caminho)
                 .header("Authorization", token)
                 .header("User-Agent", ua)
@@ -280,6 +290,7 @@ class Discord(private val token: String, private val vendorId: String, private v
     fun enviar(cid: String, texto: String): Resp = req("POST", "/channels/$cid/messages", JSONObject()
         .put("content", texto)
         .put("nonce", Snow.novo())
+        .put("enforce_nonce", true)
         .put("tts", false)
         .put("flags", 0))
 
@@ -373,7 +384,7 @@ class Discord(private val token: String, private val vendorId: String, private v
         when (code) {
             4004 -> { ligado = false; ouvinte.caiu("o Discord recusou o token", true); return }
             4010, 4011, 4012, 4013, 4014 -> { ligado = false; ouvinte.caiu("o Discord fechou a conexão ($code)", true); return }
-            4007, 4009 -> { sessao = null; seq = -1 }
+            4003, 4007, 4009 -> { sessao = null; seq = -1 }
         }
         tentativas++
         ouvinte.caiu("conexão caiu ($code), voltando...", false)
