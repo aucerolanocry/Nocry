@@ -487,6 +487,14 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         hs.addView(rapidas)
         card.addView(hs, Ui.lp(top = 10, c = c))
 
+        // marcar jogador / ADM (põe @nome no campo; na hora de mandar vira a marcação de verdade)
+        val marcar = Ui.hbox(c)
+        marcar.gravity = Gravity.CENTER_VERTICAL
+        marcar.addView(botaoMarcar("@ jogador", R.drawable.ic_gamepad) { marcarPapel("jogador") }, pesoUm())
+        marcar.addView(botaoMarcar("@ ADM", R.drawable.ic_shield) { marcarPapel("adm") }, pesoUm(6))
+        marcar.addView(botaoMarcar("@ outro", R.drawable.ic_user) { escolherPessoa(null) }, pesoUm(6))
+        card.addView(marcar, Ui.lp(top = 10, c = c))
+
         // escrever
         val linha = Ui.hbox(c)
         linha.gravity = Gravity.CENTER_VERTICAL
@@ -512,7 +520,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         chatCard = card
         card.visibility = if (Sniper.ordem.isEmpty()) View.GONE else View.VISIBLE
         add(card, 12)
-        add(dica("Toque numa sala pra abrir o chat dela. Pra copiar: toque no ícone de copiar da mensagem, nos botões de link/chave/ID que aparecem embaixo dela, " +
+        add(dica("Toque numa sala pra abrir o chat dela. @ jogador e @ ADM põem a marcação no campo: é só escrever o resto e mandar. " +
+            "Pra copiar: toque no ícone de copiar da mensagem, nos botões de link/chave/ID que aparecem embaixo dela, " +
             "ou segure o dedo no texto pra escolher um pedaço. Link abre no toque. Se ninguém responder em ${Sniper.tempoResposta / 1000}s, ele cancela e volta a procurar."), 10)
         atualizaChat()
     }
@@ -669,10 +678,83 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     private fun enviarCampo() {
         val e = campoMsg ?: return
-        val t = e.text.toString()
+        var t = e.text.toString()
         if (t.isBlank()) return
+        // @nome que veio do botão de marcar vira <@id> (marca de verdade no Discord); o maior primeiro
+        for ((rot, id) in marcados.entries.sortedByDescending { it.key.length }) t = t.replace(rot, "<@$id>")
+        marcados.clear()
         mandar(t)
         e.setText("")
+    }
+
+    // ---------------- marcar jogador / ADM ----------------
+    /** "@nome" que está no campo -> id da pessoa */
+    private val marcados = LinkedHashMap<String, String>()
+
+    private fun botaoMarcar(rot: String, ico: Int, acao: () -> Unit): View {
+        val c = act
+        val b = Ui.hbox(c)
+        b.gravity = Gravity.CENTER
+        b.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x0A), 12, Theme.alpha(android.graphics.Color.WHITE, 0x24), 1),
+            Ui.shape(c, android.graphics.Color.WHITE, 12))
+        b.setPadding(Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 10))
+        b.addView(Ui.icone(c, ico, Ui.ACC2, 14))
+        val t = Ui.text(c, rot, 11f, Ui.TEXT, true, mono = true)
+        t.maxLines = 1
+        b.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 6) })
+        Ui.clique(b) { acao() }
+        return b
+    }
+
+    private fun nomeDe(p: SPessoa): String = p.nome.ifBlank { if (p.papel == "adm") "ADM" else if (p.papel == "jogador") "jogador" else "pessoa" }
+
+    private fun marcarPapel(papel: String) {
+        if (salaAtual() == null) { Ui.toast(act, "nenhuma sala aberta"); return }
+        val l = Sniper.pessoasDaSala(papel)
+        when {
+            l.size == 1 -> inserirMarca(l[0])
+            l.size > 1 -> escolherPessoa(papel)
+            else -> {
+                Ui.toast(act, if (papel == "adm") "ainda não sei quem é o ADM: escolha na lista" else "ainda não sei quem é o jogador: escolha na lista")
+                escolherPessoa(null, papelDefinir = papel)
+            }
+        }
+    }
+
+    /** lista de quem está na sala; papelDefinir = quem você escolher passa a ser jogador/ADM dessa sala */
+    private fun escolherPessoa(papel: String?, papelDefinir: String? = null) {
+        val c = act
+        val l = Sniper.pessoasDaSala(papel)
+        if (l.isEmpty()) {
+            Ui.dialogAviso(c, "MARCAR", "Ainda não sei quem está nessa sala. Assim que alguém falar ou a org marcar os jogadores no card, eles aparecem aqui.", "OK") {}
+            return
+        }
+        val nomes = l.map { p -> nomeDe(p) + when (p.papel) { "jogador" -> "  · jogador"; "adm" -> "  · ADM"; else -> "" } }
+        val titulo = when (papelDefinir ?: papel) { "adm" -> "MARCAR ADM"; "jogador" -> "MARCAR JOGADOR"; else -> "MARCAR" }
+        Ui.dialogEscolha(c, titulo, nomes) { i ->
+            val p = l[i]
+            if (papelDefinir != null && p.papel != papelDefinir) Sniper.definirPapel(p.id, papelDefinir)
+            inserirMarca(p)
+        }
+    }
+
+    private fun inserirMarca(p: SPessoa) {
+        val e = campoMsg ?: return
+        var rot = "@" + nomeDe(p).replace(Regex("\\s+"), "_")
+        // dois com o mesmo nome: @nome2
+        var n = 2
+        while (marcados[rot] != null && marcados[rot] != p.id) rot = "@" + nomeDe(p).replace(Regex("\\s+"), "_") + n++
+        marcados[rot] = p.id
+        val ini = e.selectionStart.coerceAtLeast(0)
+        val atual = e.text.toString()
+        val antes = atual.substring(0, ini)
+        val espaco = if (antes.isNotEmpty() && !antes.endsWith(" ")) " " else ""
+        e.text.insert(ini, "$espaco$rot ")
+        e.requestFocus()
+        try {
+            (act.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)
+                ?.showSoftInput(e, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        } catch (_: Throwable) {}
     }
 
     // ---------------- imagem ----------------
@@ -714,6 +796,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val id = s?.id ?: ""
         val linhas = if (s == null) emptyList() else synchronized(s.chat) { s.chat.toList() }
         if (id != chatSala || linhas.firstOrNull()?.id != chatPrimeiro || linhas.size < chatQtd) {
+            if (id != chatSala) marcados.clear()   // trocou de sala: @nome da outra sala não vale aqui
             lista.removeAllViews()
             chatSala = id
             chatQtd = 0

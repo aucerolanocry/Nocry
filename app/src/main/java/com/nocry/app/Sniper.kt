@@ -92,6 +92,9 @@ class SForm(val nonce: String, val modalId: String, val customId: String, val ap
     val chegou = System.currentTimeMillis()
 }
 
+/** alguém da sala que dá pra marcar: papel "jogador", "adm" ou "?" (não deu pra saber) */
+class SPessoa(val id: String, @Volatile var nome: String, @Volatile var papel: String)
+
 class SSala(val id: String, val nome: String, val org: String, val guildId: String?, val thread: Boolean) {
     val aberta = System.currentTimeMillis()
     /** a org cancelou/fechou (te tirou da sala ou não deixa mais escrever) */
@@ -116,6 +119,8 @@ class SSala(val id: String, val nome: String, val org: String, val guildId: Stri
     val protegida: Boolean get() = apostaOk || confirmada
     val vistos: MutableSet<String> = ConcurrentHashMap.newKeySet()
     val chat = ArrayList<SChat>()
+    /** quem está na sala (pra marcar jogador/ADM no chat) */
+    val pessoas = ConcurrentHashMap<String, SPessoa>()
 }
 
 /**
@@ -963,12 +968,15 @@ object Sniper {
                 val add = d.optJSONArray("added_members") ?: return
                 var euEntrei = false
                 for (i in 0 until add.length()) if (add.optJSONObject(i)?.s("user_id") == eu) euEntrei = true
-                if (!euEntrei) return
+                if (!euEntrei) { membrosEntraram(tid, add); return }
                 val c = canais[tid] ?: dc?.canal(tid)?.obj()?.let { canalDe(it, d.s("guild_id")) } ?: return
                 c.membro = true
                 canais[c.id] = c
                 // a org acabou de te colocar nessa thread logo depois de entrar na fila (COLOMBIA usa "fila-123"): é sala
-                if (ehMinhaSala(c, adicionado = true)) abrirSala(c)?.let { s -> if (!ehSala(c.nome)) s.incerta = true }
+                if (ehMinhaSala(c, adicionado = true)) abrirSala(c)?.let { s ->
+                    if (!ehSala(c.nome)) s.incerta = true
+                    membrosEntraram(tid, add)
+                }
             }
             "MESSAGE_CREATE" -> aoMsg(DMsg.de(d), true)
             "INTERACTION_MODAL_CREATE" -> aoFormulario(d)
@@ -1143,10 +1151,78 @@ object Sniper {
                 s.vistos.add(m.id)
                 if (!vazia(m)) s.chat.add(linhaChat(m))
                 if (temBotaoConfirmar(m)) s.temConfirmar = true
+                conhecerPessoas(s, m)
             }
             s.chat.addAll(depois)
         }
         lista.lastOrNull()?.let { s.ultimoId = it.id }
+        mudou()
+    }
+
+    // ---------------- quem é quem na sala (pra marcar no chat) ----------------
+    private val RX_MENCAO = Regex("<@!?(\\d{15,21})>")
+    private val PALAVRA_ADM = Regex("(?i)(media[dç]|\\badm|admin|staff|suporte|moderador|analista|respons[aá]vel|\\bsup\\b)")
+
+    /**
+     * Aprende quem está na sala:
+     *  - quem a org marca no card (linha com "mediador/ADM/staff..." = ADM; o resto = jogador)
+     *  - quem fala na sala e ainda não era conhecido (o primeiro vira jogador)
+     */
+    private fun conhecerPessoas(s: SSala, m: DMsg) {
+        val nomes = m.mencoes.toMap()
+        val textos = ArrayList<String>()
+        textos.add(m.conteudo)
+        for (e in m.embeds) {
+            textos.add(e.titulo); textos.add(e.descricao)
+            for (f in e.campos) textos.add(f.nome + ": " + f.valor)
+        }
+        for (t in textos) for (r in RX_MENCAO.findAll(t)) {
+            val id = r.groupValues[1]
+            if (id == eu) continue
+            val ini = t.lastIndexOf('\n', r.range.first).let { if (it < 0) 0 else it }
+            val linha = t.substring(ini, r.range.first)
+            val papel = if (PALAVRA_ADM.containsMatchIn(linha)) "adm" else if (m.autorBot) "jogador" else null
+            val p = s.pessoas.getOrPut(id) { SPessoa(id, nomes[id] ?: "", papel ?: "?") }
+            nomes[id]?.let { if (p.nome.isEmpty()) p.nome = it }
+            if (papel != null && (papel == "adm" || p.papel == "?")) p.papel = papel
+        }
+        if (m.autorId.isNotEmpty() && m.autorId != eu && !m.autorBot) {
+            val novo = !s.pessoas.containsKey(m.autorId)
+            val p = s.pessoas.getOrPut(m.autorId) { SPessoa(m.autorId, m.autorNome, "?") }
+            p.nome = m.autorNome
+            if (novo && p.papel == "?" && s.pessoas.values.none { it.papel == "jogador" }) p.papel = "jogador"
+        }
+    }
+
+    /** quem entrou na thread depois que a sala já estava aberta costuma ser o ADM/mediador */
+    private fun membrosEntraram(tid: String, add: JSONArray) {
+        val s = salas[tid] ?: return
+        val tarde = agora() - s.aberta > 8_000
+        for (i in 0 until add.length()) {
+            val a = add.optJSONObject(i) ?: continue
+            val uid = a.s("user_id") ?: continue
+            if (uid == eu) continue
+            val mem = a.optJSONObject("member")
+            val u = mem?.optJSONObject("user")
+            if (u?.optBoolean("bot", false) == true) continue
+            val nome = mem?.s("nick") ?: u?.s("global_name") ?: u?.s("username") ?: ""
+            val p = s.pessoas.getOrPut(uid) { SPessoa(uid, nome, if (tarde) "adm" else "jogador") }
+            if (p.nome.isEmpty() && nome.isNotEmpty()) p.nome = nome
+        }
+    }
+
+    /** quem dá pra marcar nessa sala (o papel pedido primeiro) */
+    fun pessoasDaSala(papel: String? = null): List<SPessoa> {
+        val s = salaAtiva?.let { salas[it] } ?: return emptyList()
+        val todas = s.pessoas.values.filter { it.id != eu }
+        return if (papel == null) todas.sortedBy { if (it.papel == "jogador") 0 else if (it.papel == "adm") 1 else 2 }
+        else todas.filter { it.papel == papel }
+    }
+
+    /** você corrige: essa pessoa é jogador/ADM */
+    fun definirPapel(id: String, papel: String) {
+        val s = salaAtiva?.let { salas[it] } ?: return
+        s.pessoas[id]?.papel = papel
         mudou()
     }
 
@@ -1264,6 +1340,7 @@ object Sniper {
         if (viaGateway) s.gatewayEm = agora()
         s.ultimoId = maior(s.ultimoId, m.id)
         s.ultima = agora()
+        conhecerPessoas(s, m)
         if (!m.autorBot) s.respondida = true
         s.inativa = false
         if (!vazia(m)) synchronized(s.chat) {
