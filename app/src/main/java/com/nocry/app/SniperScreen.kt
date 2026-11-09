@@ -476,8 +476,9 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val frases = listOf("Go", "Bora", "Full UMP e XM8?", "Sem mobilador", "Regras ok ✅", "Cria a sala", "Manda o ID", "Pronto")
         for ((i, f) in frases.withIndex()) {
             val t = texto(f, 13f, Ui.TEXT, true)
-            t.background = Botao(c, "ghost", 12)
-            t.setPadding(Ui.dp(c, 14), Ui.dp(c, 10), Ui.dp(c, 14), Ui.dp(c, 10))
+            t.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(Theme.accent, 0x14), 20, Theme.alpha(Theme.accent, 0x5A), 1),
+                Ui.shape(c, android.graphics.Color.WHITE, 20))
+            t.setPadding(Ui.dp(c, 15), Ui.dp(c, 9), Ui.dp(c, 15), Ui.dp(c, 9))
             Ui.clique(t) { mandar(f) }
             val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             if (i > 0) lp.leftMargin = Ui.dp(c, 6)
@@ -511,8 +512,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         chatCard = card
         card.visibility = if (Sniper.ordem.isEmpty()) View.GONE else View.VISIBLE
         add(card, 12)
-        add(dica("Toque numa sala pra abrir o chat dela. A mensagem automática sai assim que a sala abre; " +
-            "se ninguém responder em ${Sniper.tempoResposta / 1000}s, ele cancela e volta a procurar. Aposta confirmada (★) fica no painel."), 10)
+        add(dica("Toque numa sala pra abrir o chat dela. Pra copiar: toque no ícone de copiar da mensagem, nos botões de link/chave/ID que aparecem embaixo dela, " +
+            "ou segure o dedo no texto pra escolher um pedaço. Link abre no toque. Se ninguém responder em ${Sniper.tempoResposta / 1000}s, ele cancela e volta a procurar."), 10)
         atualizaChat()
     }
 
@@ -735,15 +736,45 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val c = act
         val eu = l.tipo == "voce"
         val bot = l.tipo == "bot"
-        val linha = LinearLayout(c)
-        linha.orientation = LinearLayout.HORIZONTAL
+        val linha = Ui.hbox(c)
         linha.gravity = if (eu) Gravity.END else Gravity.START
+        // avatar com a inicial (pessoa e bot), cor pela pessoa
+        if (!eu) {
+            val corAv = corDoNome(l.nome)
+            val av = Ui.text(c, l.nome.trim().firstOrNull()?.uppercase() ?: "?", 12f, android.graphics.Color.WHITE, true, mono = true)
+            av.gravity = Gravity.CENTER
+            av.background = Ui.shape(c, Theme.alpha(corAv, if (bot) 0x55 else 0xCC), 15)
+            linha.addView(av, LinearLayout.LayoutParams(Ui.dp(c, 30), Ui.dp(c, 30)).also { it.rightMargin = Ui.dp(c, 8); it.topMargin = Ui.dp(c, 2) })
+        }
         val b = Ui.vbox(c)
-        b.background = Botao(c, if (eu) "grad" else if (bot) "ico" else "ghost", 14)
-        b.setPadding(Ui.dp(c, 12), Ui.dp(c, 8), Ui.dp(c, 12), Ui.dp(c, 9))
-        val corTexto = if (eu) Theme.sobreGrad() else if (bot) Ui.MUTED else Ui.TEXT
-        val nome = texto("${if (eu) "você" else l.nome} · ${l.hora}", 10.5f, if (eu) Theme.alpha(Theme.sobreGrad(), 0xB0) else if (bot) Theme.alpha(Ui.MUTED, 0xB0) else Ui.ACC2, true)
-        b.addView(nome)
+        b.background = when {
+            eu -> Botao(c, "grad", 16)
+            bot -> Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x08), 14, Theme.alpha(Theme.accent, 0x55), 1)
+            else -> Botao(c, "ghost", 16)
+        }
+        b.setPadding(Ui.dp(c, 12), Ui.dp(c, 8), Ui.dp(c, 10), Ui.dp(c, 10))
+        val corTexto = if (eu) Theme.sobreGrad() else Ui.TEXT
+        val corFraca = if (eu) Theme.alpha(Theme.sobreGrad(), 0xB0) else Theme.alpha(Ui.MUTED, 0xD0)
+        val larguraMax = (largura * if (eu) 0.74 else 0.66).toInt()
+
+        // cabeçalho: nome · hora · copiar tudo
+        val cab = Ui.hbox(c)
+        cab.gravity = Gravity.CENTER_VERTICAL
+        val nome = texto(if (eu) "você" else l.nome, 11f, if (eu) corFraca else if (bot) Theme.accent else corDoNome(l.nome), true)
+        nome.maxLines = 1
+        nome.ellipsize = android.text.TextUtils.TruncateAt.END
+        cab.addView(nome, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.weight = 1f })
+        cab.addView(texto(l.hora, 10f, corFraca), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 8) })
+        val tudo = listOf(l.texto, l.card).filter { it.isNotBlank() && it != "(mensagem que o app não lê)" }.joinToString("\n")
+        if (tudo.isNotEmpty()) {
+            val cp = android.widget.FrameLayout(c)
+            cp.addView(Ui.icone(c, R.drawable.ic_copy, corFraca, 14), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 14), Ui.dp(c, 14), Gravity.CENTER))
+            cp.contentDescription = "copiar mensagem"
+            Ui.clique(cp) { copiar(tudo, "mensagem copiada") }
+            cab.addView(cp, LinearLayout.LayoutParams(Ui.dp(c, 30), Ui.dp(c, 24)).also { it.leftMargin = Ui.dp(c, 2) })
+        }
+        b.addView(cab, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
         if (l.imagem != null) {
             val iv = ImageView(c)
             iv.adjustViewBounds = true
@@ -757,17 +788,126 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             if (grande != null) Ui.clique(iv) {
                 try { act.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(grande))) } catch (_: Exception) {}
             }
-            b.addView(iv, Ui.lp(top = 4, c = c))
+            b.addView(iv, Ui.lp(top = 6, c = c))
         }
         if (l.texto.isNotEmpty()) {
-            val t = texto(l.texto, if (bot) 12.5f else 14.5f, corTexto)
-            t.maxWidth = (largura * 0.72).toInt()
-            if (bot) t.typeface = Typeface.create(Theme.fonte(c, false, false), Typeface.NORMAL)
-            b.addView(t, Ui.lp(top = 2, c = c))
+            val t = textoCopiavel(l.texto, if (bot) 13f else 14.5f, corTexto, eu)
+            t.maxWidth = larguraMax
+            b.addView(t, Ui.lp(top = 3, c = c))
+        }
+        // card (org/ADM): com barrinha do lado, inteiro e copiável
+        if (l.card.isNotEmpty()) {
+            val caixaCard = Ui.hbox(c)
+            val barra = View(c)
+            barra.background = Ui.shape(c, Theme.accent, 2)
+            caixaCard.addView(barra, LinearLayout.LayoutParams(Ui.dp(c, 3), ViewGroup.LayoutParams.MATCH_PARENT).also { it.rightMargin = Ui.dp(c, 10) })
+            val t = textoCopiavel(l.card, 12.5f, corTexto, eu)
+            t.maxWidth = larguraMax - Ui.dp(c, 13)
+            caixaCard.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            b.addView(caixaCard, Ui.lp(top = if (l.texto.isNotEmpty()) 8 else 4, c = c))
+        }
+        for (a in l.arquivos) b.addView(texto("📎 $a", 12f, corFraca), Ui.lp(top = 4, c = c))
+        // botões da org (só mostra quais tem; quem clica é confirmar/cancelar lá embaixo)
+        if (l.botoes.isNotEmpty()) {
+            val fl = Ui.hbox(c)
+            for ((i, bt) in l.botoes.take(4).withIndex()) {
+                val p = Ui.text(c, bt, 9.5f, corFraca, true, mono = true)
+                p.maxLines = 1
+                p.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x0C), 8, Theme.alpha(android.graphics.Color.WHITE, 0x22), 1)
+                p.setPadding(Ui.dp(c, 8), Ui.dp(c, 4), Ui.dp(c, 8), Ui.dp(c, 4))
+                fl.addView(p, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { if (i > 0) it.leftMargin = Ui.dp(c, 6) })
+            }
+            val hs = HorizontalScrollView(c)
+            hs.isHorizontalScrollBarEnabled = false
+            hs.addView(fl)
+            b.addView(hs, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 8) })
+        }
+        // o que dá pra copiar com um toque: link, chave pix, ID/senha da sala...
+        val achados = copiaveis(tudo)
+        if (achados.isNotEmpty()) {
+            val col = Ui.vbox(c)
+            for ((rot, valor) in achados) {
+                val p = Ui.hbox(c)
+                p.gravity = Gravity.CENTER_VERTICAL
+                p.background = if (eu) Ui.shape(c, Theme.alpha(android.graphics.Color.BLACK, 0x22), 10)
+                    else Ui.shape(c, Theme.alpha(Theme.accent, 0x1E), 10, Theme.alpha(Theme.accent, 0x66), 1)
+                p.setPadding(Ui.dp(c, 10), Ui.dp(c, 7), Ui.dp(c, 10), Ui.dp(c, 7))
+                p.addView(Ui.icone(c, R.drawable.ic_copy, if (eu) corTexto else Theme.accent, 13))
+                val tx = texto("$rot  ${encurtar(valor)}", 11.5f, corTexto, true)
+                tx.maxLines = 1
+                tx.ellipsize = android.text.TextUtils.TruncateAt.MIDDLE
+                p.addView(tx, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 7) })
+                p.contentDescription = "copiar $rot"
+                Ui.clique(p) { copiar(valor, "$rot copiado") }
+                col.addView(p, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 6) })
+            }
+            b.addView(col, Ui.lp(top = 2, c = c))
         }
         linha.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        linha.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 6) }
+        linha.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 8) }
         return linha
+    }
+
+    /** texto que dá pra selecionar (toque longo) e com link que abre no toque */
+    private fun textoCopiavel(s: String, sp: Float, cor: Int, eu: Boolean): TextView {
+        val t = texto(s, sp, cor)
+        t.setTextIsSelectable(true)
+        t.setLinkTextColor(if (eu) Theme.sobreGrad() else Ui.ACC2)
+        try {
+            android.text.util.Linkify.addLinks(t, android.text.util.Linkify.WEB_URLS)
+            t.movementMethod = android.text.method.LinkMovementMethod.getInstance()
+            t.setTextIsSelectable(true)
+        } catch (_: Throwable) {}
+        return t
+    }
+
+    private fun copiar(valor: String, aviso: String) {
+        try {
+            val cm = act.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("nocry", valor))
+            // Android 13+ já mostra o próprio aviso de copiado
+            if (android.os.Build.VERSION.SDK_INT < 33) Ui.toast(act, aviso)
+        } catch (_: Throwable) {
+            Ui.toast(act, "não consegui copiar")
+        }
+    }
+
+    private fun encurtar(v: String): String = if (v.length <= 26) v else v.take(14) + "…" + v.takeLast(9)
+
+    /** cor fixa por pessoa (o mesmo nome sempre com a mesma cor) */
+    private fun corDoNome(n: String): Int {
+        val cores = intArrayOf(0xFF7C9CFF.toInt(), 0xFF4FD1C5.toInt(), 0xFFF6AD55.toInt(), 0xFFB794F4.toInt(), 0xFFF687B3.toInt(), 0xFF68D391.toInt())
+        return cores[(n.lowercase().hashCode() and 0x7fffffff) % cores.size]
+    }
+
+    /** acha o que vale um botão de copiar: link, chave pix (e-mail, CPF/CNPJ, telefone, aleatória), ID/senha/código */
+    private fun copiaveis(t: String): List<Pair<String, String>> {
+        if (t.isBlank()) return emptyList()
+        val out = LinkedHashMap<String, String>()   // valor -> rótulo
+        fun add(rot: String, v0: String) {
+            val v = v0.trim().trimEnd('.', ',', ';', ')', '!', '?', ']', '*')
+            if (v.length < 3 || out.keys.any { it.contains(v) || v.contains(it) && it.length > 4 }) return
+            out[v] = rot
+        }
+        val pix = Regex("(?i)\\bpix\\b|chave").containsMatchIn(t)
+        RX_URL.findAll(t).forEach { add("link", it.value) }
+        RX_UUID.findAll(t).forEach { add("chave pix", it.value) }
+        RX_EMAIL.findAll(t).forEach { m -> if (out.keys.none { k -> k.startsWith("http") && m.value in k }) add(if (pix) "chave pix" else "e-mail", m.value) }
+        RX_CNPJ.findAll(t).forEach { add(if (pix) "chave pix" else "CNPJ", it.value) }
+        RX_FONE.findAll(t).forEach { add(if (pix) "chave pix" else "telefone", it.value) }
+        RX_CPF.findAll(t).forEach { add(if (pix) "chave pix" else "CPF", it.value) }
+        RX_ROTULO.findAll(t).forEach { m ->
+            val r = m.groupValues[1].lowercase()
+            val rot = when {
+                r.startsWith("senha") -> "senha"
+                r.startsWith("c") && !r.startsWith("chave") -> "código"
+                r.startsWith("chave") || r == "pix" -> "chave pix"
+                r == "sala" -> "sala"
+                else -> "ID"
+            }
+            add(rot, m.groupValues[2])
+        }
+        return out.entries.take(4).map { it.value to it.key }
     }
 
     private fun carregarImagem(url: String, iv: ImageView) {
@@ -790,6 +930,14 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     companion object {
         private const val REQ_IMAGEM = 4301
         private const val REQ_BACKUP = 4302
+
+        private val RX_URL = Regex("""https?://[^\s<>"]+""")
+        private val RX_EMAIL = Regex("""[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+""")
+        private val RX_UUID = Regex("""\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b""")
+        private val RX_CNPJ = Regex("""\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b""")
+        private val RX_CPF = Regex("""\b\d{3}\.\d{3}\.\d{3}-\d{2}\b|\b\d{11}\b""")
+        private val RX_FONE = Regex("""(?:\+55\s?)?\(?\b\d{2}\)?\s?9\d{4}[-\s]?\d{4}\b""")
+        private val RX_ROTULO = Regex("""(?i)\b(id|senha|sala|c[oó]digo|chave(?:\s*pix)?|pix)\s*(?:da sala|do jogo)?\s*[:=\-]\s*([A-Za-z0-9@._+\-]{3,})""")
 
         /** imagens do chat já baixadas (até ~16 MB) */
         private val cacheImg = object : LruCache<String, Bitmap>(16 * 1024 * 1024) {

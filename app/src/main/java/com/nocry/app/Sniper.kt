@@ -70,7 +70,13 @@ class SBotoes(val normal: List<String>, val infinito: List<String>, val outros: 
 class SOrg(val nome: String, val rotulos: Map<String, String>, val botoes: SBotoes?, val filas: Map<String, Map<String, String>>, val pendentes: Int)
 class SLinha(val hora: String, val tipo: String, val texto: String)
 class SChat(val id: String, val hora: String, val tipo: String, val nome: String, val texto: String,
-            val imagem: String? = null, val imagemGrande: String? = null)
+            val imagem: String? = null, val imagemGrande: String? = null,
+            /** card inteiro (título, texto e campos), pra dar pra ler e copiar chave/ID que o ADM manda em card */
+            val card: String = "",
+            /** botões da mensagem (só pra mostrar) */
+            val botoes: List<String> = emptyList(),
+            /** arquivos que não são imagem */
+            val arquivos: List<String> = emptyList())
 
 /** um campo do formulário (modal) que a org abre: texto ou lista de opções */
 class SCampo(val chave: String, val rotulo: String, val dica: String, val tipo: Int, val customId: String,
@@ -1155,7 +1161,32 @@ object Sniper {
         val nome = if (m.autorId == eu) "você" else m.autorNome
         val img = m.anexos.firstOrNull { it.imagem }
         val pequena = img?.let { it.proxy + (if ('?' in it.proxy) "&" else "?") + "width=480&height=480" }
-        return SChat(m.id, hora(Snow.ms(m.id)), tipo, nome, textoMsg(m), pequena, img?.url)
+        // o chat mostra a mensagem inteira (antes o card virava só a 1ª linha e não dava pra pegar a chave/ID)
+        val card = m.embeds.joinToString("\n\n") { e ->
+            buildList {
+                if (e.titulo.isNotBlank()) add(e.titulo.trim())
+                if (e.descricao.isNotBlank()) add(e.descricao.trim())
+                for (f in e.campos) add((if (f.nome.isNotBlank()) f.nome.trim() + ": " else "") + f.valor.trim())
+            }.joinToString("\n")
+        }.trim()
+        val texto = trocarMencoes(m, m.conteudo).replace(Regex("\\*\\*|~~|`"), "").trim()
+        val vazio = texto.isEmpty() && card.isEmpty() && m.botoes.isEmpty() && img == null && m.anexos.isEmpty()
+        return SChat(m.id, hora(Snow.ms(m.id)), tipo, nome, if (vazio) "(mensagem que o app não lê)" else texto, pequena, img?.url,
+            card = trocarMencoes(m, card).replace(Regex("\\*\\*|__|~~|`"), "").replace(Regex("(?m)^#{1,3}\\s*"), "").trim(),
+            botoes = m.botoes.map { it.label.uppercase() },
+            arquivos = m.anexos.filter { !it.imagem }.map { it.nome })
+    }
+
+    /** troca <@123> por @nome, <#123> por #canal e emoji :nome: (pro chat ficar legível) */
+    private fun trocarMencoes(m: DMsg, txt: String): String {
+        var t = txt
+        for ((id, nome) in m.mencoes) {
+            val n = if (id == eu) "@VOCÊ" else "@$nome"
+            t = t.replace("<@$id>", n).replace("<@!$id>", n)
+        }
+        if (eu.isNotEmpty()) t = t.replace("<@$eu>", "@VOCÊ").replace("<@!$eu>", "@VOCÊ")
+        return t.replace(Regex("<@!?\\d+>"), "@alguém").replace(Regex("<@&\\d+>"), "@cargo").replace(Regex("<#\\d+>"), "#canal")
+            .replace(Regex("<a?:(\\w+):\\d+>"), ":$1:")
     }
 
     fun fecharSala(id: String, apostaPedida: Boolean = false) {
