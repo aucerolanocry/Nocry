@@ -57,6 +57,10 @@ class Painel(
     private var shBorda: Shader? = null
     private var shBordaOn: Shader? = null
     private var shLuz: Shader? = null
+    private var shBrilhoTopo: Shader? = null
+    private val cantos = Path()
+    /** moldura "de mira": linha fina em volta e so os cantos acesos na cor do tema (cartoes retos de vidro/contorno) */
+    private val moldura = !hud && estilo != "solido" && raioDp <= 10
     private val inset get() = maxOf(Prefs.borda * d * 0.65f, 1f)
 
     override fun onBoundsChange(b: android.graphics.Rect) {
@@ -69,6 +73,17 @@ class Painel(
         val c1 = Theme.accent
         val c2 = Theme.accent2
         val base = Theme.base
+        // cantos acesos: em cima-esquerda e embaixo-direita (cartao em destaque acende os 4)
+        cantos.reset()
+        val len = raio + (if (ligado || forte) 18f else 12f) * d
+        val bl = b.left.toFloat(); val bt = b.top.toFloat(); val br = b.right.toFloat(); val bb = b.bottom.toFloat()
+        cantos.addRect(bl, bt, bl + len, bt + len, Path.Direction.CW)
+        cantos.addRect(br - len, bb - len, br, bb, Path.Direction.CW)
+        if (ligado || forte) {
+            cantos.addRect(br - len, bt, br, bt + len, Path.Direction.CW)
+            cantos.addRect(bl, bb - len, bl + len, bb, Path.Direction.CW)
+        }
+        shBrilhoTopo = LinearGradient(0f, bt, 0f, bt + h * 0.5f, Theme.alpha(Color.WHITE, 0x12), Theme.alpha(Color.WHITE, 0), Shader.TileMode.CLAMP)
         val k = Prefs.vidro / 62f
         fun a(x: Float) = (x.coerceIn(0f, 0.97f) * 255).toInt()
         val p = Theme.pontos(w, h)
@@ -76,9 +91,9 @@ class Painel(
         val tint = if (ligado) 0.20f else if (forte) 0.15f else 0.08f
         shBase = when (estilo) {
             "contorno" -> {
-                val fundo = 0xFF060812.toInt()
+                val fundo = 0xFF07080F.toInt()
                 LinearGradient(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
-                    Theme.alpha(Theme.mix(fundo, c1, tint + 0.04f), a(0.62f * k)), Theme.alpha(fundo, a(0.62f * k)), Shader.TileMode.CLAMP)
+                    Theme.alpha(Theme.mix(fundo, c1, tint + 0.03f), a(0.76f * k)), Theme.alpha(Theme.mix(fundo, Color.BLACK, 0.25f), a(0.80f * k)), Shader.TileMode.CLAMP)
             }
             "solido" -> {
                 val al = a(0.55f + 0.42f * ((Prefs.vidro - 20) / 75f))
@@ -128,6 +143,11 @@ class Painel(
         } else {
             pFill.shader = shBase
             cv.drawPath(path, pFill)
+            if (estilo == "contorno") {
+                // luz suave vindo de cima: da volume ao cartao sem deixar ele claro
+                pFill.shader = shBrilhoTopo
+                cv.drawPath(path, pFill)
+            }
         }
         pFill.shader = null
 
@@ -162,11 +182,28 @@ class Painel(
             cv.restore()
         }
 
-        // 4) borda em degrade
-        pLine.shader = if (on) shBordaOn else shBorda
-        pLine.alpha = 255
-        pLine.strokeWidth = Prefs.borda * d * (if (estilo == "contorno") 1.25f else 1f)
-        cv.drawPath(path, pLine)
+        // 4) borda
+        if (moldura && minOf(b.width(), b.height()) > 40f * d) {
+            // linha fina e discreta em toda a volta...
+            pLine.shader = null
+            pLine.color = Theme.alpha(Color.WHITE, if (on) 0x3A else 0x24)
+            pLine.strokeWidth = maxOf(d * 0.9f, Prefs.borda * d * 0.7f)
+            cv.drawPath(path, pLine)
+            // ...e so os cantos acesos, no degrade do tema
+            cv.save()
+            cv.clipPath(cantos)
+            pLine.shader = shBordaOn
+            pLine.alpha = if (on) 255 else 0xD0
+            pLine.strokeWidth = Prefs.borda * d * (if (on) 2f else 1.6f)
+            cv.drawPath(path, pLine)
+            cv.restore()
+            pLine.alpha = 255
+        } else {
+            pLine.shader = if (on) shBordaOn else shBorda
+            pLine.alpha = 255
+            pLine.strokeWidth = Prefs.borda * d * (if (estilo == "contorno") 1.25f else 1f)
+            cv.drawPath(path, pLine)
+        }
 
         // 5) detalhes dos cantos cortados
         if (hud) {
@@ -259,6 +296,9 @@ class Botao(
             cv.clipPath(path)
             pFill.shader = LinearGradient(0f, b.top.toFloat(), 0f, b.top + b.height() * 0.55f, Theme.alpha(Color.WHITE, 0x38), Theme.alpha(Color.WHITE, 0), Shader.TileMode.CLAMP)
             cv.drawRect(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.top + b.height() * 0.55f, pFill)
+            // e uma sombra leve na base: o botao ganha volume em vez de ser uma chapa
+            pFill.shader = LinearGradient(0f, b.top + b.height() * 0.5f, 0f, b.bottom.toFloat(), Theme.alpha(Color.BLACK, 0), Theme.alpha(Color.BLACK, 0x30), Shader.TileMode.CLAMP)
+            cv.drawRect(b.left.toFloat(), b.top + b.height() * 0.5f, b.right.toFloat(), b.bottom.toFloat(), pFill)
             pFill.shader = null
             cv.restore()
         }

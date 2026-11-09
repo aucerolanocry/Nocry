@@ -660,7 +660,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             b.addView(card)
             return
         }
-        b.addView(Ui.label(c, "salas abertas · ${ids.size}"))
+        b.addView(Ui.secao(c, "salas abertas · ${ids.size}"))
         val itens = ids.mapIndexedNotNull { i, id ->
             val s = Sniper.salas[id] ?: return@mapIndexedNotNull null
             salaTile(i, s, id == Sniper.salaAtiva)

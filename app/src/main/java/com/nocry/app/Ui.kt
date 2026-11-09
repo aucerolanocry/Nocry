@@ -150,6 +150,36 @@ object Ui {
         return t
     }
 
+    /**
+     * nome de um item de lista: fonte do texto corrido em negrito, sem caixa alta. A fonte de titulo fica
+     * so pros titulos de verdade (tela, secao, estado, botao) - lista inteira em caixa alta cansa e parece amador.
+     */
+    fun nome(c: Context, s: String, sp: Float = 13.5f, cor: Int = TEXT): TextView {
+        val t = text(c, s, sp, cor)
+        t.typeface = Theme.fonte(c, false, true)
+        t.setLineSpacing(0f, 1.15f)
+        return t
+    }
+
+    /** titulo de secao: marquinha no degrade do tema, o nome e uma linha fina que some pra direita */
+    fun secao(c: Context, s: String, direita: View? = null): View {
+        val r = hbox(c)
+        val m = View(c)
+        m.background = Botao(c, "grad", 1)
+        val mp = LinearLayout.LayoutParams(dp(c, 3), dp(c, 11))
+        mp.rightMargin = dp(c, 8)
+        r.addView(m, mp)
+        r.addView(label(c, s))
+        val linha = View(c)
+        linha.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+            intArrayOf(Theme.alpha(Color.WHITE, 0x38), Theme.alpha(Color.WHITE, 0)))
+        val lpx = LinearLayout.LayoutParams(0, maxOf(1, dp(c, 1)), 1f)
+        lpx.leftMargin = dp(c, 10)
+        r.addView(linha, lpx)
+        if (direita != null) r.addView(direita)
+        return r
+    }
+
     /** etiqueta com um iconezinho do lado, no mesmo padrao usado no Bypass e na Conexao */
     fun labelIcone(c: Context, iconRes: Int, s: String): View {
         val r = hbox(c)
@@ -192,7 +222,7 @@ object Ui {
     fun selo(c: Context, s: String, cor: Int = RED, cheio: Boolean = true): TextView {
         val t = text(c, s.uppercase(), 10f, if (cheio) cor else MUTED, true, mono = true)
         t.letterSpacing = 0.12f
-        t.background = shape(c, Theme.alpha(cor, if (cheio) 0x22 else 0x14), 8, Theme.alpha(cor, if (cheio) 0x99 else 0x55), 1)
+        t.background = shape(c, Theme.alpha(cor, if (cheio) 0x22 else 0x14), raioPeq(8), Theme.alpha(cor, if (cheio) 0x99 else 0x55), 1)
         t.setPadding(dp(c, 10), dp(c, 6), dp(c, 10), dp(c, 6))
         return t
     }
@@ -334,21 +364,21 @@ object Ui {
     /** igual ao item(), mas com a cor do valor da direita (ex.: verde = OK, amarelo = falta liberar) */
     fun itemEstado(c: Context, titulo: String, sub: String, ico: Int, valor: String?, valorCor: Int?, onClick: (() -> Unit)? = null): View {
         val r = hbox(c)
-        r.minimumHeight = dp(c, 52)
-        r.setPadding(0, dp(c, 10), 0, dp(c, 10))
+        r.minimumHeight = dp(c, 56)
+        r.setPadding(0, dp(c, 12), 0, dp(c, 12))
         if (ico != 0) {
             val ip = LinearLayout.LayoutParams(dp(c, 34), dp(c, 34))
             ip.rightMargin = dp(c, 12)
             r.addView(caixaIcone(c, ico, false, 34), ip)
         }
         val col = vbox(c)
-        col.addView(text(c, titulo, 13f, TEXT, true))
-        if (sub.isNotEmpty()) col.addView(text(c, sub, 10.5f, MUTED), lp(top = 2, c = c))
+        col.addView(nome(c, titulo))
+        if (sub.isNotEmpty()) col.addView(text(c, sub, 11f, MUTED), lp(top = 2, c = c))
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (valor != null) {
             val vc = valorCor ?: RED
             val v = text(c, valor, 11f, vc, true, mono = true)
-            v.background = shape(c, Theme.alpha(vc, 0x1A), 8)
+            v.background = shape(c, Theme.alpha(vc, 0x1C), raioPeq(8), Theme.alpha(vc, 0x40), 1)
             v.setPadding(dp(c, 10), dp(c, 5), dp(c, 10), dp(c, 5))
             v.maxLines = 1
             val vp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -368,16 +398,16 @@ object Ui {
     /** chave liga/desliga sem fundo proprio (vai dentro de grupo()) */
     fun itemChave(c: Context, titulo: String, sub: String, ligado: Boolean, ico: Int = 0, onChange: (Boolean) -> Unit): View {
         val r = hbox(c)
-        r.minimumHeight = dp(c, 52)
-        r.setPadding(0, dp(c, 10), 0, dp(c, 10))
+        r.minimumHeight = dp(c, 56)
+        r.setPadding(0, dp(c, 12), 0, dp(c, 12))
         if (ico != 0) {
             val ip = LinearLayout.LayoutParams(dp(c, 34), dp(c, 34))
             ip.rightMargin = dp(c, 12)
             r.addView(caixaIcone(c, ico, false, 34), ip)
         }
         val col = vbox(c)
-        col.addView(text(c, titulo, 13f, TEXT, true))
-        if (sub.isNotEmpty()) col.addView(text(c, sub, 10.5f, MUTED), lp(top = 2, c = c))
+        col.addView(nome(c, titulo))
+        if (sub.isNotEmpty()) col.addView(text(c, sub, 11f, MUTED), lp(top = 2, c = c))
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val ch = interruptor(c, ligado, onChange)
         val chp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -418,19 +448,19 @@ object Ui {
     /** grupo de itens: rotulo em cima e um cartao so, com os itens separados por linhas finas */
     fun grupo(c: Context, titulo: String?, itens: List<View>): View {
         val col = vbox(c)
-        if (titulo != null) col.addView(label(c, titulo))
+        if (titulo != null) col.addView(secao(c, titulo))
         val card = vbox(c)
         card.background = glass(c)
-        card.setPadding(dp(c, 16), dp(c, 2), dp(c, 16), dp(c, 2))
+        card.setPadding(dp(c, 16), dp(c, 3), dp(c, 16), dp(c, 3))
         for ((i, v) in itens.withIndex()) {
             if (i > 0) {
                 val d = View(c)
-                d.setBackgroundColor(Theme.alpha(Color.WHITE, 0x14))
+                d.setBackgroundColor(Theme.alpha(Color.WHITE, 0x12))
                 card.addView(d, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1))
             }
             card.addView(v)
         }
-        col.addView(card, lp(top = if (titulo != null) 8 else 0, c = c))
+        col.addView(card, lp(top = if (titulo != null) 10 else 0, c = c))
         return col
     }
 
@@ -594,14 +624,14 @@ object Ui {
             r.addView(ib, ip)
         }
         val col = vbox(c)
-        col.addView(text(c, titulo, 15f, TEXT, true))
+        col.addView(nome(c, titulo, 14.5f))
         if (sub.isNotEmpty()) {
-            val s = text(c, sub, 12f, MUTED)
+            val s = text(c, sub, 11.5f, MUTED)
             s.setPadding(0, dp(c, 2), 0, 0)
             col.addView(s)
         }
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val seta = icone(c, R.drawable.ic_chevron, RED, 20)
+        val seta = icone(c, R.drawable.ic_chevron, MUTED, 18)
         val sp = LinearLayout.LayoutParams(dp(c, 20), dp(c, 20))
         sp.leftMargin = dp(c, 8)
         r.addView(seta, sp)
@@ -751,31 +781,49 @@ object Ui {
 
     /** quadrado da tela inicial: icone, nome, descricao e um selo de estado no rodape */
     fun tile(c: Context, ico: Int, titulo: String, desc: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
+        val on = ligado == true
         val col = vbox(c)
-        col.background = ripple(c, glass(c, ligado = ligado == true), Painel(c, mascara = true))
+        col.background = ripple(c, glass(c, ligado = on), Painel(c, mascara = true))
         val p = dp(c, 14)
-        col.setPadding(p, p, p, dp(c, 12))
-        col.minimumHeight = dp(c, 134)
-        col.addView(caixaIcone(c, ico, ligado == true))
-        col.addView(text(c, titulo, 13.5f, TEXT, true), lp(top = 11, c = c))
+        col.setPadding(p, p, p, dp(c, 13))
+        col.minimumHeight = dp(c, 142)
+        // topo: icone na esquerda e a "luz" de estado na direita (acesa = modo ligado)
+        val topo = hbox(c)
+        topo.gravity = Gravity.TOP
+        topo.addView(caixaIcone(c, ico, on))
+        topo.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
+        val corLuz = if (on) OK else Theme.alpha(Color.WHITE, 0x40)
+        val led = FrameLayout(c)
+        if (on) {
+            val halo = View(c)
+            halo.background = shape(c, Theme.alpha(OK, 0x38), 8)
+            led.addView(halo, FrameLayout.LayoutParams(dp(c, 16), dp(c, 16), Gravity.CENTER))
+        }
+        val dot = View(c)
+        dot.background = shape(c, corLuz, 4)
+        led.addView(dot, FrameLayout.LayoutParams(dp(c, 7), dp(c, 7), Gravity.CENTER))
+        topo.addView(led, LinearLayout.LayoutParams(dp(c, 16), dp(c, 16)))
+        col.addView(topo)
+        col.addView(text(c, titulo, 13.5f, TEXT, true), lp(top = 12, c = c))
         if (desc.isNotEmpty()) {
-            val d = text(c, desc, 10.5f, MUTED)
+            val d = text(c, desc, 11f, MUTED)
             d.maxLines = 2
             col.addView(d, lp(top = 3, c = c))
         }
-        // espaco flexivel empurra o selo pro rodape - assim ele nunca fica em cima do icone
-        // ou do titulo, por mais longo que o texto do estado seja ou por mais estreito que o tile fique.
+        // espaco flexivel empurra o rodape pra baixo - assim ele nunca fica em cima do icone ou do titulo
         col.addView(View(c), LinearLayout.LayoutParams(1, 0, 1f))
-        val cor = if (ligado == true) RED else MUTED
-        val selo = text(c, estado, 9f, cor, true, mono = true)
-        selo.letterSpacing = if (Prefs.maiusc) 0.08f else 0.02f
-        selo.maxLines = 1
-        selo.ellipsize = android.text.TextUtils.TruncateAt.END
-        selo.background = shape(c, Theme.alpha(cor, if (ligado == true) 0x26 else 0x16), 7)
-        selo.setPadding(dp(c, 7), dp(c, 3), dp(c, 7), dp(c, 3))
-        val sp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        sp.topMargin = dp(c, 9)
-        col.addView(selo, sp)
+        // rodape: estado em texto e um trilho fino embaixo, que acende no degrade quando o modo esta ligado
+        val est = text(c, estado, 9.5f, if (on) OK else MUTED, true, mono = true)
+        est.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
+        est.maxLines = 1
+        est.ellipsize = android.text.TextUtils.TruncateAt.END
+        col.addView(est, lp(top = 10, c = c))
+        val trilho = FrameLayout(c)
+        trilho.background = shape(c, Theme.alpha(Color.WHITE, 0x16), 1)
+        val cheio = View(c)
+        cheio.background = if (on) Botao(c, "grad", 1) else shape(c, Theme.alpha(Color.WHITE, 0x38), 1)
+        trilho.addView(cheio, FrameLayout.LayoutParams(if (on) ViewGroup.LayoutParams.MATCH_PARENT else dp(c, 14), ViewGroup.LayoutParams.MATCH_PARENT))
+        col.addView(trilho, lp(h = dp(c, 2), top = 7, c = c))
         clique(col, onClick)
         return col
     }

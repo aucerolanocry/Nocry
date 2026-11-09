@@ -308,7 +308,8 @@ class MainActivity : Activity() {
         val r = LinearLayout(this)
         r.orientation = LinearLayout.HORIZONTAL
         r.gravity = Gravity.CENTER_VERTICAL
-        r.background = Painel(this, "vidro", true, false, 28)
+        // o canto da barra acompanha o tema: tema reto ganha uma doca reta, tema redondo continua pílula
+        r.background = Painel(this, "vidro", true, false, minOf(28, Prefs.raio + 12))
         r.elevation = Ui.dp(this, 10).toFloat()
         r.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7))
         for ((i, a) in abas.withIndex()) {
@@ -317,7 +318,7 @@ class MainActivity : Activity() {
             item.orientation = LinearLayout.HORIZONTAL
             item.gravity = Gravity.CENTER
             item.contentDescription = a.nome
-            if (on) item.background = Botao(this, "grad", 22)
+            if (on) item.background = Botao(this, "grad", minOf(22, Prefs.raio + 8))
             val cor = if (on) Theme.sobreGrad() else Ui.MUTED
             item.addView(Ui.icone(this, a.icone, cor, 21))
             if (on) {

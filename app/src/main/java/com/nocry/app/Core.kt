@@ -129,8 +129,8 @@ var bypassVolAtivo: Boolean
     get() = gb("bypass_vol_ativo")
     set(v) = pb("bypass_vol_ativo", v)
     var bypassCliques: Int
-    get() = gi("bypass_cliques", 3, 2, 10)
-    set(v) = pi("bypass_cliques", v.coerceIn(2, 10))
+    get() = sp.getInt("bypass_cliques", 3).coerceIn(2, 5) // quem tinha 6 a 10 salvo cai pra 5
+    set(v) = pi("bypass_cliques", v.coerceIn(2, 5))
 
     fun init(c: Context) {
         sp = c.applicationContext.getSharedPreferences("nocry", Context.MODE_PRIVATE)

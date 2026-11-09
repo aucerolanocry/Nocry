@@ -389,6 +389,11 @@ class BgView(c: Context) : FrameLayout(c) {
         topo.background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(0xB0000000.toInt(), 0x60000000, 0x00000000))
         addView(topo, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (170 * c.resources.displayMetrics.density).toInt(), android.view.Gravity.TOP))
+        // e embaixo (atrás da barra de abas): fecha a tela como uma vinheta e a barra ganha destaque
+        val base = View(c)
+        base.background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
+            intArrayOf(0xD0000000.toInt(), 0x70000000, 0x00000000))
+        addView(base, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (240 * c.resources.displayMetrics.density).toInt(), android.view.Gravity.BOTTOM))
         aplica()
     }
 

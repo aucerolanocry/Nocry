@@ -48,14 +48,14 @@ class BypassScreen(a: MainActivity) : Screen(a) {
 
         if (travado) add(Ui.dica(c, "Pra trocar o gatilho, o Free Fire ou o tipo, desative o bypass primeiro (e restaure, se estiver aplicado). Assim ele nunca restaura a pasta do jogo errado.", Ui.Dica.AVISO), 12)
 
-        add(Ui.label(c, "escolha o free fire"), 20)
+        add(Ui.secao(c, "escolha o free fire"), 20)
         add(Ui.segmento(c, listOf("NORMAL", "MAX"), if (Prefs.bypassFf == "normal") 0 else 1) { i ->
             if (travado) { Ui.toast(act, "DESATIVE O BYPASS PRA TROCAR"); return@segmento }
             Prefs.bypassFf = if (i == 0) "normal" else "max"
             redesenha()
         }, 8)
 
-        add(Ui.label(c, "escolha o tipo"), 18)
+        add(Ui.secao(c, "escolha o tipo"), 18)
         add(Ui.segmento(c, listOf("COMPLETO", "NORMAL", "SIMPLES"),
             when (Prefs.bypassTipo) { "completo" -> 0; "normal" -> 1; else -> 2 }) { i ->
             if (travado) { Ui.toast(act, "DESATIVE O BYPASS PRA TROCAR"); return@segmento }
@@ -67,8 +67,8 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         }
 
         if (Prefs.bypassGatilho == "volume") {
-            add(Ui.label(c, "cliques do volume (2 a 10)"), 18)
-            add(Ui.segmento(c, listOf("2x", "3x", "4x", "5x", "6x", "7x", "8x", "9x", "10x"),
+            add(Ui.secao(c, "cliques do volume (2 a 5)"), 18)
+            add(Ui.segmento(c, listOf("2x", "3x", "4x", "5x"),
                 Prefs.bypassCliques - 2) { i ->
                 Prefs.bypassCliques = i + 2
                 redesenha()
@@ -147,8 +147,8 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         ip.rightMargin = Ui.dp(c, 12)
         r.addView(Ui.caixaIcone(c, iconRes, sel, 36), ip)
         val col = Ui.vbox(c)
-        col.addView(Ui.text(c, nome, 13f, if (sel) Ui.RED else Ui.TEXT, true))
-        col.addView(Ui.text(c, desc, 10.5f, Ui.MUTED), Ui.lp(top = 2, c = c))
+        col.addView(Ui.nome(c, nome, 13.5f, if (sel) Ui.RED else Ui.TEXT))
+        col.addView(Ui.text(c, desc, 11f, Ui.MUTED), Ui.lp(top = 2, c = c))
         r.addView(col, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         // marcador redondo: aro sempre, miolo so no escolhido
         val marca = FrameLayout(c)

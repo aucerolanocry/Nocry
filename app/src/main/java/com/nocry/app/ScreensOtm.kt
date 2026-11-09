@@ -783,7 +783,7 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         add(card, 12)
 
         // ---------------- links ----------------
-        add(Ui.label(c, "links"), 22)
+        add(Ui.secao(c, "links"), 22)
         val link = "https://github.com/" + Const.REPO + "/releases/latest"
         add(Ui.row(c, "Compartilhar o app", "manda o link de download pra alguém", R.drawable.ic_globe) {
             val i = Intent(Intent.ACTION_SEND)

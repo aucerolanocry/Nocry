@@ -134,11 +134,10 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             hora < 18 -> "Boa tarde"
             else -> "Boa noite"
         }
-        val saudTxt = Ui.text(c, saud, 10.5f, Ui.MUTED, true, mono = true)
+        val saudTxt = Ui.text(c, "$saud,", 11f, Ui.MUTED, true, mono = true)
         saudTxt.letterSpacing = 0.16f
-        add(saudTxt, 22)
-        add(Ui.text(c, "Olá,", 26f, Ui.TEXT, true), 3)
-        add(Ui.gradTexto(c, if (nome.isNotEmpty()) nome else "bem-vindo", 34f), 0)
+        add(saudTxt, 24)
+        add(Ui.gradTexto(c, if (nome.isNotEmpty()) nome else "bem-vindo", 32f), 2)
 
         // ---------------- estado geral: anel + 3 passos ----------------
         val adb = Adb.connected
@@ -189,13 +188,10 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         }
 
         // ---------------- modos em quadrados ----------------
-        val cabModos = Ui.hbox(c)
-        cabModos.addView(Ui.label(c, "modos"), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val editar = Ui.text(c, "Editar ›", 10.5f, Ui.MUTED, true, mono = true)
         editar.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), 0, Ui.dp(c, 6))
         Ui.clique(editar) { act.abre(OrganizarScreen(act)) }
-        cabModos.addView(editar)
-        add(cabModos, 22)
+        add(Ui.secao(c, "modos", editar), 22)
 
         val lista = Atalhos.visiveis()
         if (lista.isEmpty()) {
@@ -211,7 +207,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             linha.addView(tile(c, lista[i]), l1)
             if (i + 1 < lista.size) linha.addView(tile(c, lista[i + 1]), l2)
             else linha.addView(View(c), l2)
-            add(linha, if (i == 0) 8 else 10)
+            add(linha, 10)
             i += 2
         }
 
@@ -326,7 +322,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         add(resumo, 12)
 
         // ---------------- linha do tempo ----------------
-        add(Ui.label(c, "passo a passo"), 22)
+        add(Ui.secao(c, "passo a passo"), 22)
         // 1 a 3 dependem da conexao: se o ADB conectou, a depuracao e o pareamento ja foram feitos
         val feito = booleanArrayOf(conectado, conectado, conectado, perm, acc, notif)
         val atual = feito.indexOfFirst { !it }
@@ -629,11 +625,11 @@ class CargaScreen(a: MainActivity) : Screen(a) {
                 }
             }, 16)
         } else {
-            add(Ui.label(c, "quando ligar o toque?"), 18)
+            add(Ui.secao(c, "quando ligar o toque?"), 18)
             add(Ui.segmento(c, listOf("tirou o carregador", "colocou o carregador"), if (gatilho == "tirou") 0 else 1) { i ->
                 gatilho = if (i == 0) "tirou" else "colocou"; redesenha()
             }, 8)
-            add(Ui.label(c, "quantas repetições?"), 16)
+            add(Ui.secao(c, "quantas repetições?"), 16)
             add(Ui.segmento(c, listOf("1 vez", "2 vezes", "3 vezes"), rep - 1) { i -> rep = i + 1; redesenha() }, 8)
             add(Ui.button(c, "ligar monitor") {
                 if (!Toque.podeMexer()) Ui.toast(act, "Sem permissão para mudar o toque (CONEXÃO)")
@@ -704,14 +700,14 @@ class McScreen(a: MainActivity) : Screen(a) {
                 }
             }, if (alterada) 10 else 16)
         } else {
-            add(Ui.label(c, "qual Free Fire abrir?"), 18)
+            add(Ui.secao(c, "qual Free Fire abrir?"), 18)
             add(Ui.segmento(c, listOf("FF MAX", "FF NORMAL"), if (ff == "max") 0 else 1) { i -> ff = if (i == 0) "max" else "normal"; redesenha() }, 8)
             add(Ui.grupo(c, "configuração", listOf(
                 Ui.item(c, "Density ao ligar o carregador", "toque para mudar (200 a 9999)", R.drawable.ic_sliders, dens.toString()) {
                     Ui.dialogNumero(act, "DENSITY", "200 a 9999", 200, 9999, dens) { v -> dens = v; redesenha() }
                 }
             )), 16)
-            add(Ui.label(c, "quantas vezes?"), 16)
+            add(Ui.secao(c, "quantas vezes?"), 16)
             add(Ui.segmento(c, listOf("1 vez", "2 vezes", "3 vezes"), rep - 1) { i -> rep = i + 1; redesenha() }, 8)
             add(Ui.button(c, "ligar monitor") {
                 if (!Adb.connected) Ui.toast(act, "Conecte o ADB primeiro (CONEXÃO)")
