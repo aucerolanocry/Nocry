@@ -84,7 +84,8 @@ class RingView(c: Context) : View(c) {
         val d = resources.displayMetrics.density
         val w = width.toFloat()
         val h = height.toFloat()
-        val esp = 9f * d
+        // a grossura acompanha o tamanho do anel (anel pequeno nao fica com traco gordo)
+        val esp = minOf(minOf(w, h) * 0.085f, 9f * d)
         val m = esp * 1.6f
         r.set(m, m, w - m, h - m)
         trilho.strokeWidth = esp
@@ -196,7 +197,7 @@ class Chave(c: Context, ligado: Boolean, private val aoMudar: (Boolean) -> Unit)
     var ligado = ligado
         private set
     private var t = if (ligado) 1f else 0f
-    private val d = resources.displayMetrics.density
+    private val d = resources.displayMetrics.density * Ui.fator(c)
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rr = RectF()
     private var anim: ValueAnimator? = null

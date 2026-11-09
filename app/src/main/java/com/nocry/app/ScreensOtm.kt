@@ -723,7 +723,7 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         val e = License.expira()
         val horas = (License.restaOffline() / 3600000L).coerceAtLeast(0)
         kc.addView(Ui.chips(c,
-            Ui.infoBox(c, R.drawable.ic_key, "validade", if (e == 0L) "Sem vencimento" else fmt.format(java.util.Date(e)), Ui.OK),
+            Ui.infoBox(c, R.drawable.ic_key, "validade", if (e == 0L) "Vitalícia" else fmt.format(java.util.Date(e)), Ui.OK),
             Ui.infoBox(c, R.drawable.ic_globe, "sem internet", if (horas >= 48) "${horas / 24} dias" else "$horas h", if (horas >= 12) Ui.OK else Ui.WARN)
         ), Ui.lp(top = 16, c = c))
         kc.addView(Ui.chips(c,

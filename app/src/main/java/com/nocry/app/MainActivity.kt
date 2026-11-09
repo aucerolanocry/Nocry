@@ -32,6 +32,8 @@ abstract class Screen(val act: MainActivity) {
         val sv = android.widget.ScrollView(act)
         sv.isVerticalScrollBarEnabled = false
         sv.overScrollMode = View.OVER_SCROLL_NEVER
+        sv.isVerticalFadingEdgeEnabled = true
+        sv.setFadingEdgeLength(Ui.dp(act, 26))
         rolagem = sv
         root = Ui.vbox(act)
         val p = Ui.dp(act, 16)
@@ -200,6 +202,8 @@ class MainActivity : Activity() {
     private fun abreInicial() {
         if (gate || pilha.isNotEmpty()) return
         if (License.valid()) {
+            // prévia (prints do CI): dá pra pedir uma fonte, pra conferir o app com o visual que o dono usa
+            if (BuildConfig.PREVIEW) intent?.getStringExtra("fonte")?.let { if (Packs.existe(it)) Prefs.fonte = it }
             abre(HomeScreen(this))
             if (BuildConfig.PREVIEW) { abrirPrevia(intent); return }
             avisoAtividade()

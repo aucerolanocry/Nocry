@@ -159,7 +159,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val info = Ui.vbox(c)
         info.addView(Ui.label(c, "status do sistema"))
         val titulo2 = when (ok) { 3 -> "Pronto"; 0 -> "Conecte"; else -> "Quase lá" }
-        info.addView(if (ok == 3) Ui.gradTexto(c, titulo2, 28f) else Ui.text(c, titulo2, 28f, Ui.TEXT, true), Ui.lp(top = 2, c = c))
+        info.addView((if (ok == 3) Ui.gradTexto(c, titulo2, 26f) else Ui.text(c, titulo2, 26f, Ui.TEXT, true)).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 2, c = c))
         val precisa = Prefs.precisaServico()
         info.addView(Ui.text(c, if (NocryService.rodando) "monitores rodando" else if (precisa) "monitores iniciando" else "nenhum monitor ligado", 10.5f, Ui.MUTED, mono = true), Ui.lp(top = 2, c = c))
         val ip = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -307,7 +307,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
             3 -> "Falta 1 passo"
             else -> "Faltam ${4 - feitos} passos"
         }
-        info.addView(if (feitos == 4) Ui.gradTexto(c, tit, 20f) else Ui.text(c, tit, 20f, Ui.TEXT, true), Ui.lp(top = 3, c = c))
+        info.addView((if (feitos == 4) Ui.gradTexto(c, tit, 20f) else Ui.text(c, tit, 20f, Ui.TEXT, true)).also { Ui.umaLinha(it, 12) }, Ui.lp(top = 3, c = c))
         info.addView(Ui.text(c, if (feitos == 4) "O NOCRY já funciona sozinho." else "Comece pelo passo destacado.", 10.5f, Ui.MUTED), Ui.lp(top = 2, c = c))
         val ip = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         ip.leftMargin = Ui.dp(c, 14)
@@ -331,13 +331,26 @@ class SetupScreen(a: MainActivity) : Screen(a) {
             val estado = if (feito[i]) 0 else if (i == atual) 1 else 2
             // o passo 4 so funciona com o ADB conectado: enquanto nao conecta, fica recolhido como "depois"
             val bloqueado = i == 3 && !conectado
-            val aberto = if (feito[i] || bloqueado) reaberto.contains(i + 1) else true
-            val toque: (() -> Unit)? = if (feito[i] || bloqueado) {
+            // os passos 5 e 6 so abrem sozinhos quando chega a vez deles: antes disso ficam recolhidos
+            // (toque abre), senao a tela vira uma lista enorme com tudo aberto ao mesmo tempo
+            val espera = i >= 4 && i != atual
+            val aberto = if (feito[i] || bloqueado || espera) reaberto.contains(i + 1) else true
+            val toque: (() -> Unit)? = if (feito[i] || bloqueado || espera) {
                 { if (!reaberto.remove(i + 1)) reaberto.add(i + 1); redesenha() }
             } else null
             val conteudo = if (aberto) conteudoPasso(c, i, conectado, perm, acc, notif, estado == 1) else null
             add(Ui.passo(c, i + 1, nomes[i], estado, conteudo, i == 5, toque), if (i == 0) 12 else 0)
         }
+    }
+
+    /** o erro cru do ADB (em ingles) vira uma frase que a pessoa entende e sabe o que fazer */
+    private fun motivoAdb(e: String): String = when {
+        e.contains("Timed out", true) || e.contains("valid host", true) || e.contains("timeout", true) ->
+            "O celular não respondeu. Confira se a Depuração sem fio está ligada e se você está no Wi-Fi."
+        e.contains("refused", true) -> "O Android recusou a conexão. Desligue e ligue a Depuração sem fio e tente de novo."
+        e.contains("parear", true) -> "Precisa parear primeiro (passo 2)."
+        e.contains("codigo", true) || e.contains("porta", true) -> "Código ou porta errados. Confira na tela de pareamento e digite de novo."
+        else -> "Não conectou: $e"
     }
 
     /** o que aparece dentro de cada passo aberto; destaque = e o proximo passo a fazer (botao principal em degrade) */
@@ -402,7 +415,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
             }
             2 -> {
                 v.addView(Ui.status(c, "ADB", if (conectado) "CONECTADO" else "DESCONECTADO", conectado))
-                if (!conectado && Adb.lastError.isNotEmpty()) v.addView(Ui.dica(c, "Motivo: " + Adb.lastError, Ui.Dica.AVISO), Ui.lp(top = 8, c = c))
+                if (!conectado && Adb.lastError.isNotEmpty()) v.addView(Ui.dica(c, motivoAdb(Adb.lastError), Ui.Dica.AVISO), Ui.lp(top = 8, c = c))
                 v.addView(Ui.button(c, if (conectado) "reconectar" else "conectar agora", if (conectado) Ui.Kind.GHOST else forte) {
                     if (!ocupado) roda("Conectando...") {
                         Adb.disconnect()

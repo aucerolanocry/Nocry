@@ -254,7 +254,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val ponto = View(c)
         ponto.background = Ui.shape(c, corPonto, 5)
         linha.addView(ponto, LinearLayout.LayoutParams(Ui.dp(c, 9), Ui.dp(c, 9)).also { it.rightMargin = Ui.dp(c, 9) })
-        linha.addView(Ui.text(c, estado, 21f, if (Sniper.buscando) Ui.OK else Ui.TEXT, true))
+        linha.addView(Ui.text(c, estado, 21f, if (Sniper.buscando) Ui.OK else Ui.TEXT, true).also { Ui.umaLinha(it, 12) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         col.addView(linha, Ui.lp(top = 3, c = c))
         val sub = Ui.text(c, subTopo(), 10.5f, Ui.MUTED)
         tempoTxt = sub

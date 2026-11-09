@@ -43,7 +43,30 @@ object Ui {
 
     enum class Kind { PRIMARY, DANGER, GHOST }
 
-    fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density + 0.5f).toInt()
+    private var fatorTela = 0f
+
+    /**
+     * telas estreitas (aparelho pequeno ou "tamanho da tela" do Android aumentado) encolhem medidas e textos juntos,
+     * pra tudo caber como numa tela normal em vez de quebrar linha e cortar. Tela normal ou larga = 1 (nao muda nada).
+     */
+    fun fator(c: Context): Float {
+        if (fatorTela == 0f) {
+            val dm = c.resources.displayMetrics
+            val larguraDp = minOf(dm.widthPixels, dm.heightPixels) / dm.density
+            fatorTela = (larguraDp / 384f).coerceIn(0.8f, 1f)
+        }
+        return fatorTela
+    }
+
+    fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density * fator(c) + 0.5f).toInt()
+
+    /** o texto encolhe ate caber em uma linha so (titulos grandes dos cartoes, que nao podem quebrar) */
+    fun umaLinha(t: TextView, minSp: Int = 10) {
+        t.maxLines = 1
+        t.ellipsize = android.text.TextUtils.TruncateAt.END
+        val max = (t.textSize / t.resources.displayMetrics.scaledDensity).toInt()
+        if (max > minSp) t.setAutoSizeTextTypeUniformWithConfiguration(minSp, max, 1, TypedValue.COMPLEX_UNIT_SP)
+    }
 
     private val hud: Boolean get() = Prefs.cartao == "hud"
 
@@ -81,7 +104,7 @@ object Ui {
     fun text(c: Context, s: String, sp: Float = 14f, color: Int = TEXT, bold: Boolean = false, mono: Boolean = false, code: Boolean = false): TextView {
         val t = TextView(c)
         t.text = s
-        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp * Theme.escalaTexto() * (if (code) 0.95f else 1f))
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp * Theme.escalaTexto() * fator(c) * (if (code) 0.95f else 1f))
         t.setTextColor(color)
         val display = bold || mono
         // texto corrido (explicacoes) ganha mais entrelinha: em paragrafo, linha colada cansa a leitura
@@ -143,8 +166,10 @@ object Ui {
     fun raioPeq(max: Int): Int = minOf(max, Prefs.raio + 3)
 
     fun label(c: Context, s: String): TextView {
-        val t = text(c, s, 11f, RED, true, mono = true)
-        t.letterSpacing = if (Prefs.maiusc) 0.2f else 0.06f
+        val t = text(c, s, 10.5f, RED, true, mono = true)
+        t.letterSpacing = if (Prefs.maiusc) 0.14f else 0.06f
+        t.maxLines = 1
+        t.ellipsize = android.text.TextUtils.TruncateAt.END
         // sombra leve: a etiqueta fica fora do cartão, direto em cima do fundo
         t.setShadowLayer(dp(c, 4).toFloat(), 0f, dp(c, 1).toFloat(), Theme.alpha(Color.BLACK, 0xE0))
         return t
@@ -303,8 +328,7 @@ object Ui {
         topo.addView(r, rp)
         col.addView(topo)
         val v = text(c, valor, 12f, cor, true)
-        v.maxLines = 1
-        v.ellipsize = android.text.TextUtils.TruncateAt.END
+        umaLinha(v, 8)
         col.addView(v, lp(top = 7, c = c))
         return col
     }
@@ -327,7 +351,9 @@ object Ui {
         val dlp = LinearLayout.LayoutParams(dp(c, 9), dp(c, 9))
         dlp.rightMargin = dp(c, 9)
         linha.addView(dot, dlp)
-        linha.addView(text(c, estado, 21f, if (ligado == true) OK else TEXT, true))
+        val est = text(c, estado, 21f, if (ligado == true) OK else TEXT, true)
+        umaLinha(est, 12)
+        linha.addView(est, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         col.addView(linha, lp(top = 3, c = c))
         if (sub.isNotEmpty()) col.addView(text(c, sub, 10.5f, MUTED), lp(top = 3, c = c))
         val cp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -373,13 +399,13 @@ object Ui {
         }
         val col = vbox(c)
         col.addView(nome(c, titulo))
-        if (sub.isNotEmpty()) col.addView(text(c, sub, 11f, MUTED), lp(top = 2, c = c))
+        if (sub.isNotEmpty()) col.addView(text(c, sub, 11f, MUTED).also { it.setLineSpacing(0f, 1.18f) }, lp(top = 2, c = c))
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (valor != null) {
             val vc = valorCor ?: RED
-            val v = text(c, valor, 11f, vc, true, mono = true)
+            val v = text(c, valor, 10f, vc, true, mono = true)
             v.background = shape(c, Theme.alpha(vc, 0x1C), raioPeq(8), Theme.alpha(vc, 0x40), 1)
-            v.setPadding(dp(c, 10), dp(c, 5), dp(c, 10), dp(c, 5))
+            v.setPadding(dp(c, 8), dp(c, 4), dp(c, 8), dp(c, 4))
             v.maxLines = 1
             val vp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             vp.leftMargin = dp(c, 8)
@@ -407,7 +433,7 @@ object Ui {
         }
         val col = vbox(c)
         col.addView(nome(c, titulo))
-        if (sub.isNotEmpty()) col.addView(text(c, sub, 11f, MUTED), lp(top = 2, c = c))
+        if (sub.isNotEmpty()) col.addView(text(c, sub, 11f, MUTED).also { it.setLineSpacing(0f, 1.18f) }, lp(top = 2, c = c))
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val ch = interruptor(c, ligado, onChange)
         val chp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -598,8 +624,9 @@ object Ui {
         val l = hbox(c)
         l.gravity = Gravity.CENTER
         if (ico != 0) l.addView(icone(c, ico, corTxt, 18))
-        val t = text(c, label.uppercase(), 13f, corTxt, true, mono = true)
-        t.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
+        val t = text(c, label.uppercase(), if (label.length > 24) 11f else if (label.length > 17) 12f else 13f, corTxt, true, mono = true)
+        t.letterSpacing = if (Prefs.maiusc) (if (label.length > 17) 0.05f else 0.09f) else 0.02f
+        t.maxLines = 2
         t.gravity = Gravity.CENTER
         val tp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         if (ico != 0) tp.leftMargin = dp(c, 8)
@@ -791,7 +818,7 @@ object Ui {
         col.background = ripple(c, glass(c, ligado = on), Painel(c, mascara = true))
         val p = dp(c, 14)
         col.setPadding(p, p, p, dp(c, 13))
-        col.minimumHeight = dp(c, 142)
+        col.minimumHeight = dp(c, 132)
         // topo: icone na esquerda e a "luz" de estado na direita (acesa = modo ligado)
         val topo = hbox(c)
         topo.gravity = Gravity.TOP
@@ -809,9 +836,11 @@ object Ui {
         led.addView(dot, FrameLayout.LayoutParams(dp(c, 7), dp(c, 7), Gravity.CENTER))
         topo.addView(led, LinearLayout.LayoutParams(dp(c, 16), dp(c, 16)))
         col.addView(topo)
-        col.addView(text(c, titulo, 13.5f, TEXT, true), lp(top = 12, c = c))
+        col.addView(text(c, titulo, 13f, TEXT, true).also { it.maxLines = 2; it.ellipsize = android.text.TextUtils.TruncateAt.END }, lp(top = 11, c = c))
         if (desc.isNotEmpty()) {
-            val d = text(c, desc, 11f, MUTED)
+            val d = text(c, desc, 10.5f, MUTED)
+            d.setLineSpacing(0f, 1.15f)
+            d.ellipsize = android.text.TextUtils.TruncateAt.END
             d.maxLines = 2
             col.addView(d, lp(top = 3, c = c))
         }

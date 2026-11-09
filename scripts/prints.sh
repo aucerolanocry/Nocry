@@ -20,11 +20,12 @@ adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null || tru
 W=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); LARG=${W%x*}; ALT=${W#*x}
 X=$((LARG/2)); Y1=$((ALT*78/100)); Y2=$((ALT*28/100))
 
+FONTE=bigs   # a fonte que o dono usa (condensada): o caso mais apertado
 shot() { # nome tela [aba] [demo]
   local nome=$1 tela=$2 aba=${3:-0} demo=${4:-false}
   adb shell am force-stop $PKG
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
-  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" >/dev/null
   sleep 7
   adb exec-out screencap -p > "$OUT/cru/${nome}_1.png"
   for i in 2 3 4 5; do
@@ -38,6 +39,9 @@ shot() { # nome tela [aba] [demo]
   echo "ok $nome"
 }
 
+# 1ª passada: tela ESTREITA (320dp de largura, como celular pequeno ou com "tamanho da tela" aumentado)
+adb shell wm density 540
+sleep 3
 shot 01_inicio home
 shot 02_conexao conexao
 shot 03_bypass bypass
@@ -60,5 +64,12 @@ shot 19_bot_partidas bot 0 true
 shot 20_bot_busca bot 1 true
 shot 21_bot_conta bot 2 true
 shot 22_bot_vazio bot 0 false
+# 2ª passada: tela LARGA (411dp), só as principais, pra conferir que nada ficou pequeno demais
+adb shell wm density reset
+sleep 3
+shot 31_largo_inicio home
+shot 32_largo_conexao conexao
+shot 33_largo_bypass bypass
+shot 34_largo_bot bot 2 true
 rm -rf "$OUT/cru"
 ls -la "$OUT"
