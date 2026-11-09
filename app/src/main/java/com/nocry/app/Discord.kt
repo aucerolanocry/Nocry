@@ -430,7 +430,7 @@ class Discord(private val token: String, private val vendorId: String, private v
         ws = http.newWebSocket(req, object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 if (webSocket !== ws) return
-                try { trata(webSocket, JSONObject(text), retomar) } catch (t: Throwable) { NLog.add("sniper", "gateway: $t") }
+                try { trata(webSocket, JSONObject(text), retomar) } catch (t: Throwable) { NLog.add("bot de fila", "gateway: $t") }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {

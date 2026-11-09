@@ -185,7 +185,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                 Sniper.ligado() -> Sniper.estado
                 else -> "filas de aposta do Discord · desligado"
             }
-            add(Ui.row(c, "Sniper", sub, R.drawable.ic_crown) { act.abre(SniperScreen(act)) }, 12)
+            add(Ui.row(c, "Bot de fila", sub, R.drawable.ic_crown) { act.abre(SniperScreen(act)) }, 12)
         }
 
         // ---------------- modos em quadrados ----------------

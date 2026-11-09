@@ -380,7 +380,7 @@ object Sniper {
 
     /** volta o backup (junta com o que já tem). null = deu certo, senão o motivo */
     fun importarDados(o: JSONObject, sozinho: Boolean = false): String? {
-        if (o.s("app") != "nocry-sniper") return "esse arquivo não é backup do Sniper"
+        if (o.s("app") != "nocry-sniper") return "esse arquivo não é backup do bot de fila"
         val ed = sp.edit()
         for (k in CHAVES_BACKUP) {
             val novo = o.optJSONObject(k) ?: continue
@@ -647,7 +647,7 @@ object Sniper {
 
     private fun cabecalhoSessao() {
         gravar("==================================================================")
-        gravar("[sessao] SNIPER ligado · app ${BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE} (${android.os.Build.VERSION.SDK_INT}) · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+        gravar("[sessao] BOT DE FILA ligado · app ${BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE} (${android.os.Build.VERSION.SDK_INT}) · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
         gravar("[sessao] alvo: $org · modos ${modos.sorted().joinToString(" ")} · valores ${textoValores(valores)} · gelo $gelo")
         gravar("[sessao] ajustes: limite ${if (maxFilas >= 300) "sem limite" else maxFilas} · responder em ${tempoResposta / 1000}s · sair ao abrir $sairAoAbrir · buscar ao ligar $buscarAoLigar")
         gravar("[sessao] aprendidos: ${sp.getString("aprendidos", "{}")}")
@@ -747,7 +747,7 @@ object Sniper {
 
     // ======================================================================== ligar / desligar
     fun ligar(): Boolean {
-        if (!License.isOwner()) { log("erro", "o sniper é só pra key de dono"); return false }
+        if (!License.isOwner()) { log("erro", "o bot de fila é só pra key de dono"); return false }
         if (dc != null) return true
         val tk = Cofre.le(app)
         if (tk.isNullOrBlank()) { log("erro", "cole o token da conta primeiro"); return false }
@@ -2197,7 +2197,7 @@ object Sniper {
 
     fun resumo(): String = when {
         !ligado() -> ""
-        buscando -> "SNIPER buscando · ${filasEntradas.size} filas · ${salas.size} salas"
-        else -> "SNIPER ${estado.uppercase()}"
+        buscando -> "BOT DE FILA buscando · ${filasEntradas.size} filas · ${salas.size} salas"
+        else -> "BOT DE FILA ${estado.uppercase()}"
     }
 }

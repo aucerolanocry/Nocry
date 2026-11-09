@@ -446,12 +446,18 @@ object Ui {
         val ico = when (tipo) { Dica.INFO -> R.drawable.ic_info; Dica.AVISO -> R.drawable.ic_warn; Dica.OK -> R.drawable.ic_check }
         val r = hbox(c)
         r.gravity = Gravity.TOP
-        r.background = shape(c, Theme.alpha(cor, 0x18), 12, Theme.alpha(cor, 0x4D), 1)
-        r.setPadding(dp(c, 11), dp(c, 10), dp(c, 12), dp(c, 10))
-        val ip = LinearLayout.LayoutParams(dp(c, 15), dp(c, 15))
-        ip.rightMargin = dp(c, 9)
-        r.addView(icone(c, ico, cor, 15), ip)
-        r.addView(text(c, s, 10.5f, Theme.mix(TEXT, cor, 0.18f)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        r.background = shape(c, Theme.alpha(cor, 0x16), 14, Theme.alpha(cor, 0x42), 1)
+        r.setPadding(dp(c, 12), dp(c, 11), dp(c, 13), dp(c, 11))
+        // ícone numa bolinha da mesma cor (fica com cara de balão de aviso, não de texto solto)
+        val bola = FrameLayout(c)
+        bola.background = shape(c, Theme.alpha(cor, 0x28), 11)
+        bola.addView(icone(c, ico, cor, 13), FrameLayout.LayoutParams(dp(c, 13), dp(c, 13), Gravity.CENTER))
+        val ip = LinearLayout.LayoutParams(dp(c, 22), dp(c, 22))
+        ip.rightMargin = dp(c, 10)
+        r.addView(bola, ip)
+        val t = text(c, s, 11f, Theme.mix(TEXT, cor, 0.15f))
+        t.setPadding(0, dp(c, 2), 0, 0)
+        r.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         return r
     }
 
