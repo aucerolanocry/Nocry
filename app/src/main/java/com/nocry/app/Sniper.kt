@@ -945,6 +945,13 @@ object Sniper {
                 canais[c.id] = c
                 if (c.ehTexto && c.guildId != null) canaisPorGuilda[c.guildId]?.let { l -> if (c.id !in l) canaisPorGuilda[c.guildId] = l + c.id }
                 if ((t == "CHANNEL_CREATE" || t.startsWith("THREAD")) && ehMinhaSala(c)) abrirSala(c)
+                // a org arquivou/trancou a thread da sala = fechou a partida
+                if (t == "THREAD_UPDATE" && salas.containsKey(c.id)) {
+                    val md = d.optJSONObject("thread_metadata")
+                    if (md?.optBoolean("archived", false) == true || md?.optBoolean("locked", false) == true) {
+                        salaEncerrada(c.id, "a org fechou a sala")
+                    }
+                }
             }
             "CHANNEL_DELETE", "THREAD_DELETE" -> {
                 val id = d.s("id") ?: return
@@ -1058,6 +1065,14 @@ object Sniper {
     private fun salaEncerrada(id: String, motivo: String) {
         val s = salas[id] ?: return
         if (s.encerrada) return
+        if (!s.protegida) {
+            // cancelada/fechada: sai do painel na hora
+            log("info", "sala ${numeroSala(id)} (${s.org}): $motivo · saiu do painel")
+            liberarFilasDa(s.org)
+            fecharSala(id)
+            return
+        }
+        // aposta confirmada fica no painel (só pra ver), até você tirar
         s.encerrada = true
         s.somenteLeitura = true
         s.ultima = agora()
@@ -1373,7 +1388,8 @@ object Sniper {
         // a org avisou que a partida foi cancelada / expirou (só vale depois que a sala já está aberta um tempo)
         val tudo = semAcento((txt + " " + m.embeds.joinToString(" ") { it.descricao }).lowercase())
         if (m.autorBot && !s.protegida && agora() - s.aberta > 15_000 && CANCELADA.any { it.containsMatchIn(tudo) }) {
-            log("info", "sala ${numeroSala(s.id)} (${s.org}): a org avisou que a partida foi cancelada/expirou")
+            salaEncerrada(s.id, "a org cancelou a partida")
+            return
         }
         if (!s.apostaOk && PALAVRAS_APOSTA.any { it in txt }) {
             s.apostaOk = true
@@ -1418,6 +1434,7 @@ object Sniper {
                 s.ultimoPoll = t
                 val (ms, r) = d.historico(s.id, 50, s.ultimoId, s.guildId)
                 if (r.codigo == 404 || r.erro() == 10003) { fecharSala(s.id); continue }
+                if (r.codigo == 403 && r.erro() == 50001) { salaEncerrada(s.id, "você não está mais nessa sala"); continue }
                 for (m in ms.sortedBy { it.id.toLongOrNull() ?: 0L }) aoMsg(m, false)
             }
         }
