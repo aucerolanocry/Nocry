@@ -36,6 +36,9 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     override val titulo = "BOT DE FILA"
 
     private var abaAtual = 0
+
+    /** abre direto numa aba (0 partidas, 1 busca, 2 conta) */
+    fun irPraAba(i: Int) { abaAtual = i.coerceIn(0, 2) }
     private var geracao = 0
 
     /** pedaço que se refaz sozinho quando a "assinatura" (o que ele mostra) muda */

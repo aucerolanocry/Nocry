@@ -8,6 +8,10 @@ val appVersionName = (System.getenv("NOCRY_VERSION")?.trim()?.takeIf { it.isNotE
 val appVersionCode = System.getenv("NOCRY_VERSION_CODE")?.trim()?.toIntOrNull() ?: 10301
 
 // endereco do servidor das Keys (Cloudflare Worker). Nao e segredo: so diz onde o app confere a key.
+// build de PREVIA (so pra tirar print das telas no emulador do CI): pula a key e abre uma tela direto.
+// Nunca e publicada: so o workflow prints.yml liga isso.
+val preview = System.getenv("NOCRY_PREVIEW") == "1"
+
 val apiUrl = (System.getenv("NOCRY_API")?.trim()?.takeIf { it.isNotEmpty() } ?: "https://nocry.osreaisnocry.workers.dev").trimEnd('/')
 
 android {
@@ -21,7 +25,8 @@ android {
         versionCode = appVersionCode
         versionName = appVersionName
 
-        ndk { abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a")) }
+        ndk { abiFilters.addAll(if (preview) listOf("arm64-v8a", "armeabi-v7a", "x86_64") else listOf("arm64-v8a", "armeabi-v7a")) }
+        buildConfigField("boolean", "PREVIEW", preview.toString())
         buildConfigField("String", "API_URL", "\"" + apiUrl + "\"")
         
         // 👇 ADICIONADO AQUI: Puxa o token do repositório privado do GitHub Secrets

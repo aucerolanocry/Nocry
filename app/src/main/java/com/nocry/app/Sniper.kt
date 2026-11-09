@@ -810,7 +810,54 @@ object Sniper {
         try { NocryService.sync(app) } catch (_: Throwable) {}
     }
 
-    fun ligado(): Boolean = dc != null
+    fun ligado(): Boolean = dc != null || modoDemo
+
+    // ---------------- só na build de prévia (prints do CI): dados de mentira pra ver a tela cheia ----------------
+    @Volatile private var modoDemo = false
+
+    fun demo() {
+        if (!BuildConfig.PREVIEW) return
+        modoDemo = true
+        try { Cofre.guarda(app, "token-de-previa-nao-conecta") } catch (_: Throwable) {}
+        estado = "online"
+        conectado = true
+        nomeConta = "conta_teste"
+        buscando = true
+        inicioBusca = agora() - 192_000
+        apostas = 1
+        for (o in orgs.keys.take(5)) statusOrg[o] = "✓ em 3 filas" to "ok"
+        orgs.keys.drop(5).take(2).forEach { statusOrg[it] = "limite da org: espera 45s" to "pausa" }
+        orgs.keys.drop(7).take(1).forEach { statusOrg[it] = "✗ a org não respondeu" to "erro" }
+        for ((o, f) in orgs.entries.take(3)) f.filas.values.firstOrNull()?.values?.take(2)?.forEach { filasEntradas.add(it) }
+        fun sala(id: String, nome: String, org: String, idade: Long): SSala {
+            val s = SSala(id, nome, org, null, true)
+            salas[id] = s
+            ordem.add(id)
+            return s
+        }
+        val h = hora(agora())
+        val a = sala("9000000000000000001", "aguardando-4908657", "WHALE", 0)
+        a.respondida = true
+        a.naoLidas = 0
+        a.pessoas["111111111111111111"] = SPessoa("111111111111111111", "Kauã", "jogador")
+        a.pessoas["222222222222222222"] = SPessoa("222222222222222222", "Mediador Leo", "adm")
+        synchronized(a.chat) {
+            a.chat.add(SChat("1", h, "bot", "WHALE APOSTAS", "", card = "3x3 Mobile · R$ 2,00\nJogadores: @VOCÊ vs @Kauã\nConfirmem em até 60 segundos.",
+                botoes = listOf("CONFIRMAR", "CANCELAR")))
+            a.chat.add(SChat("2", h, "voce", "você", "FULL UMP E XM8 SEM MOBILADOR E SEM BUG DE KIT"))
+            a.chat.add(SChat("3", h, "pessoa", "Kauã", "on? bora, sem jota"))
+            a.chat.add(SChat("4", h, "bot", "Mediador Leo", "Chave pix: leo.mediador@gmail.com\nID da sala: 482913577 senha: 4321"))
+        }
+        val b = sala("9000000000000000002", "partida-0754", "MOREIRA", 0)
+        b.naoLidas = 2
+        val c = sala("9000000000000000003", "Aguardando 646", "MORRO", 0)
+        c.apostaOk = true
+        salaAtiva = a.id
+        log("ok", "entrou na fila WHALE 3X3 R$ 2")
+        log("info", "sala 1 aberta (WHALE)")
+        log("erro", "SHARK: a org não respondeu ao clique (não entrou)")
+        mudou()
+    }
 
     fun salvarToken(t: String) {
         val limpo = t.trim().removePrefix("\"").removeSuffix("\"")

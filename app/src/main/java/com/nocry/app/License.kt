@@ -110,11 +110,11 @@ object License {
     }
 
     /** "owner" (dono), "staff" ou "user"; vazio = sem key */
-    fun role(): String = if (valid()) (campo(3) ?: "") else ""
+    fun role(): String = if (BuildConfig.PREVIEW) "owner" else if (valid()) (campo(3) ?: "") else ""
     fun isOwner(): Boolean = role() == "owner"
     fun isStaff(): Boolean = role() == "staff"
     fun isAdmin(): Boolean = role() == "owner" || role() == "staff"
-    fun label(): String = Prefs.licLabel
+    fun label(): String = if (BuildConfig.PREVIEW) "Prévia" else Prefs.licLabel
     fun roleNome(): String = when (role()) { "owner" -> "DONO"; "staff" -> "STAFF"; "user" -> "USUÁRIO"; else -> "" }
 
     /** vencimento em ms (0 = sem vencimento) */
@@ -123,6 +123,7 @@ object License {
 
     /** a key atual vale agora? (confere assinatura, aparelho, vencimento, prazo sem internet e relogio) */
     fun valid(): Boolean {
+        if (BuildConfig.PREVIEW) return true
         val p = Prefs.licP ?: return false
         val sig = Prefs.licSig ?: return false
         if (cacheSig != sig) {

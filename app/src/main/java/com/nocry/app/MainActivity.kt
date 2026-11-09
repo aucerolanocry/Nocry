@@ -179,16 +179,16 @@ class MainActivity : Activity() {
         License.saiu = { mostraGate() }
         montaChrome()
         UpdateJob.agenda(applicationContext)
-        val updJaConhecida = Update.pendente(applicationContext)
+        val updJaConhecida = if (BuildConfig.PREVIEW) null else Update.pendente(applicationContext)
         // intro de abertura: so quando o app abre do zero (nunca ao recriar a tela) e nunca no lugar do
         // bloqueio de atualizacao. A key (ou o inicio) so aparece DEPOIS que a intro termina.
-        val comIntro = savedInstanceState == null && updJaConhecida == null && Intro.deveTocar(this)
+        val comIntro = !BuildConfig.PREVIEW && savedInstanceState == null && updJaConhecida == null && Intro.deveTocar(this)
         if (updJaConhecida != null) mostraUpdateGate(updJaConhecida)
         else if (comIntro) tocaIntro { abreInicial() }
         else abreInicial()
 
         // confere no github agora mesmo se saiu versao nova
-        Bg.io {
+        if (!BuildConfig.PREVIEW) Bg.io {
             Update.atualizarCache(applicationContext, forcar = true)
             val i = Update.pendente(applicationContext)
             if (i != null) Bg.ui { mostraUpdateGate(i) }
@@ -199,7 +199,9 @@ class MainActivity : Activity() {
     private fun abreInicial() {
         if (gate || pilha.isNotEmpty()) return
         if (License.valid()) {
-            abre(HomeScreen(this)); avisoAtividade()
+            abre(HomeScreen(this))
+            if (BuildConfig.PREVIEW) { abrirPrevia(intent); return }
+            avisoAtividade()
             if (intent?.getStringExtra("abrir") == "sniper" && License.isOwner()) abre(SniperScreen(this))
         } else mostraGate()
     }
@@ -358,6 +360,34 @@ class MainActivity : Activity() {
     }
 
     /** tocou na notificação do SNIPER com o app já aberto: vai pra tela dele */
+    /** só na build de prévia (prints do CI): abre a tela pedida em "tela" e, no bot, a aba em "aba" */
+    private fun abrirPrevia(i: android.content.Intent?) {
+        if (!BuildConfig.PREVIEW || i == null) return
+        if (i.getBooleanExtra("demo", false)) Sniper.demo()
+        val t: Screen = when (i.getStringExtra("tela") ?: "") {
+            "conexao" -> SetupScreen(this)
+            "comp" -> CompScreen(this)
+            "vol" -> VolScreen(this)
+            "carga" -> CargaScreen(this)
+            "mc" -> McScreen(this)
+            "ajustes" -> AjustesScreen(this)
+            "testar" -> TestarScreen(this)
+            "otm" -> OtmScreen(this)
+            "otmver" -> OtmVerScreen(this)
+            "otmproteger" -> OtmProtegerScreen(this)
+            "otmmais" -> OtmMaisScreen(this)
+            "log" -> LogScreen(this)
+            "sobre" -> SobreScreen(this)
+            "recursos" -> RecursosScreen(this)
+            "bypass" -> BypassScreen(this)
+            "estudio" -> EstudioScreen(this)
+            "organizar" -> OrganizarScreen(this)
+            "bot" -> SniperScreen(this).also { it.irPraAba(i.getIntExtra("aba", 0)) }
+            else -> return
+        }
+        abre(t)
+    }
+
     override fun onNewIntent(i: android.content.Intent) {
         super.onNewIntent(i)
         if (i.getStringExtra("abrir") == "sniper" && License.isOwner() && !gate && pilha.lastOrNull() !is SniperScreen) {
