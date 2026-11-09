@@ -295,8 +295,7 @@ object Ui {
         col.addView(n)
         val v = text(c, valor, 11.5f, cor, true, mono = true)
         v.gravity = Gravity.CENTER
-        v.maxLines = 1
-        v.ellipsize = android.text.TextUtils.TruncateAt.END
+        umaLinha(v, 8)
         col.addView(v, lp(top = 2, c = c))
         col.setPadding(dp(c, 6), dp(c, 11), dp(c, 6), dp(c, 11))
         return col
