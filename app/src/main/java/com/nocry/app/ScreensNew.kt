@@ -516,7 +516,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     // ---------------- intro de abertura ----------------
     private fun secaoIntro(c: Context): View {
         val s = secao(c, "intro de abertura", icone = R.drawable.ic_play)
-        s.addView(Ui.dica(c, "Abertura de cinema: a catedral na névoa, as torres e o NOCRY entrando no ritmo da música. Toca inteira (5 s) antes da tela da key.", Ui.Dica.INFO), Ui.lp(top = 10, c = c))
+        s.addView(Ui.text(c, "Abertura de cinema: a catedral na névoa, as torres e o NOCRY entrando no ritmo da música. Toca inteira (5 s) antes da tela da key.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
 
         val modos = listOf("sempre", "novo", "off")
         s.addView(Ui.segmento(c, listOf("Sempre", "1ª vez", "Desligada"), modos.indexOf(Prefs.introModo).coerceAtLeast(0)) { i ->
@@ -551,7 +551,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             }, Ui.lp(top = 10, c = c))
         }
         if (msgMus.isNotEmpty()) s.addView(Ui.text(c, msgMus, 12.5f, Ui.WARN, true), Ui.lp(top = 8, c = c))
-        s.addView(Ui.dica(c, "A música é copiada para dentro do app e nada é enviado pela internet. Só toca o tempo da intro (uns 5 segundos) e vai baixando no final.", Ui.Dica.OK), Ui.lp(top = 10, c = c))
+        s.addView(Ui.text(c, "A música é copiada para dentro do app e nada é enviado pela internet. Só toca o tempo da intro (uns 5 segundos) e vai baixando no final.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
 
         s.addView(Ui.button(c, "assistir agora", Ui.Kind.PRIMARY, R.drawable.ic_play) { act.tocaIntro() }, Ui.lp(top = 14, c = c))
         return s
@@ -720,7 +720,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
 
         when (Prefs.bgTipo) {
             "animado" -> {
-                f.addView(Ui.dica(c, "Desenhos do próprio app. Eles seguem as cores 1 e 2.", Ui.Dica.INFO), Ui.lp(top = 10, c = c))
+                f.addView(Ui.text(c, "Desenhos do próprio app. Eles seguem as cores 1 e 2.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
                 val cartas = ArrayList<View>()
                 for (id in Temas.FUNDOS) {
                     val sel = Prefs.bgPreset == id
@@ -748,12 +748,12 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
                     if (!ocupado) escolher(video)
                 }, Ui.lp(top = 10, c = c))
                 if (tem) f.addView(Ui.button(c, "remover e voltar ao animado", Ui.Kind.GHOST, R.drawable.ic_trash) { remove() }, Ui.lp(top = 8, c = c))
-                f.addView(Ui.dica(c, if (video)
+                f.addView(Ui.text(c, if (video)
                     "O vídeo toca em loop, sem som. Vídeos curtos e leves (até 1080p) gastam menos bateria. O arquivo é copiado para dentro do app e nada é enviado pela internet."
                 else
-                    "A imagem é copiada para dentro do app e nada é enviado pela internet.", Ui.Dica.INFO), Ui.lp(top = 10, c = c))
+                    "A imagem é copiada para dentro do app e nada é enviado pela internet.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
             }
-            else -> f.addView(Ui.dica(c, "Só a cor de fundo do app, sem nenhum desenho. A cor muda em CORES.", Ui.Dica.INFO), Ui.lp(top = 10, c = c))
+            else -> f.addView(Ui.text(c, "Só a cor de fundo do app, sem nenhum desenho. A cor muda em CORES.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
         }
         if (msg.isNotEmpty()) f.addView(Ui.text(c, msg, 12.5f, Ui.WARN, true), Ui.lp(top = 8, c = c))
 

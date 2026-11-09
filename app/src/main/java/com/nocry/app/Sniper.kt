@@ -141,6 +141,7 @@ object Sniper {
     const val PAUSA_BLOQUEIO = 15 * 60_000L
     const val PAUSA_LIMITE = 45_000L      // org disse "limite máximo de filas": espera isso e tenta de novo
     const val FORM_VALIDO = 12 * 60_000L  // formulário aberto vale uns 15 min no Discord
+    const val VALOR_MINIMO = 100          // em centavos: R$ 1,00 pra cima
     const val MSG_PADRAO = "# FULL UMP E XM8 SEM MOBILADOR E SEM BUG DE KIT"
     val MODOS = listOf("1X1", "2X2", "3X3", "4X4")
     private val PALAVRAS_SALA = listOf("aguardando", "partida", "match", "vs", "sala", "duelo", "confronto")
@@ -557,6 +558,9 @@ object Sniper {
                 }
             }
             for ((_, l) in pend) l.removeAll { cor.s(it) == "-" }
+            // só fila de R$ 1 pra cima (as de centavos nem aparecem nem são procuradas)
+            for ((_, f) in filas) f.keys.removeAll { (it.toIntOrNull() ?: 0) < VALOR_MINIMO }
+            filas.entries.removeAll { it.value.isEmpty() }
             val pendLimpo = pend.filterValues { it.isNotEmpty() }
             if (pendLimpo.isNotEmpty()) pendAll[nome] = pendLimpo
             if (filas.isEmpty()) { if (pendLimpo.isNotEmpty()) sem.add(nome); continue }

@@ -139,7 +139,43 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     }
 
     /** explicação no balãozinho (igual ao resto do app) */
-    private fun dica(s: String): View = Ui.dica(act, s, Ui.Dica.INFO)
+    /** observação curta: texto pequeno e discreto (menos caixa na tela, menos confusão) */
+    private fun nota(s: String): TextView {
+        val t = Ui.text(act, s, 11f, Theme.alpha(Ui.MUTED, 0xE0))
+        t.setLineSpacing(0f, 1.15f)
+        return t
+    }
+
+    /** tudo que explica o bot fica aqui (botão ? do topo), em vez de espalhado pela tela */
+    private fun ajuda() {
+        val c = act
+        val box = Ui.vbox(c)
+        val p = Ui.dp(c, 20)
+        box.setPadding(p, Ui.dp(c, 6), p, Ui.dp(c, 6))
+        fun secao(titulo: String, itens: List<String>) {
+            box.addView(Ui.label(c, titulo), Ui.lp(top = 14, c = c))
+            box.addView(Ui.lista(c, itens), Ui.lp(top = 8, c = c))
+        }
+        secao("busca", listOf(
+            "Na aba Busca escolha a org (ou TODAS), os modos e os valores (de R$ 1 pra cima).",
+            "Iniciar busca: ele procura em todas as orgs ao mesmo tempo e entra em toda fila que bate.",
+            "Cada org tem um limite de filas: quando ela avisa, ele espera e tenta de novo sozinho."))
+        secao("salas", listOf(
+            "Formou partida: a sala aparece em Partidas, a mensagem automática sai na hora e chega notificação.",
+            "Ninguém respondeu em ${Sniper.tempoResposta / 1000}s: ele cancela e volta a procurar.",
+            "Aposta confirmada (★) fica no painel até a org apagar ou você tirar."))
+        secao("chat", listOf(
+            "@ jogador e @ ADM põem a marcação no campo: escreve o resto e manda.",
+            "Copiar: ícone no canto da mensagem, botões de link/chave pix/ID embaixo dela, ou segure o dedo no texto.",
+            "Verificação anti-robô de algumas orgs: aparece em cima, um toque na resposta e entra."))
+        val rola = ScrollView(c)
+        rola.addView(box)
+        android.app.AlertDialog.Builder(c, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            .setTitle("COMO O BOT DE FILA FUNCIONA")
+            .setView(rola)
+            .setPositiveButton("ENTENDI", null)
+            .show()
+    }
 
     private fun pesoUm(esq: Int = 0): LinearLayout.LayoutParams =
         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(act, esq) }
@@ -221,6 +257,12 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         tempoTxt = sub
         col.addView(sub, Ui.lp(top = 3, c = c))
         cab.addView(col, pesoUm(14))
+        val aj = android.widget.FrameLayout(c)
+        aj.background = Botao(c, "ico", 12)
+        aj.addView(Ui.icone(c, R.drawable.ic_info, Ui.MUTED, 17), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 17), Ui.dp(c, 17), Gravity.CENTER))
+        aj.contentDescription = "como funciona"
+        Ui.clique(aj) { ajuda() }
+        cab.addView(aj, LinearLayout.LayoutParams(Ui.dp(c, 38), Ui.dp(c, 38)).also { it.leftMargin = Ui.dp(c, 8); it.gravity = Gravity.TOP })
         card.addView(cab)
 
         val filas = if (Sniper.maxFilas >= 300) "${Sniper.filasEntradas.size}" else "${Sniper.filasEntradas.size}/${Sniper.maxFilas}"
@@ -321,9 +363,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             fs.size == 1 -> "📝 a org pediu um formulário"
             else -> "📝 ${fs.size} esperando resposta"
         }, 13f, Ui.WARN, true, mono = true))
-        card.addView(dica(if (verif > 0)
-            "Essas orgs mostram uma pergunta anti-robô (conta, comida, emoji) quando clica pra entrar. Sem responder, NÃO entra na fila. Toque em responder e escolha: um toque e já vai."
-            else "A org abre um formulário quando clica pra entrar. Sem responder, NÃO entra na fila. Responda uma vez: o bot guarda e responde sozinho nas próximas."), Ui.lp(top = 6, c = c))
+        card.addView(nota(if (verif > 0) "Sem responder, não entra na fila. Toque em responder: um toque na resposta e já vai."
+            else "Sem responder, não entra na fila. Responda uma vez: o bot guarda e responde sozinho nas próximas."), Ui.lp(top = 4, c = c))
         for (f in fs.take(3)) {
             val linha = Ui.hbox(c)
             linha.gravity = Gravity.CENTER_VERTICAL
@@ -337,7 +378,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 8) })
             card.addView(linha, Ui.lp(top = 12, c = c))
         }
-        if (fs.size > 3) card.addView(dica("+ ${fs.size - 3} esperando" + if (verif > 0) "" else " (respondendo um, os iguais vão sozinhos)"), Ui.lp(top = 8, c = c))
+        if (fs.size > 3) card.addView(nota("+ ${fs.size - 3} esperando"), Ui.lp(top = 8, c = c))
         b.addView(card, Ui.lp(top = 12, c = c))
     }
 
@@ -520,9 +561,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         chatCard = card
         card.visibility = if (Sniper.ordem.isEmpty()) View.GONE else View.VISIBLE
         add(card, 12)
-        add(dica("Toque numa sala pra abrir o chat dela. @ jogador e @ ADM põem a marcação no campo: é só escrever o resto e mandar. " +
-            "Pra copiar: toque no ícone de copiar da mensagem, nos botões de link/chave/ID que aparecem embaixo dela, " +
-            "ou segure o dedo no texto pra escolher um pedaço. Link abre no toque. Se ninguém responder em ${Sniper.tempoResposta / 1000}s, ele cancela e volta a procurar."), 10)
+
         atualizaChat()
     }
 
@@ -590,8 +629,10 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             val t = Ui.text(c, if (Sniper.buscando) "Procurando partida..." else "Nenhuma sala aberta", 16f, Ui.TEXT, true)
             t.gravity = Gravity.CENTER
             card.addView(t, Ui.lp(top = 12, c = c))
-            card.addView(dica(if (Sniper.buscando) "Quando formar partida, a sala aparece aqui, a mensagem automática sai na hora e chega notificação."
-                else "Escolha org, modo e valor na aba Busca e toque em iniciar busca lá em cima."), Ui.lp(top = 12, c = c))
+            val n = nota(if (Sniper.buscando) "Quando formar partida, a sala aparece aqui e chega notificação."
+                else "Escolha org, modo e valor na aba Busca e toque em iniciar busca.")
+            n.gravity = Gravity.CENTER
+            card.addView(n, Ui.lp(top = 6, c = c))
             b.addView(card)
             return
         }
@@ -1051,15 +1092,6 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     // ======================================================================== BUSCA
     private fun abaBusca() {
-        val c = act
-        val como = Ui.card(c)
-        como.addView(Ui.labelIcone(c, R.drawable.ic_info, "como funciona"))
-        como.addView(Ui.lista(c, listOf(
-            "Escolha a org (ou TODAS), o gelo do 1X1, os modos e os valores. Pode marcar vários.",
-            "Toque em iniciar busca. Ele procura em todas as orgs ao mesmo tempo e entra em toda fila que bate.",
-            "Cada org tem um limite de filas: quando ela avisa, ele espera e tenta de novo sozinho."
-        )), Ui.lp(top = 12, c = c))
-        add(como, 12)
         add(pedaco({ assinaturaAlvo() }) { alvo(it) }, 12)
         add(pedaco({ assinaturaOrgs() }) { orgs(it) }, 12)
     }
@@ -1069,30 +1101,45 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     private fun alvo(b: LinearLayout) {
         val c = act
-        val card = Ui.card(c)
-        card.addView(Ui.labelIcone(c, R.drawable.ic_sliders, "alvo"))
-        card.addView(Ui.itemEstado(c, "Org", if (Sniper.org == "TODAS") "procura em todas ao mesmo tempo" else "só nessa org", R.drawable.ic_globe,
-            Sniper.org, Theme.accent) {
-            val l = Sniper.listaOrgs
-            Ui.dialogEscolha(c, "ORG", l) { i -> Sniper.trocarOrg(l[i]) }
-        }, Ui.lp(top = 6, c = c))
+        // org
+        b.addView(Ui.grupo(c, "onde procurar", listOf(
+            Ui.itemEstado(c, "Org", if (Sniper.org == "TODAS") "todas ao mesmo tempo" else "só essa org", R.drawable.ic_globe,
+                Sniper.org, Theme.accent) {
+                val l = Sniper.listaOrgs
+                Ui.dialogEscolha(c, "ORG", l) { i -> Sniper.trocarOrg(l[i]) }
+            }
+        )))
 
-        card.addView(Ui.label(c, "gelo · só vale no 1x1"), Ui.lp(top = 14, c = c))
-        card.addView(Ui.segmento(c, listOf("Gelo normal", "Gelo infinito"), if (Sniper.gelo == "INFINITO") 1 else 0) { i ->
-            Sniper.escolherGelo(if (i == 1) "INFINITO" else "NORMAL")
-        }, Ui.lp(top = 8, c = c))
+        // modo (+ gelo só quando tem 1X1)
+        val cm = Ui.card(c)
+        val tm = Ui.hbox(c)
+        tm.gravity = Gravity.CENTER_VERTICAL
+        tm.addView(Ui.label(c, "modo"), pesoUm())
+        tm.addView(Ui.selo(c, "${Sniper.modos.size} marcado${if (Sniper.modos.size == 1) "" else "s"}", Theme.accent, Sniper.modos.isNotEmpty()))
+        cm.addView(tm)
+        cm.addView(grade(Sniper.MODOS.map { m -> caixa(m, null, m in Sniper.modos) { Sniper.alternarModo(m) } }, 4), Ui.lp(top = 10, c = c))
+        if ("1X1" in Sniper.modos) {
+            cm.addView(Ui.label(c, "gelo do 1x1"), Ui.lp(top = 16, c = c))
+            cm.addView(Ui.segmento(c, listOf("Normal", "Infinito"), if (Sniper.gelo == "INFINITO") 1 else 0) { i ->
+                Sniper.escolherGelo(if (i == 1) "INFINITO" else "NORMAL")
+            }, Ui.lp(top = 8, c = c))
+        }
+        b.addView(cm, Ui.lp(top = 12, c = c))
 
-        card.addView(Ui.label(c, "modo · ${Sniper.modos.size} marcado${if (Sniper.modos.size == 1) "" else "s"}"), Ui.lp(top = 18, c = c))
-        card.addView(grade(Sniper.MODOS.map { m -> caixa(m, null, m in Sniper.modos) { Sniper.alternarModo(m) } }, 4), Ui.lp(top = 8, c = c))
-
-        card.addView(Ui.label(c, "valor · ${Sniper.valores.size} marcado${if (Sniper.valores.size == 1) "" else "s"}"), Ui.lp(top = 18, c = c))
+        // valor
+        val cv = Ui.card(c)
+        val tv = Ui.hbox(c)
+        tv.gravity = Gravity.CENTER_VERTICAL
+        tv.addView(Ui.label(c, "valor"), pesoUm())
+        tv.addView(Ui.selo(c, "${Sniper.valores.size} marcado${if (Sniper.valores.size == 1) "" else "s"}", Theme.accent, Sniper.valores.isNotEmpty()))
+        cv.addView(tv)
         val disp = Sniper.valoresDisponiveis()
-        card.addView(grade(Sniper.todosValores.map { v ->
+        cv.addView(grade(Sniper.todosValores.map { v ->
             caixa(Sniper.rotuloValor(v), null, v in Sniper.valores, v in disp) { Sniper.alternarValor(v) }
-        }, 4), Ui.lp(top = 8, c = c))
-        card.addView(dica("Valor apagado não existe nessa org/modo. Com TODAS, o valor que uma org não tem ele procura nas outras." +
-            if (Sniper.buscando) " Mudou com a busca ligada? Vale na próxima volta." else ""), Ui.lp(top = 12, c = c))
-        b.addView(card)
+        }, 4), Ui.lp(top = 10, c = c))
+        if (Sniper.todosValores.any { it !in disp }) cv.addView(nota("Valor apagado: não tem nessa org/modo."), Ui.lp(top = 10, c = c))
+        if (Sniper.buscando) cv.addView(nota("Mudou com a busca ligada? Vale na próxima volta."), Ui.lp(top = 4, c = c))
+        b.addView(cv, Ui.lp(top = 12, c = c))
     }
 
     private fun assinaturaOrgs(): String =
@@ -1149,7 +1196,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val temToken = Cofre.tem(c)
         if (!temToken || Sniper.estado == "token") {
             card.addView(Ui.status(c, "TOKEN", if (Sniper.estado == "token") "RECUSADO" else "FALTA", false), Ui.lp(top = 10, c = c))
-            card.addView(dica("Use a conta temporária. O token fica cifrado neste celular e no backup (que só abre com a sua key de dono). Se o Discord pedir pra trocar a senha, o token muda: é só colar o novo aqui."), Ui.lp(top = 8, c = c))
+            card.addView(nota("Use a conta temporária. O token fica cifrado no celular e no backup (só abre com a sua key). Trocou a senha no Discord? Cole o token novo."), Ui.lp(top = 8, c = c))
             val e = campoToken ?: Ui.field(c, "token da conta", false).also {
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 campoToken = it
@@ -1175,7 +1222,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             }
             card.addView(Ui.status(c, "DISCORD", txt, ok), Ui.lp(top = 10, c = c))
             if (Sniper.estado == "online") card.addView(Ui.status(c, "CONTA", Sniper.nomeConta.uppercase(), true))
-            card.addView(dica("Com o bot ligado ele fica rodando mesmo com a tela apagada (notificação do Nocry)."), Ui.lp(top = 10, c = c))
+
             card.addView(if (!Sniper.ligado())
                 Ui.button(c, "ligar o bot", Ui.Kind.PRIMARY, R.drawable.ic_power) { Sniper.ligar() }
             else
@@ -1226,7 +1273,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             val card = Ui.card(c, forte = true)
             card.addView(Ui.status(c, "LENDO AS FILAS", "AGUARDE", null))
             card.addView(Ui.text(c, Sniper.progresso.ifEmpty { "lendo as filas..." }, 12.5f, Ui.WARN, true, mono = true), Ui.lp(top = 6, c = c))
-            card.addView(dica("Só lê as filas, não entra em nenhuma. Pode continuar usando o app."), Ui.lp(top = 8, c = c))
+            card.addView(nota("Só lê as filas, não entra em nenhuma."), Ui.lp(top = 6, c = c))
             b.addView(card, Ui.lp(top = 0, c = c))
         }
         val itens = ArrayList<View>()
@@ -1281,10 +1328,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         })
         itens.add(Ui.item(c, "Restaurar de um arquivo", "escolha o sniper_backup.json", R.drawable.ic_up, null) { restaurarBackup() })
         b.addView(Ui.grupo(c, "backup", itens))
-        b.addView(Ui.dica(c, if (pode)
-            "Guarda valores das filas, respostas dos formulários, ajustes e o token (cifrado com a sua key). Reinstalou? Entra com a key de dono e abre o bot de fila: volta tudo sozinho."
-            else "Libere o acesso a todos os arquivos (o mesmo do bypass) pra ele salvar e voltar sozinho depois de reinstalar. Toque em Backup automático.",
-            if (pode) Ui.Dica.OK else Ui.Dica.AVISO), Ui.lp(top = 10, c = c))
+        if (!pode) b.addView(Ui.dica(c, "Libere o acesso a todos os arquivos (o mesmo do bypass) pra ele salvar e voltar sozinho depois de reinstalar. Toque em Backup automático.",
+            Ui.Dica.AVISO), Ui.lp(top = 10, c = c))
     }
 
     private fun restaurarBackup() {
@@ -1342,7 +1387,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val tam = if (f.exists()) f.length() else 0L
         cab.addView(Ui.selo(c, if (tam > 0) "%.0f KB".format(tam / 1024.0) else "vazio", Theme.accent, tam > 0))
         card.addView(cab)
-        card.addView(dica("O registro completo (tudo desde que liga, com data e detalhes) fica num arquivo. Deu problema? Compartilhe e me mande."), Ui.lp(top = 10, c = c))
+        card.addView(nota("Tudo desde que liga, com data e detalhes. Deu problema? Compartilhe e me mande."), Ui.lp(top = 6, c = c))
         val linha = Ui.hbox(c)
         linha.addView(Ui.button(c, "compartilhar", Ui.Kind.PRIMARY, R.drawable.ic_log) { compartilharRegistro() }, pesoUm())
         linha.addView(Ui.button(c, "apagar", Ui.Kind.DANGER, R.drawable.ic_trash) {

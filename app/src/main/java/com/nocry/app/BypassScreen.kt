@@ -128,11 +128,10 @@ class BypassScreen(a: MainActivity) : Screen(a) {
             }, 10)
         }
 
-        add(Ui.dica(c, "O app fica em segundo plano escutando o gatilho, mesmo minimizado ou fechado nos recentes. Para parar, toque em desativar.", Ui.Dica.INFO), 18)
-        add(Ui.toggle(c, "Vibrar nos avisos", "1 vibração = aplicou · 2 = restaurou · 3 = falhou", Prefs.vibrarAvisos) { v ->
+        add(Ui.toggle(c, "Vibrar nos avisos", "1 vibração = aplicou · 2 = removeu · 3 = falhou", Prefs.vibrarAvisos) { v ->
             Prefs.vibrarAvisos = v
             redesenha()
-        }, 12)
+        }, 18)
         add(SegundoPlano.grupo(act) { redesenha() }, 14)
     }
 
