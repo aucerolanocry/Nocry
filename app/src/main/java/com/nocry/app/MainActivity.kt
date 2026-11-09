@@ -376,7 +376,7 @@ class MainActivity : Activity() {
             "otmver" -> OtmVerScreen(this)
             "otmproteger" -> OtmProtegerScreen(this)
             "otmmais" -> OtmMaisScreen(this)
-            "log" -> LogScreen(this)
+            "log" -> LogScreen(this, null)
             "sobre" -> SobreScreen(this)
             "recursos" -> RecursosScreen(this)
             "bypass" -> BypassScreen(this)
