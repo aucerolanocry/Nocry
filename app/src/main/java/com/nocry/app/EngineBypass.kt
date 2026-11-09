@@ -52,7 +52,7 @@ object EngineBypass {
         NLog.add("bypass", "parou")
         if (estava) {
             when (rc) {
-                0 -> Notif.evento(Sys.app, "BYPASS DESATIVADO", "O padrão do ${ffNome()} foi restaurado.", Notif.Efeito.DESLIGOU)
+                0 -> Notif.evento(Sys.app, "BYPASS REMOVIDO E DESATIVADO", "Restaurado · ${ffNome()} voltou ao padrão.", Notif.Efeito.DESLIGOU)
                 1 -> Notif.evento(Sys.app, "BYPASS DESATIVADO, MAS NÃO RESTAUREI", "O ADB não respondeu. Abra o NOCRY > Bypass e toque em restaurar padrão.", Notif.Efeito.FALHOU)
                 else -> Notif.evento(Sys.app, "BYPASS DESATIVADO", "Não estava aplicado: nada pra restaurar.", Notif.Efeito.DESLIGOU)
             }
@@ -119,11 +119,11 @@ object EngineBypass {
         var restaurou = false
         val ok = if (aplicar) {
             Prefs.bypassMark || Config.aplicar(Prefs.bypassFf, Prefs.bypassTipo).also {
-                if (it) { Prefs.bypassMark = true; Notif.evento(Sys.app, "BYPASS APLICADO", "${ffNome()} · pelo $nome", Notif.Efeito.LIGOU) }
+                if (it) { Prefs.bypassMark = true; Notif.evento(Sys.app, "BYPASS APLICADO", "Já está no jogo · ${ffNome()} · pelo $nome", Notif.Efeito.LIGOU) }
             }
         } else {
             !Prefs.bypassMark || Config.restaurar(Prefs.bypassFf).also {
-                if (it) { Prefs.bypassMark = false; restaurou = true; Notif.evento(Sys.app, "BYPASS RESTAURADO", "${ffNome()} voltou ao padrão · pelo $nome", Notif.Efeito.DESLIGOU) }
+                if (it) { Prefs.bypassMark = false; restaurou = true; Notif.evento(Sys.app, "BYPASS REMOVIDO", "Restaurado · ${ffNome()} voltou ao padrão · pelo $nome", Notif.Efeito.DESLIGOU) }
             }
         }
         if (ok) {
@@ -148,7 +148,7 @@ object EngineBypass {
         if (Prefs.bypassTipo != "completo") return
         Config.apagarSuja(Prefs.bypassFf)
         NLog.add("bypass", "autodestruição (modo completo) - apagou a suja")
-        Notif.evento(Sys.app, "BYPASS FINALIZADO (COMPLETO)", "Restaurou e apagou a pasta suja. Pra usar de novo, instale em Instalar recursos.", Notif.Efeito.DESLIGOU)
+        Notif.evento(Sys.app, "BYPASS REMOVIDO (COMPLETO)", "Restaurado e a pasta suja foi apagada. Pra usar de novo, instale em Instalar recursos.", Notif.Efeito.DESLIGOU)
         Prefs.bypassAtivo = false
         Prefs.bypassVolAtivo = false
         NocryService.sync(Sys.app)
@@ -166,7 +166,7 @@ object EngineBypass {
                 cu = 0
                 if (Config.aplicar(Prefs.bypassFf, Prefs.bypassTipo)) {
                     Prefs.bypassMark = true
-                    Notif.evento(Sys.app, "BYPASS APLICADO", "${ffNome()} · VOL+ ${cliques}x", Notif.Efeito.LIGOU)
+                    Notif.evento(Sys.app, "BYPASS APLICADO", "Já está no jogo · ${ffNome()} · VOL+ ${cliques}x", Notif.Efeito.LIGOU)
                 } else {
                     // antes falhava calado e parecia que o volume nao tinha funcionado
                     NLog.add("bypass-volume", "nao aplicou: " + Adb.lastError)
@@ -183,7 +183,7 @@ object EngineBypass {
                 if (Prefs.bypassMark) {
                     if (Config.restaurar(Prefs.bypassFf)) {
                         Prefs.bypassMark = false
-                        Notif.evento(Sys.app, "BYPASS RESTAURADO", "${ffNome()} voltou ao padrão · VOL− ${cliques}x", Notif.Efeito.DESLIGOU)
+                        Notif.evento(Sys.app, "BYPASS REMOVIDO", "Restaurado · ${ffNome()} voltou ao padrão · VOL− ${cliques}x", Notif.Efeito.DESLIGOU)
                         autodestruirSeCompleto()
                     } else {
                         NLog.add("bypass-volume", "nao restaurou: " + Adb.lastError)

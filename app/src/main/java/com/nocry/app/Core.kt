@@ -438,8 +438,9 @@ object Notif {
     const val CH_ALERT = "nocry_alert"
     const val CH_PAIR = "nocry_pair"
     const val CH_INST = "nocry_inst"
-    /** canal novo dos avisos de bypass/toque: o antigo podia estar silenciado e sumia em 6 s */
-    const val CH_EVENTO = "nocry_eventos"
+    /** avisos de bypass/toque: só na barra de notificações (não pula na tela nem faz barulho) */
+    const val CH_EVENTO = "nocry_eventos_barra"
+    private const val CH_EVENTO_ANTIGO = "nocry_eventos"
     const val ID_EVENTO = 6001
     const val ID_SVC = 1001
     const val ID_ALERT = 2001
@@ -452,22 +453,21 @@ object Notif {
         nm.createNotificationChannel(NotificationChannel(CH_ALERT, "Avisos do NOCRY", NotificationManager.IMPORTANCE_HIGH))
         nm.createNotificationChannel(NotificationChannel(CH_PAIR, "Pareamento", NotificationManager.IMPORTANCE_HIGH))
         nm.createNotificationChannel(NotificationChannel(CH_INST, "Instalação das pastas", NotificationManager.IMPORTANCE_LOW))
-        val ev = NotificationChannel(CH_EVENTO, "Bypass e toque (aplicou / restaurou)", NotificationManager.IMPORTANCE_HIGH)
-        ev.description = "Aparece na hora quando o bypass ou o toque liga, aplica, restaura ou desliga."
+        // o canal antigo pulava na tela; a importância de um canal não muda depois de criado, então troca por um novo
+        try { nm.deleteNotificationChannel(CH_EVENTO_ANTIGO) } catch (_: Throwable) {}
+        val ev = NotificationChannel(CH_EVENTO, "Bypass e toque (aplicou / removeu)", NotificationManager.IMPORTANCE_LOW)
+        ev.description = "Fica na barra de notificações quando o bypass ou o toque liga, aplica, remove ou desliga. Não aparece por cima do jogo."
         ev.enableVibration(false)          // a vibração é do próprio app (dá pra desligar no Estúdio)
-        ev.setSound(null, null)            // sem barulho no meio da partida
+        ev.setSound(null, null)
         ev.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         nm.createNotificationChannel(ev)
     }
 
     enum class Efeito { LIGOU, DESLIGOU, FALHOU, INFO }
 
-    private val principal = Handler(Looper.getMainLooper())
-
     /**
-     * Aviso de bypass/toque: notificação que aparece na hora (e fica na barra até o próximo aviso),
-     * um balão na tela quando o app está fechado (aparece até dentro do jogo) e uma vibração curta:
-     * 1 = aplicou/ligou · 2 = restaurou/desligou · 3 = falhou.
+     * Aviso de bypass/toque: só na barra de notificações (não pula na tela, não faz barulho) e fica lá até o
+     * próximo aviso. Vibração curta: 1 = aplicou/ligou · 2 = removeu/desligou · 3 = falhou.
      */
     fun evento(c: Context, titulo: String, texto: String, efeito: Efeito = Efeito.INFO) {
         val app = c.applicationContext
@@ -488,17 +488,11 @@ object Notif {
                     .setCategory(Notification.CATEGORY_STATUS)
                     .setVisibility(Notification.VISIBILITY_PUBLIC)
                     .setColor(Theme.accent)
-                    .setTimeoutAfter(10 * 60_000L)
+                    .setOnlyAlertOnce(true)
                     .build()
                 nm.notify(ID_EVENTO, n)
             }
         } catch (_: Throwable) {}
-        // app fechado (ex.: dentro do jogo): balão rápido na tela também, porque tem celular que esconde notificação durante o jogo
-        if (!Presenca.naTela) {
-            principal.post {
-                try { android.widget.Toast.makeText(app, "$titulo · $texto".take(120), android.widget.Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
-            }
-        }
         if (Prefs.vibrarAvisos && efeito != Efeito.INFO) vibra(app, efeito)
     }
 
