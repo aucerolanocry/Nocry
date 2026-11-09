@@ -489,15 +489,36 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         card.addView(pedaco({ Sniper.salaAtiva ?: "-" }) { cabecaChat(it) })
 
         val sv = object : ScrollView(c) {
+            private var yAnt = 0f
+            private var tAnt = -1L
+
+            /** rola o chat enquanto ele tem pra onde ir; no topo/fim, quem rola é a página (antes o chat travava a tela) */
+            private fun decide(ev: MotionEvent) {
+                if (ev.eventTime == tAnt && ev.actionMasked == MotionEvent.ACTION_MOVE) return
+                tAnt = ev.eventTime
+                when (ev.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> { yAnt = ev.y; parent?.requestDisallowInterceptTouchEvent(true) }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dy = ev.y - yAnt
+                        yAnt = ev.y
+                        val podeChat = when {
+                            dy > 0 -> canScrollVertically(-1)
+                            dy < 0 -> canScrollVertically(1)
+                            else -> true
+                        }
+                        parent?.requestDisallowInterceptTouchEvent(podeChat)
+                    }
+                }
+            }
+
             @SuppressLint("ClickableViewAccessibility")
             override fun onTouchEvent(ev: MotionEvent): Boolean {
-                // a página também rola: enquanto o dedo está no chat, quem rola é o chat
-                if (ev.actionMasked == MotionEvent.ACTION_DOWN || ev.actionMasked == MotionEvent.ACTION_MOVE) parent?.requestDisallowInterceptTouchEvent(true)
+                decide(ev)
                 return super.onTouchEvent(ev)
             }
 
             override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-                if (ev.actionMasked == MotionEvent.ACTION_DOWN) parent?.requestDisallowInterceptTouchEvent(true)
+                decide(ev)
                 return super.onInterceptTouchEvent(ev)
             }
         }
@@ -666,7 +687,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val (txt, cor) = estadoCurto(s)
         val col = Ui.vbox(c)
         col.background = if (sel) Botao(c, "grad", 14)
-            else Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x0A), 14, Theme.alpha(cor, 0x66), 1)
+            else Ui.shape(c, Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), cor, 0.10f), 0xCC), 14, Theme.alpha(cor, 0x88), 1)
         col.setPadding(Ui.dp(c, 12), Ui.dp(c, 10), Ui.dp(c, 12), Ui.dp(c, 11))
         val l1 = Ui.hbox(c)
         l1.gravity = Gravity.CENTER_VERTICAL
@@ -915,12 +936,12 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             if (grande != null) Ui.clique(iv) {
                 try { act.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(grande))) } catch (_: Exception) {}
             }
-            b.addView(iv, Ui.lp(top = 6, c = c))
+            b.addView(iv, solto(6))
         }
         if (l.texto.isNotEmpty()) {
             val t = textoCopiavel(l.texto, if (bot) 13f else 14.5f, corTexto, eu)
             t.maxWidth = larguraMax
-            b.addView(t, Ui.lp(top = 3, c = c))
+            b.addView(t, solto(3))
         }
         // card (org/ADM): com barrinha do lado, inteiro e copiável
         if (l.card.isNotEmpty()) {
@@ -931,9 +952,9 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             val t = textoCopiavel(l.card, 12.5f, corTexto, eu)
             t.maxWidth = larguraMax - Ui.dp(c, 13)
             caixaCard.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            b.addView(caixaCard, Ui.lp(top = if (l.texto.isNotEmpty()) 8 else 4, c = c))
+            b.addView(caixaCard, solto(if (l.texto.isNotEmpty()) 8 else 4))
         }
-        for (a in l.arquivos) b.addView(texto("📎 $a", 12f, corFraca), Ui.lp(top = 4, c = c))
+        for (a in l.arquivos) b.addView(texto("📎 $a", 12f, corFraca), solto(4))
         // botões da org (só mostra quais tem; quem clica é confirmar/cancelar lá embaixo)
         if (l.botoes.isNotEmpty()) {
             val fl = Ui.hbox(c)
@@ -968,12 +989,16 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                 Ui.clique(p) { copiar(valor, "$rot copiado") }
                 col.addView(p, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 6) })
             }
-            b.addView(col, Ui.lp(top = 2, c = c))
+            b.addView(col, solto(2))
         }
         linha.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         linha.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 8) }
         return linha
     }
+
+    /** largura do próprio conteúdo (dentro da bolha, MATCH_PARENT prende tudo na largura do cabeçalho) */
+    private fun solto(top: Int) = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        .also { it.topMargin = Ui.dp(act, top) }
 
     /** texto que dá pra selecionar (toque longo) e com link que abre no toque */
     private fun textoCopiavel(s: String, sp: Float, cor: Int, eu: Boolean): TextView {

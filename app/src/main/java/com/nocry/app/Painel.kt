@@ -245,10 +245,10 @@ class Botao(
         }
         pFill.shader = shFill
         pFill.color = when (tipo) {
-            "ghost" -> Theme.alpha(Color.WHITE, 0x12)
-            "danger" -> Theme.alpha(Ui.BAD, 0x24)
-            "campo" -> Theme.alpha(Color.BLACK, 0x70)
-            "ico" -> Theme.alpha(Color.WHITE, 0x14)
+            "ghost" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.07f), 0xB8)
+            "danger" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Ui.BAD, 0.22f), 0xC8)
+            "campo" -> Theme.alpha(Color.BLACK, 0x88)
+            "ico" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.08f), 0xB0)
             else -> Color.BLACK
         }
         cv.drawPath(path, pFill)

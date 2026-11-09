@@ -283,7 +283,7 @@ var bypassVolAtivo: Boolean
         get() = gs("bg_arquivo")
         set(v) = ps("bg_arquivo", v)
     var bgEscuro: Int
-        get() = gi("bg_escuro", 25, 0, 90)
+        get() = gi("bg_escuro", 48, 0, 90)
         set(v) = pi("bg_escuro", v.coerceIn(0, 90))
     var bgBlur: Int
         get() = gi("bg_blur", 0, 0, 25)

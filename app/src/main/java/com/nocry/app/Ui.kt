@@ -138,6 +138,8 @@ object Ui {
     fun label(c: Context, s: String): TextView {
         val t = text(c, s, 11f, RED, true, mono = true)
         t.letterSpacing = if (Prefs.maiusc) 0.2f else 0.06f
+        // sombra leve: a etiqueta fica fora do cartão, direto em cima do fundo
+        t.setShadowLayer(dp(c, 4).toFloat(), 0f, dp(c, 1).toFloat(), Theme.alpha(Color.BLACK, 0xE0))
         return t
     }
 
@@ -446,7 +448,10 @@ object Ui {
         val ico = when (tipo) { Dica.INFO -> R.drawable.ic_info; Dica.AVISO -> R.drawable.ic_warn; Dica.OK -> R.drawable.ic_check }
         val r = hbox(c)
         r.gravity = Gravity.TOP
-        r.background = shape(c, Theme.alpha(cor, 0x16), 14, Theme.alpha(cor, 0x42), 1)
+        // base escura por baixo da cor: o balão fica legível mesmo em cima de fundo claro
+        r.background = android.graphics.drawable.LayerDrawable(arrayOf(
+            shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xC4), 14),
+            shape(c, Theme.alpha(cor, 0x1C), 14, Theme.alpha(cor, 0x55), 1)))
         r.setPadding(dp(c, 12), dp(c, 11), dp(c, 13), dp(c, 11))
         // ícone numa bolinha da mesma cor (fica com cara de balão de aviso, não de texto solto)
         val bola = FrameLayout(c)
