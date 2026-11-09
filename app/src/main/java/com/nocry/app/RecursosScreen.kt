@@ -25,7 +25,7 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
         limpa()
         val c = act
 
-        add(Ui.text(c, "Instala a pasta suja (usada pelo bypass) e a pasta limpa (pra restaurar depois). Pode minimizar ou fechar o app: continua sozinho e avisa na notificação.", 10.5f, Ui.MUTED), 0)
+        add(Ui.dica(c, "Instala a pasta suja (usada pelo bypass) e a pasta limpa (pra restaurar depois). Pode minimizar ou fechar o app: continua sozinho e avisa na notificação.", Ui.Dica.INFO), 0)
 
         if (!temPermissao()) {
             add(Ui.hero(c, R.drawable.ic_lock, "permissão", "Falta liberar", false, "O app precisa do acesso a todos os arquivos pra instalar as pastas."), 12)

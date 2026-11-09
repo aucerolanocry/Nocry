@@ -346,7 +346,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     override fun key(): String = listOf(
         Prefs.bgTipo, Prefs.bgPreset, Prefs.bgArquivo, Prefs.bgEscuro, Prefs.bgBlur, Prefs.accent, Prefs.accent2, Prefs.baseCor,
         Prefs.angulo, Prefs.tema, Prefs.cartao, Prefs.vidro, Prefs.raio, Prefs.brilho, Prefs.borda, Prefs.fonte, Prefs.escala,
-        Prefs.maiusc, Prefs.anim, Prefs.particulas, Prefs.scanner, Prefs.pulso, Prefs.vibrar, ocupado, msg,
+        Prefs.maiusc, Prefs.anim, Prefs.particulas, Prefs.scanner, Prefs.pulso, Prefs.vibrar, Prefs.vibrarAvisos, ocupado, msg,
         Prefs.introModo, Prefs.introSom, Prefs.introMusica, Prefs.introInicio, ocupadoMus, msgMus
     ).joinToString("|")
 
@@ -395,7 +395,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        add(Ui.text(c, "Deixe o NOCRY do seu jeito. Tudo muda na hora e fica salvo.", 10.5f, Ui.MUTED), 0)
+        add(Ui.dica(c, "Deixe o NOCRY do seu jeito. Tudo muda na hora e fica salvo.", Ui.Dica.INFO), 0)
         add(Ui.abas(c, ABAS_EST, abaEst) { i -> abaEst = i; redesenha() }, 12)
         when (abaEst) {
             0 -> abaTemas(c)
@@ -508,14 +508,15 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             Ui.itemChave(c, "Brilho pulsando", "o anel do início respira", Prefs.pulso) { x -> Prefs.pulso = x; muda() }
         )), 14)
         add(Ui.grupo(c, "toque", listOf(
-            Ui.itemChave(c, "Vibrar ao tocar", "vibração curta nos botões", Prefs.vibrar) { x -> Prefs.vibrar = x; muda() }
+            Ui.itemChave(c, "Vibrar ao tocar", "vibração curta nos botões", Prefs.vibrar) { x -> Prefs.vibrar = x; muda() },
+            Ui.itemChave(c, "Vibrar nos avisos", "bypass e toque: 1 = aplicou · 2 = restaurou · 3 = falhou", Prefs.vibrarAvisos) { x -> Prefs.vibrarAvisos = x; muda() }
         )), 18)
     }
 
     // ---------------- intro de abertura ----------------
     private fun secaoIntro(c: Context): View {
         val s = secao(c, "intro de abertura", icone = R.drawable.ic_play)
-        s.addView(Ui.text(c, "Abertura de cinema: a catedral na névoa, as torres e o NOCRY entrando no ritmo da música. Toca inteira (5 s) antes da tela da key.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        s.addView(Ui.dica(c, "Abertura de cinema: a catedral na névoa, as torres e o NOCRY entrando no ritmo da música. Toca inteira (5 s) antes da tela da key.", Ui.Dica.INFO), Ui.lp(top = 10, c = c))
 
         val modos = listOf("sempre", "novo", "off")
         s.addView(Ui.segmento(c, listOf("Sempre", "1ª vez", "Desligada"), modos.indexOf(Prefs.introModo).coerceAtLeast(0)) { i ->
@@ -550,7 +551,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             }, Ui.lp(top = 10, c = c))
         }
         if (msgMus.isNotEmpty()) s.addView(Ui.text(c, msgMus, 12.5f, Ui.WARN, true), Ui.lp(top = 8, c = c))
-        s.addView(Ui.text(c, "A música é copiada para dentro do app e nada é enviado pela internet. Só toca o tempo da intro (uns 5 segundos) e vai baixando no final.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        s.addView(Ui.dica(c, "A música é copiada para dentro do app e nada é enviado pela internet. Só toca o tempo da intro (uns 5 segundos) e vai baixando no final.", Ui.Dica.OK), Ui.lp(top = 10, c = c))
 
         s.addView(Ui.button(c, "assistir agora", Ui.Kind.PRIMARY, R.drawable.ic_play) { act.tocaIntro() }, Ui.lp(top = 14, c = c))
         return s
@@ -719,7 +720,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
 
         when (Prefs.bgTipo) {
             "animado" -> {
-                f.addView(Ui.text(c, "Desenhos do próprio app. Eles seguem as cores 1 e 2.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+                f.addView(Ui.dica(c, "Desenhos do próprio app. Eles seguem as cores 1 e 2.", Ui.Dica.INFO), Ui.lp(top = 10, c = c))
                 val cartas = ArrayList<View>()
                 for (id in Temas.FUNDOS) {
                     val sel = Prefs.bgPreset == id
@@ -747,12 +748,12 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
                     if (!ocupado) escolher(video)
                 }, Ui.lp(top = 10, c = c))
                 if (tem) f.addView(Ui.button(c, "remover e voltar ao animado", Ui.Kind.GHOST, R.drawable.ic_trash) { remove() }, Ui.lp(top = 8, c = c))
-                f.addView(Ui.text(c, if (video)
+                f.addView(Ui.dica(c, if (video)
                     "O vídeo toca em loop, sem som. Vídeos curtos e leves (até 1080p) gastam menos bateria. O arquivo é copiado para dentro do app e nada é enviado pela internet."
                 else
-                    "A imagem é copiada para dentro do app e nada é enviado pela internet.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+                    "A imagem é copiada para dentro do app e nada é enviado pela internet.", Ui.Dica.INFO), Ui.lp(top = 10, c = c))
             }
-            else -> f.addView(Ui.text(c, "Só a cor de fundo do app, sem nenhum desenho. A cor muda em CORES.", 10.5f, Ui.MUTED), Ui.lp(top = 10, c = c))
+            else -> f.addView(Ui.dica(c, "Só a cor de fundo do app, sem nenhum desenho. A cor muda em CORES.", Ui.Dica.INFO), Ui.lp(top = 10, c = c))
         }
         if (msg.isNotEmpty()) f.addView(Ui.text(c, msg, 12.5f, Ui.WARN, true), Ui.lp(top = 8, c = c))
 
@@ -766,7 +767,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
                 act.ajustaFundo()
             }, onFim = { x -> Prefs.bgBlur = x; act.ajustaFundo() }), Ui.lp(top = 12, c = c))
         } else {
-            f.addView(Ui.text(c, "O desfoque do fundo precisa do Android 12 ou mais novo.", 10.5f, Ui.MUTED), Ui.lp(top = 12, c = c))
+            f.addView(Ui.dica(c, "O desfoque do fundo precisa do Android 12 ou mais novo.", Ui.Dica.AVISO), Ui.lp(top = 12, c = c))
         }
         return f
     }

@@ -26,6 +26,7 @@ object Sys {
      * e nunca mexe se o usuario ja tiver algum fundo (video/imagem) escolhido.
      */
     private fun aplicarVideoPadrao() {
+        trocarPadraoPorMudo()
         if (Prefs.bgPadraoAplicado) return
         Prefs.bgPadraoAplicado = true
         if (Prefs.bgArquivo != null) return
@@ -40,6 +41,24 @@ object Sys {
         } catch (_: Exception) {
             // sem asset embutido ainda (ou falhou copiar): fica no fundo animado normal
         }
+    }
+
+    /**
+     * O video padrao antigo tinha som. Quem ja tinha ele copiado (bg_padrao.mp4) ganha a versao nova,
+     * sem audio, uma vez so. Video que o usuario escolheu da galeria nao e mexido.
+     */
+    private fun trocarPadraoPorMudo() {
+        try {
+            val sp = app.getSharedPreferences("nocry_bg", Context.MODE_PRIVATE)
+            if (sp.getBoolean("padrao_mudo", false)) return
+            val f = File(app.filesDir, "bg_padrao.mp4")
+            if (f.isFile) {
+                val tmp = File(app.filesDir, "bg_padrao.tmp")
+                app.assets.open(ASSET_VIDEO_PADRAO).use { ins -> tmp.outputStream().use { outs -> ins.copyTo(outs) } }
+                if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
+            }
+            sp.edit().putBoolean("padrao_mudo", true).apply()
+        } catch (_: Exception) {}
     }
 
     private val nomeOk = Regex("[a-z_]+")

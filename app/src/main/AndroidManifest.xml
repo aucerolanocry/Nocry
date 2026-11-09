@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- segura o celular acordado enquanto baixa as pastas com a tela desligada -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- religa o NOCRY sozinho quando ele e fechado nos recentes (com algo ativado) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- pedido de "bateria sem restricao" (o Android nao fecha o app em segundo plano) -->

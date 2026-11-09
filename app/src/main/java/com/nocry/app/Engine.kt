@@ -89,9 +89,10 @@ object Engine {
         val rc = Toque.aplica(modo, Mark.VOL)
         NLog.add("volume", "$quem: $modo rc=$rc ${Toque.lido()}")
         if (rc == 0) {
-            Notif.say(app, if (modo == "rapido") "TOQUE LIGADO ${Toque.txtLigado()}" else "TOQUE NORMAL ${Toque.txtNormal()}")
+            if (modo == "rapido") Notif.evento(app, "TOQUE RÁPIDO LIGADO", "${Toque.txtLigado()} · $quem", Notif.Efeito.LIGOU)
+            else Notif.evento(app, "TOQUE NORMAL", "${Toque.txtNormal()} · $quem", Notif.Efeito.DESLIGOU)
         } else if (rc == 1) {
-            Notif.say(app, "O APARELHO NAO ACEITOU A MUDANCA - veja CONEXAO")
+            Notif.evento(app, "O CELULAR NÃO ACEITOU A MUDANÇA", "Veja a tela Conexão (permissão ou ADB).", Notif.Efeito.FALHOU)
         }
         mudou()
     }
@@ -102,6 +103,7 @@ object Engine {
             Prefs.volAtivo = true
             NLog.add("volume", "ligado (VOL+ ${Prefs.clicksUp}x = ${Toque.txtLigado()} · VOL- ${Prefs.clicksDown}x = ${Toque.txtNormal()})")
         }
+        Notif.evento(app, "TOQUE VIA VOLUME ATIVADO", "VOL+ ${Prefs.clicksUp}x liga o toque rápido · VOL− ${Prefs.clicksDown}x volta ao normal", Notif.Efeito.LIGOU)
         NocryService.sync(app)
         mudou()
         Presenca.evento("modo_on", "TOQUE VIA VOLUME")
@@ -114,10 +116,12 @@ object Engine {
             if (Prefs.markVol) {
                 rc = Toque.aplica("normal", Mark.VOL)
                 NLog.add("volume", "parou: normal rc=$rc ${Toque.lido()}")
-                if (rc != 1) Notif.say(app, "TOQUE VIA VOLUME PARADO - toque normal")
             } else NLog.add("volume", "parou")
             Prefs.volAtivo = false
         }
+        if (estava) Notif.evento(app, "TOQUE VIA VOLUME DESATIVADO",
+            if (rc == 1) "Não consegui voltar o toque ao normal: veja a tela Conexão." else "O toque está no normal.",
+            if (rc == 1) Notif.Efeito.FALHOU else Notif.Efeito.DESLIGOU)
         NocryService.sync(app)
         mudou()
         if (estava) Presenca.evento("modo_off", "TOQUE VIA VOLUME")
@@ -138,6 +142,9 @@ object Engine {
             tentCarga = 0
             NLog.add("toque-carga", "ligado (gatilho: $gatilho, repeticoes: $rep)")
         }
+        Notif.evento(app, "TOQUE VIA CARREGADOR ATIVADO",
+            if (gatilho == "colocou") "Colocar no carregador liga o toque rápido · tirar volta ao normal" else "Tirar do carregador liga o toque rápido · colocar volta ao normal",
+            Notif.Efeito.LIGOU)
         NocryService.sync(app)
         mudou()
         Presenca.evento("modo_on", "TOQUE VIA CARREGADOR")
@@ -150,11 +157,13 @@ object Engine {
             if (Prefs.markCarga) {
                 rc = Toque.aplica("normal", Mark.CARGA)
                 NLog.add("toque-carga", "parou: normal rc=$rc ${Toque.lido()}")
-                if (rc != 1) Notif.say(app, "TOQUE VIA CARREGADOR PARADO - toque normal")
             } else NLog.add("toque-carga", "parou")
             Prefs.cargaAtivo = false
             Prefs.cargaRep = 0
         }
+        if (estava) Notif.evento(app, "TOQUE VIA CARREGADOR DESATIVADO",
+            if (rc == 1) "Não consegui voltar o toque ao normal: veja a tela Conexão." else "O toque está no normal.",
+            if (rc == 1) Notif.Efeito.FALHOU else Notif.Efeito.DESLIGOU)
         NocryService.sync(app)
         mudou()
         if (estava) Presenca.evento("modo_off", "TOQUE VIA CARREGADOR")
@@ -174,7 +183,8 @@ object Engine {
         val rc = Toque.aplica(want, Mark.CARGA)
         NLog.add("toque-carga", "carregador=${if (now) "ligado" else "desligado"} ($faz): $want rc=$rc ${Toque.lido()}")
         if (rc == 0) {
-            Notif.say(app, if (want == "rapido") "TOQUE LIGADO ${Toque.txtLigado()}" else "TOQUE NORMAL ${Toque.txtNormal()}")
+            if (want == "rapido") Notif.evento(app, "TOQUE RÁPIDO LIGADO", "${Toque.txtLigado()} · carregador", Notif.Efeito.LIGOU)
+            else Notif.evento(app, "TOQUE NORMAL", "${Toque.txtNormal()} · carregador", Notif.Efeito.DESLIGOU)
         }
         if (rc != 1) {
             prevCarga = now
@@ -186,7 +196,7 @@ object Engine {
                     Prefs.cargaRep = rep
                     NLog.add("toque-carga", "repeticoes restantes: $rep")
                     if (rep <= 0) {
-                        Notif.say(app, "TOQUE VIA CARREGADOR TERMINOU AS REPETICOES")
+                        Notif.evento(app, "TOQUE VIA CARREGADOR TERMINOU", "Acabaram as repetições: desligou sozinho.", Notif.Efeito.DESLIGOU)
                         NLog.add("toque-carga", "terminou as repeticoes, parando")
                         Prefs.cargaAtivo = false
                         NocryService.sync(app)
@@ -234,7 +244,7 @@ object Engine {
         synchronized(lock) {
             if (Prefs.densOrig != null) {
                 ok = Adb.ensure(app) && MC.densOff()
-                if (ok) Notif.say(app, "MODO CARREGADOR PARADO") else NLog.add("carregador", "nao consegui devolver a density")
+                if (ok) Notif.evento(app, "MODO CARREGADOR DESATIVADO", "A tela voltou ao normal.", Notif.Efeito.DESLIGOU) else NLog.add("carregador", "nao consegui devolver a density")
             }
             Prefs.mcAtivo = false
             Prefs.mcCycles = 0
@@ -259,7 +269,7 @@ object Engine {
                 val pkg = if (Prefs.mcFf == "normal") Const.FF_NORMAL else Const.FF_MAX
                 val abriu = Sys.abrirFf(pkg)
                 NLog.add("carregador", "ligou: density $dens aplicada · abrir $pkg=$abriu")
-                Notif.say(app, "MODO CARREGADOR ATIVO")
+                Notif.evento(app, "MODO CARREGADOR ATIVADO", "Pra parar: VOL+ VOL− VOL+ VOL−.", Notif.Efeito.LIGOU)
                 prevMc = now
                 tentMc = 0
             } else {
@@ -276,7 +286,7 @@ object Engine {
                     val c = Prefs.mcCycles - 1
                     Prefs.mcCycles = c
                     NLog.add("carregador", "tirou: density voltou · repeticoes restantes: $c")
-                    Notif.say(app, "MODO CARREGADOR: VOLTOU AO NORMAL")
+                    Notif.evento(app, "MODO CARREGADOR", "Voltou ao normal.", Notif.Efeito.DESLIGOU)
                     prevMc = now
                     if (c <= 0) pararMc()
                     mudou()
@@ -302,8 +312,9 @@ object Engine {
         if (Prefs.cargaAtivo) l.add("TOQUE/CARREGADOR")
         if (Prefs.mcAtivo) l.add("MODO CARREGADOR")
         if (Prefs.otmAuto) l.add("OTIMIZACAO AUTO")
-        if (Prefs.bypassAtivo) l.add("BYPASS(${Prefs.bypassGatilho})")
-        if (Prefs.bypassVolAtivo) l.add("BYPASS-VOLUME")
+        val estadoBypass = if (Prefs.bypassMark) "APLICADO" else "PRONTO"
+        if (Prefs.bypassAtivo) l.add("BYPASS ${when (Prefs.bypassGatilho) { "dnd" -> "NÃO PERTURBE"; "bt" -> "BLUETOOTH"; "carga" -> "CARREGADOR"; else -> Prefs.bypassGatilho.uppercase() }} · $estadoBypass")
+        if (Prefs.bypassVolAtivo) l.add("BYPASS VOLUME · $estadoBypass")
         Sniper.resumo().takeIf { it.isNotEmpty() }?.let { l.add(it) }
         return if (l.isEmpty()) "nada ligado" else l.joinToString(" · ")
     }

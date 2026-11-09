@@ -481,7 +481,8 @@ class BgView(c: Context) : FrameLayout(c) {
             m.isLooping = true
             m.setVolume(0f, 0f)                                   // fundo sempre mudo
             m.setOnVideoSizeChangedListener { _, w, h -> vw = w; vh = h; ajusta() }
-            m.setOnPreparedListener { pl -> if (!pausado) pl.start() }
+            // alguns celulares ignoram o volume posto antes de preparar: zera de novo aqui
+            m.setOnPreparedListener { pl -> try { pl.setVolume(0f, 0f) } catch (_: Throwable) {}; if (!pausado) pl.start() }
             m.setOnErrorListener { _, _, _ ->
                 NLog.add("visual", "o video de fundo nao abriu; usando o fundo animado")
                 Bg.ui { paraVideo(); conteudo.removeAllViews(); animado() }
@@ -534,7 +535,7 @@ class BgView(c: Context) : FrameLayout(c) {
     fun retoma() {
         pausado = false
         anim?.retoma()
-        try { mp?.start() } catch (_: Throwable) {}
+        try { mp?.setVolume(0f, 0f); mp?.start() } catch (_: Throwable) {}
     }
 
     fun encerra() { libera() }

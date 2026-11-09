@@ -11,24 +11,30 @@ class BypassScreen(a: MainActivity) : Screen(a) {
 
     override fun key(): String = listOf(
         Prefs.bypassAtivo, Prefs.bypassGatilho, Prefs.bypassFf, Prefs.bypassTipo,
-        Prefs.bypassMark, Prefs.bypassVolAtivo, Prefs.bypassCliques, Adb.connected, SegundoPlano.estado(act)
+        Prefs.bypassMark, Prefs.bypassVolAtivo, Prefs.bypassCliques, Adb.connected, SegundoPlano.estado(act), Prefs.vibrarAvisos
     ).joinToString("|")
 
     override fun render() {
         limpa()
         val c = act
 
-        add(Ui.text(c, "Ativa pelo volume, não perturbe, bluetooth ou carregador — e aplica a pasta suja no Free Fire escolhido.", 10.5f, Ui.MUTED), 0)
+        add(Ui.dica(c, "Escolha um gatilho (volume, não perturbe, bluetooth ou carregador). Quando ele acontece, o app aplica a pasta suja no Free Fire escolhido, e quando desfaz, restaura o padrão. Avisa na notificação e com uma vibração curta.", Ui.Dica.INFO), 0)
 
         val ativo = Prefs.bypassAtivo || Prefs.bypassVolAtivo
+        // com o bypass ligado (ou aplicado) não dá pra trocar o jogo/gatilho/tipo: restauraria a pasta errada
+        val travado = ativo || Prefs.bypassMark
         val gat = if (Prefs.bypassVolAtivo) "volume" else Prefs.bypassGatilho
         val nomeGat = when (gat) { "dnd" -> "NÃO PERTURBE"; "bt" -> "BLUETOOTH"; "carga" -> "CARREGADOR"; "volume" -> "VOLUME"; else -> gat.uppercase() }
         val hero = Ui.hero(c, R.drawable.ic_shield, "bypass", if (ativo) "Ativo" else "Desativado", ativo,
-            if (ativo) "Escutando o gatilho em segundo plano." else "Escolha o gatilho, o Free Fire e o tipo.")
+            when {
+                ativo && Prefs.bypassMark -> "Aplicado agora no ${if (Prefs.bypassFf == "max") "FF MAX" else "FF NORMAL"}."
+                ativo -> "Escutando o gatilho em segundo plano."
+                else -> "Escolha o gatilho, o Free Fire e o tipo."
+            })
         hero.addView(Ui.chips(c,
             Ui.chip(c, "ADB", if (Adb.connected) "OK" else "OFF", Adb.connected),
             Ui.chip(c, "GATILHO", nomeGat, if (ativo) true else null),
-            Ui.chip(c, "FREE FIRE", if (Prefs.bypassFf == "max") "MAX" else "NORMAL", null)
+            Ui.chip(c, "AGORA", if (Prefs.bypassMark) "APLICADO" else "PADRÃO", if (Prefs.bypassMark) true else null)
         ), Ui.lp(top = 16, c = c))
         add(hero, 12)
 
@@ -40,8 +46,11 @@ class BypassScreen(a: MainActivity) : Screen(a) {
             itemGatilho(R.drawable.ic_volume, "Volume", "VOL+ ${nx}x = ativa · VOL− ${nx}x = desativa", "volume")
         )), 20)
 
+        if (travado) add(Ui.dica(c, "Pra trocar o gatilho, o Free Fire ou o tipo, desative o bypass primeiro (e restaure, se estiver aplicado). Assim ele nunca restaura a pasta do jogo errado.", Ui.Dica.AVISO), 12)
+
         add(Ui.label(c, "escolha o free fire"), 20)
         add(Ui.segmento(c, listOf("NORMAL", "MAX"), if (Prefs.bypassFf == "normal") 0 else 1) { i ->
+            if (travado) { Ui.toast(act, "DESATIVE O BYPASS PRA TROCAR"); return@segmento }
             Prefs.bypassFf = if (i == 0) "normal" else "max"
             redesenha()
         }, 8)
@@ -49,9 +58,13 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         add(Ui.label(c, "escolha o tipo"), 18)
         add(Ui.segmento(c, listOf("COMPLETO", "NORMAL", "SIMPLES"),
             when (Prefs.bypassTipo) { "completo" -> 0; "normal" -> 1; else -> 2 }) { i ->
+            if (travado) { Ui.toast(act, "DESATIVE O BYPASS PRA TROCAR"); return@segmento }
             Prefs.bypassTipo = when (i) { 0 -> "completo"; 1 -> "normal"; else -> "simples" }
             redesenha()
         }, 8)
+        if (Prefs.bypassTipo == "completo") {
+            add(Ui.dica(c, "Completo: depois de restaurar (ou desativar), apaga a pasta suja. Pra usar de novo, instale ela em Instalar recursos.", Ui.Dica.AVISO), 8)
+        }
 
         if (Prefs.bypassGatilho == "volume") {
             add(Ui.label(c, "cliques do volume (2 a 10)"), 18)
@@ -87,13 +100,14 @@ class BypassScreen(a: MainActivity) : Screen(a) {
                     return@button
                 }
                 if (Prefs.bypassGatilho == "volume") {
-                    Bg.run({ if (!Sys.acessibilidadeLigada()) Sys.ligarAcessibilidade() else true; EngineBypass.iniciarVolume(); 0 }) { _ ->
-                        if (Sys.acessibilidadeLigada()) {
-                            Ui.toast(act, "BYPASS ATIVO — VOL+ ${Prefs.bypassCliques}X APLICA")
-                        } else {
-                            EngineBypass.pararVolume()
-                            Ui.toast(act, "LIGUE A ACESSIBILIDADE (TELA DE CONEXÃO) PARA USAR O VOLUME")
-                        }
+                    // primeiro confere a escuta do volume; só liga (e avisa) se ela estiver funcionando
+                    Bg.run({
+                        val ok = Sys.acessibilidadeLigada() || Sys.ligarAcessibilidade() || Sys.acessibilidadeLigada()
+                        if (ok) EngineBypass.iniciarVolume()
+                        ok
+                    }) { ok ->
+                        if (ok) Ui.toast(act, "BYPASS ATIVO — VOL+ ${Prefs.bypassCliques}X APLICA")
+                        else Ui.toast(act, "LIGUE A ESCUTA DO VOLUME (TELA DE CONEXÃO, PASSO 5)")
                         redesenha()
                     }
                 } else {
@@ -115,6 +129,10 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         }
 
         add(Ui.dica(c, "O app fica em segundo plano escutando o gatilho, mesmo minimizado ou fechado nos recentes. Para parar, toque em desativar.", Ui.Dica.INFO), 18)
+        add(Ui.toggle(c, "Vibrar nos avisos", "1 vibração = aplicou · 2 = restaurou · 3 = falhou", Prefs.vibrarAvisos) { v ->
+            Prefs.vibrarAvisos = v
+            redesenha()
+        }, 12)
         add(SegundoPlano.grupo(act) { redesenha() }, 14)
     }
 
@@ -145,6 +163,10 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         mp.leftMargin = Ui.dp(c, 8)
         r.addView(marca, mp)
         Ui.clique(r) {
+            if (Prefs.bypassAtivo || Prefs.bypassVolAtivo || Prefs.bypassMark) {
+                if (atual != id) Ui.toast(act, "DESATIVE O BYPASS PRA TROCAR O GATILHO")
+                return@clique
+            }
             Prefs.bypassGatilho = id
             redesenha()
         }

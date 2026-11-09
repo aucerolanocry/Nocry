@@ -137,7 +137,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         return t
     }
 
-    private fun dica(s: String): View = Ui.text(act, s, 11f, Ui.MUTED)
+    /** explicação no balãozinho (igual ao resto do app) */
+    private fun dica(s: String): View = Ui.dica(act, s, Ui.Dica.INFO)
 
     private fun pesoUm(esq: Int = 0): LinearLayout.LayoutParams =
         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(act, esq) }
@@ -778,7 +779,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val temToken = Cofre.tem(c)
         if (!temToken || Sniper.estado == "token") {
             card.addView(Ui.text(c, if (Sniper.estado == "token") "O Discord recusou o token" else "Cole o token da conta", 15f, Ui.TEXT, true), Ui.lp(top = 12, c = c))
-            card.addView(dica("Use a conta temporária. O token fica cifrado só neste celular. Se o Discord pedir pra trocar a senha, o token muda: é só colar o novo aqui."), Ui.lp(top = 6, c = c))
+            card.addView(dica("Use a conta temporária. O token fica cifrado neste celular e no backup (que só abre com a sua key de dono). Se o Discord pedir pra trocar a senha, o token muda: é só colar o novo aqui."), Ui.lp(top = 6, c = c))
             val e = campoToken ?: Ui.field(c, "token da conta", false).also {
                 it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 campoToken = it

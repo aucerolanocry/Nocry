@@ -81,8 +81,9 @@ abstract class Screen(val act: MainActivity) {
      * embaixo deixava toda tela com o nome duplicado; o parametro fica so pra nao mexer nas chamadas.
      */
     @Suppress("UNUSED_PARAMETER")
+    /** explicação do topo da tela, no balãozinho (igual à Conexão) */
     protected fun cabecalho(titulo: String, subtitulo: String) {
-        add(Ui.text(act, subtitulo, 10.5f, Ui.MUTED), 0)
+        add(Ui.dica(act, subtitulo, Ui.Dica.INFO), 0)
     }
 }
 

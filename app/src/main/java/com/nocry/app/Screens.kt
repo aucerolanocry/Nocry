@@ -199,7 +199,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
 
         val lista = Atalhos.visiveis()
         if (lista.isEmpty()) {
-            add(Ui.text(c, "Todos os modos estão escondidos. Toque em EDITAR para mostrar de novo.", 12.5f, Ui.MUTED), 8)
+            add(Ui.dica(c, "Todos os modos estão escondidos. Toque em EDITAR para mostrar de novo.", Ui.Dica.AVISO), 8)
         }
         var i = 0
         while (i < lista.size) {
@@ -283,7 +283,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         campoPorta?.let { portaTxt = it.text.toString() }
         limpa()
         val c = act
-        add(Ui.text(c, "Siga a linha abaixo uma vez, no wi-fi, pra ligar o NOCRY no celular.", 10.5f, Ui.MUTED), 0)
+        add(Ui.dica(c, "Siga a linha abaixo uma vez, no wi-fi, pra ligar o NOCRY no celular. Passo feito fica verde e recolhe sozinho.", Ui.Dica.INFO), 0)
 
         val conectado = Adb.connected
         val perm = Sys.hasWriteSecure()

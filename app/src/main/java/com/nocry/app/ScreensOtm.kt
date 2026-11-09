@@ -402,7 +402,7 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        add(Ui.text(c, "Tudo o que o NOCRY fez, do mais novo pro mais antigo.", 10.5f, Ui.MUTED), 0)
+        add(Ui.dica(c, "Tudo o que o NOCRY fez, do mais novo pro mais antigo. Toque num filtro pra ver só um assunto.", Ui.Dica.INFO), 0)
 
         val todos = le()
         val erros = todos.count { it.tipo.contains("erro") }
@@ -728,12 +728,12 @@ class SobreScreen(a: MainActivity) : Screen(a) {
             Ui.infoBox(c, R.drawable.ic_chip, "aparelho", License.devId(c).take(8)),
             Ui.infoBox(c, R.drawable.ic_info, "versão", versao())
         ), Ui.lp(top = 8, c = c))
-        kc.addView(Ui.text(c, "A key é confirmada com o servidor a cada poucas horas, quando há internet.", 10f, Ui.MUTED), Ui.lp(top = 12, c = c))
+        kc.addView(Ui.dica(c, "A key é confirmada com o servidor a cada poucas horas, quando há internet.", Ui.Dica.INFO), Ui.lp(top = 12, c = c))
         if (License.isAdmin() && BuildConfig.API_URL.isNotBlank()) {
             kc.addView(Ui.button(c, "abrir painel de keys", Ui.Kind.PRIMARY, R.drawable.ic_globe) {
                 abre(BuildConfig.API_URL.trimEnd('/') + "/admin")
             }, Ui.lp(top = 14, c = c))
-            kc.addView(Ui.text(c, "No painel, entre com a sua própria key.", 10f, Ui.MUTED), Ui.lp(top = 6, c = c))
+            kc.addView(Ui.dica(c, "No painel, entre com a sua própria key.", Ui.Dica.INFO), Ui.lp(top = 8, c = c))
         }
         kc.addView(Ui.button(c, "sair da key", Ui.Kind.GHOST, R.drawable.ic_logout) {
             Ui.dialogConfirma(act, "SAIR DA KEY", "O app volta para a tela da key e os monitores param (o toque e a tela voltam ao normal).", "SAIR") {

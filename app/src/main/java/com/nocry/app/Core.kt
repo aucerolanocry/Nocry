@@ -354,6 +354,10 @@ var bypassVolAtivo: Boolean
     var vibrar: Boolean
         get() = sp.getBoolean("vibrar", false)
         set(v) = pb("vibrar", v)
+    /** vibra quando o bypass/toque aplica ou restaura (dá pra sentir no meio da partida, sem olhar a tela) */
+    var vibrarAvisos: Boolean
+        get() = sp.getBoolean("vibrar_avisos", true)
+        set(v) = pb("vibrar_avisos", v)
     /** ja tentou copiar o video de fundo padrao (dos assets) pra pasta interna; evita repetir toda vez */
     var bgPadraoAplicado: Boolean
         get() = sp.getBoolean("bg_padrao_aplicado", false)
@@ -434,6 +438,9 @@ object Notif {
     const val CH_ALERT = "nocry_alert"
     const val CH_PAIR = "nocry_pair"
     const val CH_INST = "nocry_inst"
+    /** canal novo dos avisos de bypass/toque: o antigo podia estar silenciado e sumia em 6 s */
+    const val CH_EVENTO = "nocry_eventos"
+    const val ID_EVENTO = 6001
     const val ID_SVC = 1001
     const val ID_ALERT = 2001
     const val ID_PAIR = 3001
@@ -445,6 +452,69 @@ object Notif {
         nm.createNotificationChannel(NotificationChannel(CH_ALERT, "Avisos do NOCRY", NotificationManager.IMPORTANCE_HIGH))
         nm.createNotificationChannel(NotificationChannel(CH_PAIR, "Pareamento", NotificationManager.IMPORTANCE_HIGH))
         nm.createNotificationChannel(NotificationChannel(CH_INST, "Instalação das pastas", NotificationManager.IMPORTANCE_LOW))
+        val ev = NotificationChannel(CH_EVENTO, "Bypass e toque (aplicou / restaurou)", NotificationManager.IMPORTANCE_HIGH)
+        ev.description = "Aparece na hora quando o bypass ou o toque liga, aplica, restaura ou desliga."
+        ev.enableVibration(false)          // a vibração é do próprio app (dá pra desligar no Estúdio)
+        ev.setSound(null, null)            // sem barulho no meio da partida
+        ev.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        nm.createNotificationChannel(ev)
+    }
+
+    enum class Efeito { LIGOU, DESLIGOU, FALHOU, INFO }
+
+    private val principal = Handler(Looper.getMainLooper())
+
+    /**
+     * Aviso de bypass/toque: notificação que aparece na hora (e fica na barra até o próximo aviso),
+     * um balão na tela quando o app está fechado (aparece até dentro do jogo) e uma vibração curta:
+     * 1 = aplicou/ligou · 2 = restaurou/desligou · 3 = falhou.
+     */
+    fun evento(c: Context, titulo: String, texto: String, efeito: Efeito = Efeito.INFO) {
+        val app = c.applicationContext
+        try {
+            val nm = app.getSystemService(NotificationManager::class.java)
+            if (nm != null) {
+                val abre = PendingIntent.getActivity(app, 6, Intent(app, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                val n = Notification.Builder(app, CH_EVENTO)
+                    .setSmallIcon(R.drawable.ic_stat)
+                    .setContentTitle(titulo)
+                    .setContentText(texto)
+                    .setStyle(Notification.BigTextStyle().bigText(texto))
+                    .setContentIntent(abre)
+                    .setAutoCancel(true)
+                    .setShowWhen(true)
+                    .setWhen(System.currentTimeMillis())
+                    .setCategory(Notification.CATEGORY_STATUS)
+                    .setVisibility(Notification.VISIBILITY_PUBLIC)
+                    .setColor(Theme.accent)
+                    .setTimeoutAfter(10 * 60_000L)
+                    .build()
+                nm.notify(ID_EVENTO, n)
+            }
+        } catch (_: Throwable) {}
+        // app fechado (ex.: dentro do jogo): balão rápido na tela também, porque tem celular que esconde notificação durante o jogo
+        if (!Presenca.naTela) {
+            principal.post {
+                try { android.widget.Toast.makeText(app, "$titulo · $texto".take(120), android.widget.Toast.LENGTH_SHORT).show() } catch (_: Throwable) {}
+            }
+        }
+        if (Prefs.vibrarAvisos && efeito != Efeito.INFO) vibra(app, efeito)
+    }
+
+    private fun vibra(c: Context, efeito: Efeito) {
+        try {
+            val v: android.os.Vibrator? = if (android.os.Build.VERSION.SDK_INT >= 31)
+                c.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+            else c.getSystemService(android.os.Vibrator::class.java)
+            if (v == null || !v.hasVibrator()) return
+            val padrao = when (efeito) {
+                Efeito.LIGOU -> longArrayOf(0, 90)
+                Efeito.DESLIGOU -> longArrayOf(0, 70, 110, 70)
+                else -> longArrayOf(0, 50, 80, 50, 80, 50)
+            }
+            v.vibrate(android.os.VibrationEffect.createWaveform(padrao, -1))
+        } catch (_: Throwable) {}
     }
 
     /** aviso rapido na tela (some sozinho) */
@@ -456,7 +526,7 @@ object Notif {
                 .setContentTitle("NOCRY")
                 .setContentText(text)
                 .setAutoCancel(true)
-                .setTimeoutAfter(6000)
+                .setTimeoutAfter(60_000)
                 .build()
             nm.notify(ID_ALERT, n)
         } catch (_: Exception) {
