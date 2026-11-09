@@ -11,6 +11,9 @@ adb install -r -g "$APK" || { echo "falhou instalar"; exit 1; }
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
+# o emulador às vezes mostra "Pixel Launcher isn't responding" por cima de tudo: esconde esses avisos do sistema
+adb shell settings put global hide_error_dialogs 1
+adb shell settings put global anr_show_background 0
 # notificações liberadas e sem a tela de economia de bateria no caminho
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null || true
 
@@ -20,6 +23,7 @@ X=$((LARG/2)); Y1=$((ALT*78/100)); Y2=$((ALT*28/100))
 shot() { # nome tela [aba] [demo]
   local nome=$1 tela=$2 aba=${3:-0} demo=${4:-false}
   adb shell am force-stop $PKG
+  adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
   adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" >/dev/null
   sleep 7
   adb exec-out screencap -p > "$OUT/cru/${nome}_1.png"

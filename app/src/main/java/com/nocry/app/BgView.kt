@@ -384,6 +384,11 @@ class BgView(c: Context) : FrameLayout(c) {
         val mm = LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         addView(conteudo, mm)
         addView(escuro, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        // sombra em cima (atrás da hora e do título): o título fica legível mesmo com céu claro no fundo
+        val topo = View(c)
+        topo.background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(0xB0000000.toInt(), 0x60000000, 0x00000000))
+        addView(topo, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (170 * c.resources.displayMetrics.density).toInt(), android.view.Gravity.TOP))
         aplica()
     }
 
