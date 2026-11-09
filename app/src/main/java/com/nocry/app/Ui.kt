@@ -91,7 +91,7 @@ object Ui {
         if (Color.red(color) * 299 + Color.green(color) * 587 + Color.blue(color) * 114 > 140_000) {
             t.setShadowLayer(dp(c, 3).toFloat(), 0f, dp(c, 1).toFloat() * 0.6f, Theme.alpha(Color.BLACK, 0x99))
         }
-        if (!code && Prefs.maiusc) {
+        if (!code && Prefs.maiusc && display) {
             t.setAllCaps(true)
             // caixa alta sem espaco entre as letras fica apertada; titulo usa o espacamento do pacote,
             // texto corrido um pouco menos (senao o paragrafo fica largo demais)
@@ -139,6 +139,9 @@ object Ui {
     }
 
     /** etiqueta pequena na cor 1 em cima de cada bloco */
+    /** canto das peças pequenas acompanhando o canto dos cartões do tema (tema reto não ganha pílula redonda) */
+    fun raioPeq(max: Int): Int = minOf(max, Prefs.raio + 6)
+
     fun label(c: Context, s: String): TextView {
         val t = text(c, s, 11f, RED, true, mono = true)
         t.letterSpacing = if (Prefs.maiusc) 0.2f else 0.06f
@@ -388,7 +391,7 @@ object Ui {
             val sel = i == escolhido
             val b = hbox(c)
             b.gravity = Gravity.CENTER
-            b.background = if (sel) Botao(c, "grad", 14) else shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xB8), 14, Theme.alpha(Color.WHITE, 0x26), 1)
+            b.background = if (sel) Botao(c, "grad", raioPeq(14)) else shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xB8), raioPeq(14), Theme.alpha(Color.WHITE, 0x26), 1)
             b.setPadding(dp(c, 14), dp(c, 9), dp(c, 15), dp(c, 9))
             val cor = if (sel) Theme.sobreGrad() else MUTED
             b.addView(icone(c, o.first, cor, 15))
@@ -454,8 +457,8 @@ object Ui {
         r.gravity = Gravity.TOP
         // base escura por baixo da cor: o balão fica legível mesmo em cima de fundo claro
         r.background = android.graphics.drawable.LayerDrawable(arrayOf(
-            shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xC4), 14),
-            shape(c, Theme.alpha(cor, 0x1C), 14, Theme.alpha(cor, 0x55), 1)))
+            shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xC8), raioPeq(14)),
+            shape(c, Theme.alpha(cor, 0x1A), raioPeq(14), Theme.alpha(cor, 0x50), 1)))
         r.setPadding(dp(c, 12), dp(c, 11), dp(c, 13), dp(c, 11))
         // ícone numa bolinha da mesma cor (fica com cara de balão de aviso, não de texto solto)
         val bola = FrameLayout(c)

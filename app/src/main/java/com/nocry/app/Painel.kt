@@ -116,7 +116,7 @@ class Painel(
         pFill.shader = null
         if (estilo == "vidro") {
             val k = Prefs.vidro / 62f
-            pFill.color = Theme.alpha(0xFF0A0814.toInt(), ((0.46f * k).coerceIn(0f, 0.95f) * 255).toInt())
+            pFill.color = Theme.alpha(0xFF0A0814.toInt(), ((0.60f * k).coerceIn(0f, 0.95f) * 255).toInt())
             cv.drawPath(path, pFill)
             pFill.shader = shVidro
             cv.drawPath(path, pFill)

@@ -188,7 +188,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val c = act
         val b = Ui.vbox(c)
         b.gravity = Gravity.CENTER
-        b.background = Botao(c, if (sel) "grad" else "ghost", 12)
+        b.background = Botao(c, if (sel) "grad" else "ghost", Ui.raioPeq(12))
         b.setPadding(Ui.dp(c, 4), Ui.dp(c, 12), Ui.dp(c, 4), Ui.dp(c, 12))
         b.minimumHeight = Ui.dp(c, 52)
         val cor = corTexto ?: if (sel) Theme.sobreGrad() else if (ativo) Ui.TEXT else Theme.alpha(Ui.MUTED, 0x70)
@@ -261,7 +261,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         col.addView(sub, Ui.lp(top = 3, c = c))
         cab.addView(col, pesoUm(14))
         val aj = android.widget.FrameLayout(c)
-        aj.background = Botao(c, "ico", 12)
+        aj.background = Botao(c, "ico", Ui.raioPeq(12))
         aj.addView(Ui.icone(c, R.drawable.ic_info, Ui.MUTED, 17), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 17), Ui.dp(c, 17), Gravity.CENTER))
         aj.contentDescription = "como funciona"
         Ui.clique(aj) { ajuda() }
@@ -300,7 +300,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val c = act
         val col = Ui.vbox(c)
         col.gravity = Gravity.CENTER_HORIZONTAL
-        col.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, if (aceso) 0x10 else 0x08), 14,
+        col.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, if (aceso) 0x10 else 0x08), Ui.raioPeq(14),
             if (aceso) Theme.alpha(Theme.accent, 0x77) else Theme.alpha(android.graphics.Color.WHITE, 0x1C), 1)
         col.setPadding(Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 12))
         val cab = Ui.hbox(c)
@@ -422,7 +422,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                     fun pinta() {
                         for ((v, tv) in botoes) {
                             val sel = v in escolhidos
-                            tv.background = Botao(c, if (sel) "grad" else "ghost", 12)
+                            tv.background = Botao(c, if (sel) "grad" else "ghost", Ui.raioPeq(12))
                             tv.setTextColor(if (sel) Theme.sobreGrad() else Ui.TEXT)
                         }
                     }
@@ -524,7 +524,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         }
         sv.isVerticalScrollBarEnabled = true
         sv.overScrollMode = View.OVER_SCROLL_NEVER
-        sv.background = Botao(c, "campo", 14)
+        sv.background = Botao(c, "campo", Ui.raioPeq(14))
         val lista = Ui.vbox(c)
         val p = Ui.dp(c, 10)
         lista.setPadding(p, p, p, p)
@@ -541,8 +541,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val frases = listOf("Go", "Bora", "Full UMP e XM8?", "Sem mobilador", "Regras ok ✅", "Cria a sala", "Manda o ID", "Pronto")
         for ((i, f) in frases.withIndex()) {
             val t = texto(f, 13f, Ui.TEXT, true)
-            t.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(Theme.accent, 0x14), 20, Theme.alpha(Theme.accent, 0x5A), 1),
-                Ui.shape(c, android.graphics.Color.WHITE, 20))
+            t.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(Theme.accent, 0x14), Ui.raioPeq(20), Theme.alpha(Theme.accent, 0x5A), 1),
+                Ui.shape(c, android.graphics.Color.WHITE, Ui.raioPeq(20)))
             t.setPadding(Ui.dp(c, 15), Ui.dp(c, 9), Ui.dp(c, 15), Ui.dp(c, 9))
             Ui.clique(t) { mandar(f) }
             val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -571,7 +571,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         }
         solta(e)
         val foto = android.widget.FrameLayout(c)
-        foto.background = Botao(c, "ghost", 12)
+        foto.background = Botao(c, "ghost", Ui.raioPeq(12))
         foto.addView(Ui.icone(c, R.drawable.ic_image, Ui.TEXT, 20), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 20), Ui.dp(c, 20), Gravity.CENTER))
         foto.contentDescription = "enviar imagem"
         Ui.clique(foto) { escolherImagem() }
@@ -609,7 +609,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         l.addView(col, pesoUm())
         b.addView(l)
         val ct = Ui.text(c, estadoSala(), 10.5f, Ui.WARN, true, mono = true)
-        ct.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x0A), 10, Theme.alpha(android.graphics.Color.WHITE, 0x1C), 1)
+        ct.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x0A), Ui.raioPeq(10), Theme.alpha(android.graphics.Color.WHITE, 0x1C), 1)
         ct.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6))
         ct.gravity = Gravity.CENTER
         contagemTxt = ct
@@ -686,8 +686,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val c = act
         val (txt, cor) = estadoCurto(s)
         val col = Ui.vbox(c)
-        col.background = if (sel) Botao(c, "grad", 14)
-            else Ui.shape(c, Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), cor, 0.10f), 0xCC), 14, Theme.alpha(cor, 0x88), 1)
+        col.background = if (sel) Botao(c, "grad", Ui.raioPeq(14))
+            else Ui.shape(c, Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), cor, 0.10f), 0xCC), Ui.raioPeq(14), Theme.alpha(cor, 0x88), 1)
         col.setPadding(Ui.dp(c, 12), Ui.dp(c, 10), Ui.dp(c, 12), Ui.dp(c, 11))
         val l1 = Ui.hbox(c)
         l1.gravity = Gravity.CENTER_VERTICAL
@@ -760,8 +760,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val c = act
         val b = Ui.hbox(c)
         b.gravity = Gravity.CENTER
-        b.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x0A), 12, Theme.alpha(android.graphics.Color.WHITE, 0x24), 1),
-            Ui.shape(c, android.graphics.Color.WHITE, 12))
+        b.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x0A), Ui.raioPeq(12), Theme.alpha(android.graphics.Color.WHITE, 0x24), 1),
+            Ui.shape(c, android.graphics.Color.WHITE, Ui.raioPeq(12)))
         b.setPadding(Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 10))
         b.addView(Ui.icone(c, ico, Ui.ACC2, 14))
         val t = Ui.text(c, rot, 11f, Ui.TEXT, true, mono = true)
@@ -896,9 +896,9 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         }
         val b = Ui.vbox(c)
         b.background = when {
-            eu -> Botao(c, "grad", 16)
-            bot -> Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x08), 14, Theme.alpha(Theme.accent, 0x55), 1)
-            else -> Botao(c, "ghost", 16)
+            eu -> Botao(c, "grad", Ui.raioPeq(16))
+            bot -> Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x08), Ui.raioPeq(14), Theme.alpha(Theme.accent, 0x55), 1)
+            else -> Botao(c, "ghost", Ui.raioPeq(16))
         }
         b.setPadding(Ui.dp(c, 12), Ui.dp(c, 8), Ui.dp(c, 10), Ui.dp(c, 10))
         val corTexto = if (eu) Theme.sobreGrad() else Ui.TEXT
@@ -977,8 +977,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             for ((rot, valor) in achados) {
                 val p = Ui.hbox(c)
                 p.gravity = Gravity.CENTER_VERTICAL
-                p.background = if (eu) Ui.shape(c, Theme.alpha(android.graphics.Color.BLACK, 0x22), 10)
-                    else Ui.shape(c, Theme.alpha(Theme.accent, 0x1E), 10, Theme.alpha(Theme.accent, 0x66), 1)
+                p.background = if (eu) Ui.shape(c, Theme.alpha(android.graphics.Color.BLACK, 0x22), Ui.raioPeq(10))
+                    else Ui.shape(c, Theme.alpha(Theme.accent, 0x1E), Ui.raioPeq(10), Theme.alpha(Theme.accent, 0x66), 1)
                 p.setPadding(Ui.dp(c, 10), Ui.dp(c, 7), Ui.dp(c, 10), Ui.dp(c, 7))
                 p.addView(Ui.icone(c, R.drawable.ic_copy, if (eu) corTexto else Theme.accent, 13))
                 val tx = texto("$rot  ${encurtar(valor)}", 11.5f, corTexto, true)
@@ -1424,7 +1424,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         card.addView(linha, Ui.lp(top = 12, c = c))
         val ls = Sniper.logs(30)
         val lista = Ui.vbox(c)
-        lista.background = Botao(c, "campo", 12)
+        lista.background = Botao(c, "campo", Ui.raioPeq(12))
         val p = Ui.dp(c, 12)
         lista.setPadding(p, Ui.dp(c, 8), p, Ui.dp(c, 10))
         if (ls.isEmpty()) lista.addView(Ui.text(c, "nada ainda", 11f, Ui.MUTED, code = true))
