@@ -87,6 +87,10 @@ object Ui {
         // texto corrido (explicacoes) ganha mais entrelinha: em paragrafo, linha colada cansa a leitura
         t.setLineSpacing(0f, if (display || code) 1.12f else 1.3f)
         t.typeface = if (code) Theme.codigo(c) else Theme.fonte(c, display, bold)
+        // texto claro ganha uma sombra bem leve: some no cartão escuro, mas segura a leitura em cima do fundo claro
+        if (Color.red(color) * 299 + Color.green(color) * 587 + Color.blue(color) * 114 > 140_000) {
+            t.setShadowLayer(dp(c, 3).toFloat(), 0f, dp(c, 1).toFloat() * 0.6f, Theme.alpha(Color.BLACK, 0x99))
+        }
         if (!code && Prefs.maiusc) {
             t.setAllCaps(true)
             // caixa alta sem espaco entre as letras fica apertada; titulo usa o espacamento do pacote,
@@ -384,7 +388,7 @@ object Ui {
             val sel = i == escolhido
             val b = hbox(c)
             b.gravity = Gravity.CENTER
-            b.background = if (sel) Botao(c, "grad", 14) else shape(c, Theme.alpha(Color.WHITE, 0x0A), 14, Theme.alpha(Color.WHITE, 0x22), 1)
+            b.background = if (sel) Botao(c, "grad", 14) else shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xB8), 14, Theme.alpha(Color.WHITE, 0x26), 1)
             b.setPadding(dp(c, 14), dp(c, 9), dp(c, 15), dp(c, 9))
             val cor = if (sel) Theme.sobreGrad() else MUTED
             b.addView(icone(c, o.first, cor, 15))
