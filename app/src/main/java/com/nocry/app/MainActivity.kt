@@ -150,6 +150,7 @@ class MainActivity : Activity() {
 
     /** mostra a tela de atualizacao obrigatoria, bloqueando tudo (tem prioridade sobre a tela da key) */
     fun mostraUpdateGate(info: Update.Info) {
+        if (BuildConfig.PREVIEW) return
         // ja esta mostrando essa mesma atualizacao: nao reconstroi (perderia o progresso/mensagem do download em andamento)
         if (gate && gateAtualizacaoTag == info.tag) return
         gateAtualizacaoTag = info.tag
@@ -213,6 +214,7 @@ class MainActivity : Activity() {
      * mostra uma vez so (quem entra pela tela da key ja ve isso na lista e marca "Li e concordo")
      */
     private fun avisoAtividade() {
+        if (BuildConfig.PREVIEW) return
         if (avisoAberto || gate || intro != null || Prefs.avisoAtividade || !License.valid()) return
         avisoAberto = true
         Ui.dialogAviso(this, "Novidade no NOCRY",
