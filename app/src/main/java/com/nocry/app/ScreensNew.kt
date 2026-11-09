@@ -437,9 +437,18 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     private fun cartaTema(c: Context, t: Tema): View {
         val sel = Prefs.tema == t.id
         val box = Ui.vbox(c)
-        box.addView(Miniatura.tema(c, t, sel), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 118)))
-        box.addView(Ui.text(c, t.nome, 12.5f, if (sel) Ui.RED else Ui.TEXT, true, mono = true), Ui.lp(top = 8, c = c))
-        box.addView(Ui.text(c, t.tag, 10f, Ui.MUTED).also { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }, Ui.lp(top = 2, c = c))
+        // base escura com borda fina: o nome do tema fica legivel em cima de qualquer fundo
+        box.background = Ui.shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xD8), Ui.raioPeq(16),
+            if (sel) Theme.alpha(Theme.accent, 0x99) else Theme.alpha(android.graphics.Color.WHITE, 0x1F), 1)
+        val pd = Ui.dp(c, 6)
+        box.setPadding(pd, pd, pd, Ui.dp(c, 10))
+        box.addView(Miniatura.tema(c, t, sel), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 112)))
+        val nome = Ui.text(c, t.nome, 12.5f, if (sel) Ui.RED else Ui.TEXT, true, mono = true)
+        nome.setPadding(Ui.dp(c, 4), 0, Ui.dp(c, 4), 0)
+        box.addView(nome, Ui.lp(top = 9, c = c))
+        val tag = Ui.text(c, t.tag, 10.5f, Ui.MUTED).also { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }
+        tag.setPadding(Ui.dp(c, 4), 0, Ui.dp(c, 4), 0)
+        box.addView(tag, Ui.lp(top = 2, c = c))
         Ui.clique(box) { Temas.aplica(t); act.reaplica() }
         return box
     }
@@ -492,7 +501,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         t.addView(fontes(c), Ui.lp(top = 12, c = c))
         add(t, 14)
         add(Ui.grupo(c, "texto", listOf(
-            Ui.itemChave(c, "Títulos em maiúsculo", "títulos, rótulos e botões em caixa alta (o texto corrido fica normal, mais fácil de ler)", Prefs.maiusc) { x -> Prefs.maiusc = x; muda() }
+            Ui.itemChave(c, "Títulos em maiúsculo", "títulos, rótulos e botões em caixa alta (o texto corrido fica normal, mais fácil de ler)", Prefs.maiusc, R.drawable.ic_brush) { x -> Prefs.maiusc = x; muda() }
         )), 18)
         val s = Ui.card(c)
         s.addView(Ui.slider(c, "Tamanho do texto", Prefs.escala, 85, 130, "%") { x -> Prefs.escala = x; muda() })
@@ -502,14 +511,14 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     // ---------------- efeitos ----------------
     private fun abaEfeitos(c: Context) {
         add(Ui.grupo(c, "efeitos visuais", listOf(
-            Ui.itemChave(c, "Animações", "fundo animado, anel e transições", Prefs.anim) { x -> Prefs.anim = x; muda() },
-            Ui.itemChave(c, "Partículas", "brasas, neve, pétalas, chuva de código", Prefs.particulas) { x -> Prefs.particulas = x; muda() },
-            Ui.itemChave(c, "Linhas de scanner", "listras e uma faixa de luz que varre a tela", Prefs.scanner) { x -> Prefs.scanner = x; muda() },
-            Ui.itemChave(c, "Brilho pulsando", "o anel do início respira", Prefs.pulso) { x -> Prefs.pulso = x; muda() }
+            Ui.itemChave(c, "Animações", "fundo animado, anel e transições", Prefs.anim, R.drawable.ic_play) { x -> Prefs.anim = x; muda() },
+            Ui.itemChave(c, "Partículas", "brasas, neve, pétalas, chuva de código", Prefs.particulas, R.drawable.ic_sparkle) { x -> Prefs.particulas = x; muda() },
+            Ui.itemChave(c, "Linhas de scanner", "listras e uma faixa de luz que varre a tela", Prefs.scanner, R.drawable.ic_sliders) { x -> Prefs.scanner = x; muda() },
+            Ui.itemChave(c, "Brilho pulsando", "o anel do início respira", Prefs.pulso, R.drawable.ic_stat) { x -> Prefs.pulso = x; muda() }
         )), 14)
         add(Ui.grupo(c, "toque", listOf(
-            Ui.itemChave(c, "Vibrar ao tocar", "vibração curta nos botões", Prefs.vibrar) { x -> Prefs.vibrar = x; muda() },
-            Ui.itemChave(c, "Vibrar nos avisos", "bypass e toque: 1 = aplicou · 2 = restaurou · 3 = falhou", Prefs.vibrarAvisos) { x -> Prefs.vibrarAvisos = x; muda() }
+            Ui.itemChave(c, "Vibrar ao tocar", "vibração curta nos botões", Prefs.vibrar, R.drawable.ic_bolt) { x -> Prefs.vibrar = x; muda() },
+            Ui.itemChave(c, "Vibrar nos avisos", "bypass e toque: 1 = aplicou · 2 = restaurou · 3 = falhou", Prefs.vibrarAvisos, R.drawable.ic_warn) { x -> Prefs.vibrarAvisos = x; muda() }
         )), 18)
     }
 
@@ -529,7 +538,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             else -> "Toca sempre que o app abre do zero. Voltar de outro app não repete."
         }, 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
 
-        s.addView(Ui.grupo(c, null, listOf(Ui.itemChave(c, "Som da intro", "música e efeitos (segue o volume de mídia)", Prefs.introSom) { x ->
+        s.addView(Ui.grupo(c, null, listOf(Ui.itemChave(c, "Som da intro", "música e efeitos (segue o volume de mídia)", Prefs.introSom, R.drawable.ic_volume) { x ->
             Prefs.introSom = x
             redesenha()
         })), Ui.lp(top = 14, c = c))

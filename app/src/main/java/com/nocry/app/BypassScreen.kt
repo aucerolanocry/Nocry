@@ -128,10 +128,10 @@ class BypassScreen(a: MainActivity) : Screen(a) {
             }, 10)
         }
 
-        add(Ui.toggle(c, "Vibrar nos avisos", "1 vibração = aplicou · 2 = removeu · 3 = falhou", Prefs.vibrarAvisos) { v ->
+        add(Ui.grupo(c, "avisos", listOf(Ui.itemChave(c, "Vibrar nos avisos", "1 vibração = aplicou · 2 = removeu · 3 = falhou", Prefs.vibrarAvisos, R.drawable.ic_warn) { v ->
             Prefs.vibrarAvisos = v
             redesenha()
-        }, 18)
+        })), 18)
         add(SegundoPlano.grupo(act) { redesenha() }, 14)
     }
 

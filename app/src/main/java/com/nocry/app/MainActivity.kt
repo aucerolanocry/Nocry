@@ -366,6 +366,13 @@ class MainActivity : Activity() {
     private fun abrirPrevia(i: android.content.Intent?) {
         if (!BuildConfig.PREVIEW || i == null) return
         if (i.getBooleanExtra("demo", false)) Sniper.demo()
+        // telas que tem aba propria na barra de baixo: abre pela aba, pra barra marcar certo
+        when (i.getStringExtra("tela") ?: "") {
+            "conexao" -> { irAba(1); return }
+            "estudio" -> { irAba(2); return }
+            "log" -> { irAba(3); return }
+            "sobre" -> { irAba(4); return }
+        }
         val t: Screen = when (i.getStringExtra("tela") ?: "") {
             "conexao" -> SetupScreen(this)
             "comp" -> CompScreen(this)

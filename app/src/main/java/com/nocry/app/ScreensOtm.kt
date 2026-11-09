@@ -118,7 +118,7 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         )), 22)
 
         add(Ui.grupo(c, "automático", listOf(
-            Ui.itemChave(c, "Ligar sozinho ao abrir o FF", "abriu o FF = ativa · saiu por 45 s = desativa (só o que ele ativou). Precisa do ADB.", Prefs.otmAuto) { v ->
+            Ui.itemChave(c, "Ligar sozinho ao abrir o FF", "abriu o FF = ativa · saiu por 45 s = desativa (só o que ele ativou). Precisa do ADB.", Prefs.otmAuto, R.drawable.ic_play) { v ->
                 if (v) {
                     if (!Adb.connected) { Ui.toast(act, "Conecte o ADB primeiro (CONEXÃO)"); redesenha() }
                     else { OtmAuto.ligar(); Ui.toast(act, "AUTOMÁTICO LIGADO — abra o FF"); redesenha() }
@@ -129,10 +129,10 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         )), 20)
 
         add(Ui.grupo(c, "opções", listOf(
-            Ui.itemChave(c, "Mensagens fecham", "WhatsApp, Telegram, Signal, Messenger e Discord saem da memória, mas ficam sem avisar até você abrir o app", Prefs.otmMsg == "fechar") { v ->
+            Ui.itemChave(c, "Mensagens fecham", "WhatsApp, Telegram, Signal, Messenger e Discord saem da memória, mas ficam sem avisar até você abrir o app", Prefs.otmMsg == "fechar", R.drawable.ic_xcircle) { v ->
                 Prefs.otmMsg = if (v) "fechar" else "proteger"
             },
-            Ui.itemChave(c, "CPU/GPU em nível fixo", "estável, não mais forte (esquenta mais). Vale na próxima ativação", Prefs.otmPerf) { v -> Prefs.otmPerf = v }
+            Ui.itemChave(c, "CPU/GPU em nível fixo", "estável, não mais forte (esquenta mais). Vale na próxima ativação", Prefs.otmPerf, R.drawable.ic_chip) { v -> Prefs.otmPerf = v }
         )), 20)
     }
 }
@@ -461,7 +461,7 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
         for ((i, o) in opcoes.withIndex()) {
             val sel = o == filtro
             val t = Ui.text(c, o ?: "tudo", 10f, if (sel) Theme.sobreGrad() else Ui.MUTED, true, mono = true)
-            t.background = if (sel) Botao(c, "grad", 12) else Ui.shape(c, Theme.alpha(Color.WHITE, 0x0A), 12, Theme.alpha(Color.WHITE, 0x22), 1)
+            t.background = if (sel) Botao(c, "grad", Ui.raioPeq(12)) else Ui.shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xC8), Ui.raioPeq(12), Theme.alpha(Color.WHITE, 0x26), 1)
             t.setPadding(Ui.dp(c, 13), Ui.dp(c, 8), Ui.dp(c, 13), Ui.dp(c, 8))
             Ui.clique(t) { filtro = o; redesenha() }
             val p = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -690,8 +690,10 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         mc.addView(Ui.gradTexto(c, "NOCRY", 24f))
         mc.addView(Ui.text(c, "versão " + versao(), 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 2, c = c))
         marca.addView(mc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        add(marca, 4)
-        add(Ui.text(c, "Toque via volume e carregador, com monitores de segundo plano direto no celular.", 10.5f, Ui.MUTED), 12)
+        val km = Ui.card(c)
+        km.addView(marca)
+        km.addView(Ui.text(c, "Toque via volume e carregador, com monitores de segundo plano direto no celular.", 11f, Ui.MUTED), Ui.lp(top = 12, c = c))
+        add(km, 4)
 
         // ---------------- sua conta: avatar, nome, cargo e grade de informacoes ----------------
         val kc = Ui.card(c, forte = true)

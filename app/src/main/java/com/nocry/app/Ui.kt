@@ -224,7 +224,7 @@ object Ui {
     fun chip(c: Context, nome: String, valor: String, ok: Boolean?): View {
         val col = vbox(c)
         col.gravity = Gravity.CENTER_HORIZONTAL
-        col.background = shape(c, Theme.alpha(Color.WHITE, 0x0A), 14, Theme.alpha(Color.WHITE, 0x1C), 1)
+        col.background = shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0x9C), raioPeq(14), Theme.alpha(Color.WHITE, 0x1F), 1)
         val cor = when (ok) { true -> OK; false -> BAD; null -> WARN }
         val dot = View(c)
         dot.background = shape(c, cor, 4)
@@ -261,7 +261,7 @@ object Ui {
     /** caixinha de informacao: icone + rotulo pequeno em cima, valor embaixo (usada em grade 2x2) */
     fun infoBox(c: Context, ico: Int, rotulo: String, valor: String, cor: Int = TEXT): View {
         val col = vbox(c)
-        col.background = shape(c, Theme.alpha(Color.WHITE, 0x0A), 14, Theme.alpha(Color.WHITE, 0x1C), 1)
+        col.background = shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0x9C), raioPeq(14), Theme.alpha(Color.WHITE, 0x1F), 1)
         col.setPadding(dp(c, 12), dp(c, 11), dp(c, 12), dp(c, 12))
         val topo = hbox(c)
         topo.addView(icone(c, ico, MUTED, 13))
@@ -366,10 +366,15 @@ object Ui {
     }
 
     /** chave liga/desliga sem fundo proprio (vai dentro de grupo()) */
-    fun itemChave(c: Context, titulo: String, sub: String, ligado: Boolean, onChange: (Boolean) -> Unit): View {
+    fun itemChave(c: Context, titulo: String, sub: String, ligado: Boolean, ico: Int = 0, onChange: (Boolean) -> Unit): View {
         val r = hbox(c)
         r.minimumHeight = dp(c, 52)
         r.setPadding(0, dp(c, 10), 0, dp(c, 10))
+        if (ico != 0) {
+            val ip = LinearLayout.LayoutParams(dp(c, 34), dp(c, 34))
+            ip.rightMargin = dp(c, 12)
+            r.addView(caixaIcone(c, ico, false, 34), ip)
+        }
         val col = vbox(c)
         col.addView(text(c, titulo, 13f, TEXT, true))
         if (sub.isNotEmpty()) col.addView(text(c, sub, 10.5f, MUTED), lp(top = 2, c = c))

@@ -1284,10 +1284,10 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                 if (Sniper.maxFilas >= 300) "sem limite" else "${Sniper.maxFilas}", Theme.accent) {
                 Ui.dialogNumero(c, "LIMITE DE FILAS DO BOT", "de 1 a 300 (300 = sem limite)", 1, 300, Sniper.maxFilas) { n -> Sniper.definirMaxFilas(n) }
             },
-            Ui.itemChave(c, "Começar a buscar ao ligar", "assim que conectar, já busca com o alvo escolhido", Sniper.buscarAoLigar) { v ->
+            Ui.itemChave(c, "Começar a buscar ao ligar", "assim que conectar, já busca com o alvo escolhido", Sniper.buscarAoLigar, R.drawable.ic_power) { v ->
                 Sniper.definirBuscarAoLigar(v)
             },
-            Ui.itemChave(c, "Sair das outras filas ao abrir sala", "desligado: continua até o limite de cada org", Sniper.sairAoAbrir) { v ->
+            Ui.itemChave(c, "Sair das outras filas ao abrir sala", "desligado: continua até o limite de cada org", Sniper.sairAoAbrir, R.drawable.ic_logout) { v ->
                 Sniper.definirSairAoAbrir(v)
             }
         )))
