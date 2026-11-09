@@ -35,6 +35,7 @@ class UpdateJob : JobService() {
 
         /** agenda uma vez (se ja estiver agendado, deixa como esta) */
         fun agenda(c: Context) {
+            if (BuildConfig.PREVIEW) return
             try {
                 val js = c.getSystemService(JobScheduler::class.java) ?: return
                 if (js.getPendingJob(ID) != null) return
