@@ -114,7 +114,7 @@ object Ui {
         if (Color.red(color) * 299 + Color.green(color) * 587 + Color.blue(color) * 114 > 140_000) {
             t.setShadowLayer(dp(c, 3).toFloat(), 0f, dp(c, 1).toFloat() * 0.6f, Theme.alpha(Color.BLACK, 0x99))
         }
-        if (!code && Prefs.maiusc && display) {
+        if (!code && Prefs.maiusc) {
             t.setAllCaps(true)
             // caixa alta sem espaco entre as letras fica apertada; titulo usa o espacamento do pacote,
             // texto corrido um pouco menos (senao o paragrafo fica largo demais)

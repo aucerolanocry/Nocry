@@ -501,7 +501,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         t.addView(fontes(c), Ui.lp(top = 12, c = c))
         add(t, 14)
         add(Ui.grupo(c, "texto", listOf(
-            Ui.itemChave(c, "Títulos em maiúsculo", "títulos, rótulos e botões em caixa alta (o texto corrido fica normal, mais fácil de ler)", Prefs.maiusc, R.drawable.ic_brush) { x -> Prefs.maiusc = x; muda() }
+            Ui.itemChave(c, "Tudo em maiúsculo", "todos os textos do app em caixa alta (desligado: só as primeiras letras)", Prefs.maiusc, R.drawable.ic_brush) { x -> Prefs.maiusc = x; muda() }
         )), 18)
         val s = Ui.card(c)
         s.addView(Ui.slider(c, "Tamanho do texto", Prefs.escala, 85, 130, "%") { x -> Prefs.escala = x; muda() })
