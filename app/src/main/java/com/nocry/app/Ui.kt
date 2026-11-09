@@ -140,7 +140,7 @@ object Ui {
 
     /** etiqueta pequena na cor 1 em cima de cada bloco */
     /** canto das peças pequenas acompanhando o canto dos cartões do tema (tema reto não ganha pílula redonda) */
-    fun raioPeq(max: Int): Int = minOf(max, Prefs.raio + 6)
+    fun raioPeq(max: Int): Int = minOf(max, Prefs.raio + 3)
 
     fun label(c: Context, s: String): TextView {
         val t = text(c, s, 11f, RED, true, mono = true)
@@ -535,7 +535,8 @@ object Ui {
             n.gravity = Gravity.CENTER
             bola.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
-        esq.addView(bola, LinearLayout.LayoutParams(dp(c, 28), dp(c, 28)))
+        // a bolinha fica na altura do meio da faixa do titulo (40dp)
+        esq.addView(bola, LinearLayout.LayoutParams(dp(c, 28), dp(c, 28)).also { it.topMargin = dp(c, 6) })
         if (!ultimo) {
             val linha = View(c)
             linha.background = shape(c, if (estado == 0) Theme.alpha(OK, 0x55) else LINE, 1)
@@ -549,7 +550,11 @@ object Ui {
         // coluna da direita: titulo + estado (+ seta) e o conteudo
         val dir = vbox(c)
         val cab = hbox(c)
-        cab.minimumHeight = dp(c, 28)
+        cab.minimumHeight = dp(c, 40)
+        // faixa escura atras do titulo: o passo vira uma linha de verdade em vez de texto solto no fundo
+        cab.background = shape(c, Theme.alpha(0xFF0B0A12.toInt(), if (estado == 1) 0xD8 else 0xA8), raioPeq(10),
+            if (estado == 1) Theme.alpha(Theme.accent, 0x70) else Theme.alpha(Color.WHITE, 0x1A), 1)
+        cab.setPadding(dp(c, 12), dp(c, 6), dp(c, 10), dp(c, 6))
         val t = text(c, titulo, 13f, if (estado == 2) MUTED else TEXT, true)
         t.maxLines = 1
         t.ellipsize = android.text.TextUtils.TruncateAt.END
@@ -574,7 +579,7 @@ object Ui {
             cartao.addView(conteudo)
             dir.addView(cartao, lp(top = 8, c = c))
         }
-        if (!ultimo) dir.setPadding(0, 0, 0, dp(c, 18))
+        if (!ultimo) dir.setPadding(0, 0, 0, dp(c, 10))
         val dlp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         dlp.leftMargin = dp(c, 12)
         r.addView(dir, dlp)

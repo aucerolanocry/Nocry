@@ -679,7 +679,7 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         // ---------------- marca ----------------
         val marca = Ui.hbox(c)
         val logo = FrameLayout(c)
-        logo.background = Botao(c, "icoOn", 14)
+        logo.background = Botao(c, "grad", Ui.raioPeq(12))
         val n = Ui.text(c, "N", 22f, Theme.sobreGrad(), true, mono = true)
         n.gravity = Gravity.CENTER
         logo.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
