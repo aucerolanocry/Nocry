@@ -105,7 +105,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val loop = object : Runnable {
             override fun run() {
                 if (g != geracao || !root.isAttachedToWindow) return
-                tique()
+                // em segundo plano nao redesenha (antes ficava refazendo a tela a cada 0,6 s com o app minimizado)
+                if (act.naFrente) tique()
                 root.postDelayed(this, 600)
             }
         }

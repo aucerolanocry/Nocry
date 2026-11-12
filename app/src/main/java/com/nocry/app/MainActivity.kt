@@ -90,6 +90,9 @@ abstract class Screen(val act: MainActivity) {
 }
 
 class MainActivity : Activity() {
+    /** true so enquanto o app esta na frente (as telas param de se redesenhar em segundo plano) */
+    @Volatile var naFrente = false
+        private set
     private class Aba(val nome: String, val icone: Int)
 
     private val abas = listOf(
@@ -499,6 +502,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        naFrente = true
         bg.retoma()
         val updPendente = Update.pendente(applicationContext)
         if (updPendente != null) mostraUpdateGate(updPendente)
@@ -536,6 +540,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        naFrente = false
         // saiu da tela: no painel passa a aparecer "2º plano" (ou some, se nada estiver rodando)
         Presenca.naTela = false
         Presenca.ping(applicationContext, forcar = true)
