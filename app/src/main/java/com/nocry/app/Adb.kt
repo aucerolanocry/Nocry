@@ -2,6 +2,7 @@ package com.nocry.app
 
 import android.content.Context
 import android.os.Build
+import android.os.Looper
 import android.sun.security.x509.AlgorithmId
 import android.sun.security.x509.CertificateAlgorithmId
 import android.sun.security.x509.CertificateExtensions
@@ -123,8 +124,31 @@ object Adb {
         }
     }
 
+    /**
+     * Ultimo estado conhecido da conexao. O isConnected() da biblioteca usa a MESMA trava do connect/autoConnect,
+     * que fica presa ate 5-9 s procurando a porta quando a depuracao sem fio caiu. Como as telas leem
+     * "connected" na thread da tela a cada 1,2 s, isso congelava o app (principalmente ao voltar do segundo plano).
+     * Agora a tela so le este valor guardado e a conferencia de verdade roda em segundo plano.
+     */
+    @Volatile private var conectadoCache = false
+    @Volatile private var conferindo = false
+
+    private fun confere(): Boolean {
+        val v = try { mgr?.isConnected == true } catch (_: Throwable) { false }
+        conectadoCache = v
+        return v
+    }
+
     val connected: Boolean
-        get() = try { mgr?.isConnected == true } catch (_: Throwable) { false }
+        get() {
+            if (Looper.myLooper() != Looper.getMainLooper()) return confere()
+            // na thread da tela: nunca espera a trava; atualiza o valor por tras e devolve o ultimo conhecido
+            if (mgr != null && !conferindo) {
+                conferindo = true
+                Bg.io { try { confere() } finally { conferindo = false } }
+            }
+            return conectadoCache
+        }
 
     /** conecta (descobre a porta sozinho pelo mDNS). false = nao deu; o motivo fica em lastError */
     fun connect(ctx: Context, timeoutMs: Long = 7000): Boolean {
@@ -134,6 +158,7 @@ object Adb {
             needsPairing = false
             val ok = if (Build.VERSION.SDK_INT >= 30) m.autoConnect(ctx.applicationContext, timeoutMs) else m.connect(5555)
             if (ok) lastError = ""
+            conectadoCache = ok
             ok
         } catch (e: AdbPairingRequiredException) {
             needsPairing = true
@@ -160,6 +185,7 @@ object Adb {
 
     fun disconnect() {
         try { mgr?.disconnect() } catch (_: Throwable) {}
+        conectadoCache = false
     }
 
     private fun open(cmd: String): AdbStream? {

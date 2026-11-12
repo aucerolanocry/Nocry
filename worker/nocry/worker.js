@@ -17,6 +17,7 @@ const KINDS = ["bypass_on", "bypass_off", "bypass_aplicou", "bypass_restaurou", 
 
 let ready = false;
 let signKeyCache = null;
+let ultimaLimpeza = 0;
 
 // ---------------------------------------------------------------- util
 function json(o, status) {
@@ -356,12 +357,17 @@ async function apiRoute(req, env, ip, op) {
   if (op === "me") return json({ ok: true, role: me.role, label: me.label });
 
   if (op === "list") {
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM log WHERE t < ?").bind(now - KEEP),
-      env.DB.prepare("DELETE FROM fails WHERE t < ?").bind(now - WINDOW),
-      env.DB.prepare("DELETE FROM events WHERE t < ?").bind(now - KEEP),
-      env.DB.prepare("DELETE FROM sessions WHERE last < ?").bind(now - KEEP),
-    ]);
+    // limpeza do historico antigo: no maximo 1 vez por hora (antes rodava a cada 15 s com o painel aberto,
+    // gastando 4 gravacoes no banco toda vez sem necessidade)
+    if (now - ultimaLimpeza > 3600 * 1000) {
+      ultimaLimpeza = now;
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM log WHERE t < ?").bind(now - KEEP),
+        env.DB.prepare("DELETE FROM fails WHERE t < ?").bind(now - WINDOW),
+        env.DB.prepare("DELETE FROM events WHERE t < ?").bind(now - KEEP),
+        env.DB.prepare("DELETE FROM sessions WHERE last < ?").bind(now - KEEP),
+      ]);
+    }
     const keys = (
       await env.DB.prepare(
         owner

@@ -67,7 +67,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Sys.acessibilidadeLigada(),
     ultimaLinha()
 ).joinToString("|")
-    private fun ultimaLinha(): String = NLog.text(null).substringAfterLast('\n')
+    private fun ultimaLinha(): String = NLog.ultima().ifEmpty { "(sem registros ainda)" }
 
     private fun estComp(): String = if (Comp.ligado()) "ATIVO" else "desativado"
     private fun estVol(): String = if (Prefs.volAtivo) "VOL+ ${Prefs.clicksUp}x · VOL− ${Prefs.clicksDown}x" else "parado"
