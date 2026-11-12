@@ -135,8 +135,15 @@ object Adb {
 
     private fun confere(): Boolean {
         val v = try { mgr?.isConnected == true } catch (_: Throwable) { false }
-        conectadoCache = v
+        guarda(v)
         return v
+    }
+
+    /** guarda o estado e, se mudou, avisa a tela na hora (sem esperar o proximo ciclo de 1,2 s) */
+    private fun guarda(v: Boolean) {
+        if (conectadoCache == v) return
+        conectadoCache = v
+        Bg.ui { Engine.onChange?.invoke() }
     }
 
     val connected: Boolean
@@ -158,7 +165,7 @@ object Adb {
             needsPairing = false
             val ok = if (Build.VERSION.SDK_INT >= 30) m.autoConnect(ctx.applicationContext, timeoutMs) else m.connect(5555)
             if (ok) lastError = ""
-            conectadoCache = ok
+            guarda(ok)
             ok
         } catch (e: AdbPairingRequiredException) {
             needsPairing = true
@@ -185,7 +192,7 @@ object Adb {
 
     fun disconnect() {
         try { mgr?.disconnect() } catch (_: Throwable) {}
-        conectadoCache = false
+        guarda(false)
     }
 
     private fun open(cmd: String): AdbStream? {
