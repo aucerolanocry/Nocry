@@ -75,23 +75,33 @@ object NLog {
             if (f.exists()) f.readLines().takeLast(MAX).forEach { lines.addLast(it) }
         } catch (_: Exception) {
         }
+        noArquivo = lines.size
     }
+
+    /** linhas escritas no arquivo desde a ultima vez que ele foi enxugado */
+    private var noArquivo = 0
 
     @Synchronized
     fun add(tag: String, msg: String) {
         val line = fmt.format(Date()) + " [" + tag + "] " + msg.replace('\n', ' ')
         lines.addLast(line)
-        var rewrite = false
-        while (lines.size > MAX) {
-            lines.removeFirst()
-            rewrite = true
-        }
+        while (lines.size > MAX) lines.removeFirst()
         val f = file ?: return
         try {
-            if (rewrite) f.writeText(lines.joinToString("\n") + "\n") else f.appendText(line + "\n")
+            // antes, depois de 400 linhas, TODA linha nova regravava o arquivo inteiro (inclusive na thread da tela).
+            // Agora so acrescenta e enxuga o arquivo de vez em quando (a cada 200 linhas novas).
+            noArquivo++
+            if (noArquivo > MAX + 200) {
+                f.writeText(lines.joinToString("\n") + "\n")
+                noArquivo = lines.size
+            } else f.appendText(line + "\n")
         } catch (_: Exception) {
         }
     }
+
+    /** so a ultima linha (barato: a tela inicial confere isso a cada 1,2 s) */
+    @Synchronized
+    fun ultima(): String = lines.lastOrNull() ?: ""
 
     @Synchronized
     fun text(tag: String? = null): String {

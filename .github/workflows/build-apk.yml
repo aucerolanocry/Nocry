@@ -17,6 +17,10 @@ on:
         description: "Publicar em Releases?"
         type: boolean
         default: true
+      privado:
+        description: "Só pra mim (rascunho de release, ninguém mais vê nem recebe atualização)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -106,3 +110,13 @@ jobs:
           else
             gh release create "$TAG" dist/Nocry.apk --title "Nocry $TAG" --notes "$NOTAS" --target "${GITHUB_SHA}"
           fi
+
+      - name: Rascunho só pro dono
+        if: github.event.inputs.privado == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="privado-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" dist/Nocry.apk --draft --title "Nocry (privado) $TAG" \
+            --notes "Versão de teste só pro dono. Rascunho: não aparece pros usuários nem vira atualização." \
+            --target "${GITHUB_SHA}"
