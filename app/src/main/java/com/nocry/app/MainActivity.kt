@@ -207,7 +207,6 @@ class MainActivity : Activity() {
             abre(HomeScreen(this))
             if (BuildConfig.PREVIEW) { abrirPrevia(intent); return }
             avisoAtividade()
-            if (intent?.getStringExtra("abrir") == "sniper" && License.isOwner()) abre(SniperScreen(this))
         } else mostraGate()
     }
 
@@ -366,11 +365,9 @@ class MainActivity : Activity() {
         conteudo.addView(g.criar(), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
-    /** tocou na notificação do SNIPER com o app já aberto: vai pra tela dele */
     /** só na build de prévia (prints do CI): abre a tela pedida em "tela" e, no bot, a aba em "aba" */
     private fun abrirPrevia(i: android.content.Intent?) {
         if (!BuildConfig.PREVIEW || i == null) return
-        if (i.getBooleanExtra("demo", false)) Sniper.demo()
         // telas que tem aba propria na barra de baixo: abre pela aba, pra barra marcar certo
         when (i.getStringExtra("tela") ?: "") {
             "conexao" -> { irAba(1); return }
@@ -396,17 +393,9 @@ class MainActivity : Activity() {
             "bypass" -> BypassScreen(this)
             "estudio" -> EstudioScreen(this)
             "organizar" -> OrganizarScreen(this)
-            "bot" -> SniperScreen(this).also { it.irPraAba(i.getIntExtra("aba", 0)) }
             else -> return
         }
         abre(t)
-    }
-
-    override fun onNewIntent(i: android.content.Intent) {
-        super.onNewIntent(i)
-        if (i.getStringExtra("abrir") == "sniper" && License.isOwner() && !gate && pilha.lastOrNull() !is SniperScreen) {
-            abre(SniperScreen(this))
-        }
     }
 
     /** a key valeu: abre o app */

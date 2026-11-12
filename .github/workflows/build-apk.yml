@@ -107,11 +107,11 @@ jobs:
         if: github.event.inputs.rascunho == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: sniper-v${{ steps.v.outputs.name }}
+          TAG: privado-v${{ steps.v.outputs.name }}
         run: |
           gh release delete "$TAG" -y >/dev/null 2>&1 || true
-          gh release create "$TAG" dist/Nocry.apk --draft --title "Nocry $TAG (só dono)" \
-            --notes "Versão com o SNIPER. Rascunho: não aparece pros usuários e não vira atualização." --target "${GITHUB_SHA}"
+          gh release create "$TAG" dist/Nocry.apk --draft --title "Nocry $TAG (só pra mim)" \
+            --notes "Versão de teste. Rascunho: não aparece pros usuários e não vira atualização." --target "${GITHUB_SHA}"
 
       - name: Publicar em Releases
         if: github.event_name == 'push' || github.event.inputs.publicar == 'true'

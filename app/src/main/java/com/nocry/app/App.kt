@@ -9,7 +9,6 @@ class App : Application() {
         Sys.init(this)
         NLog.init(this)
         Notif.init(this)
-        Sniper.init(this)
         NLog.add("app", "iniciou")
     }
 }

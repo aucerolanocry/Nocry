@@ -65,8 +65,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Adb.connected, 
     NocryService.rodando,
     Sys.acessibilidadeLigada(),
-    ultimaLinha(),
-    if (License.isOwner()) Sniper.resumo() + Sniper.estado else ""
+    ultimaLinha()
 ).joinToString("|")
     private fun ultimaLinha(): String = NLog.text(null).substringAfterLast('\n')
 
@@ -175,17 +174,6 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val falta = !adb || !perm
         hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
         add(hero, 18)
-
-        // ---------------- SNIPER (só a key de dono vê) ----------------
-        if (License.isOwner()) {
-            val sub = when {
-                Sniper.buscando -> "buscando · ${Sniper.filasEntradas.size} filas · ${Sniper.salas.size} salas"
-                Sniper.estado == "online" -> "online · busca parada"
-                Sniper.ligado() -> Sniper.estado
-                else -> "filas de aposta do Discord · desligado"
-            }
-            add(Ui.row(c, "Bot de fila", sub, R.drawable.ic_crown) { act.abre(SniperScreen(act)) }, 12)
-        }
 
         // ---------------- modos em quadrados ----------------
         val editar = Ui.text(c, "Editar ›", 10.5f, Ui.MUTED, true, mono = true)

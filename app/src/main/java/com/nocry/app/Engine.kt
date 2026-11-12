@@ -315,7 +315,6 @@ object Engine {
         val estadoBypass = if (Prefs.bypassMark) "APLICADO" else "PRONTO"
         if (Prefs.bypassAtivo) l.add("BYPASS ${when (Prefs.bypassGatilho) { "dnd" -> "NÃO PERTURBE"; "bt" -> "BLUETOOTH"; "carga" -> "CARREGADOR"; else -> Prefs.bypassGatilho.uppercase() }} · $estadoBypass")
         if (Prefs.bypassVolAtivo) l.add("BYPASS VOLUME · $estadoBypass")
-        Sniper.resumo().takeIf { it.isNotEmpty() }?.let { l.add(it) }
         return if (l.isEmpty()) "nada ligado" else l.joinToString(" · ")
     }
 }

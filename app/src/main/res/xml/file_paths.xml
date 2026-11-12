@@ -4,6 +4,6 @@
          Environment.DIRECTORY_DOWNLOADS na pratica aponta pra pasta "Download" (singular) -
          cobre a raiz toda dos arquivos externos do app pra nao depender desse nome exato. -->
     <external-files-path name="externos" path="." />
-    <!-- reserva: registro do Sniper quando não tem pasta externa -->
+    <!-- reserva: quando não tem pasta externa -->
     <files-path name="internos" path="." />
 </paths>
