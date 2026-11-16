@@ -8,6 +8,7 @@ PKG=com.whatsapp.web
 ACT=com.nocry.app.MainActivity
 
 adb install -r -g "$APK" || { echo "falhou instalar"; exit 1; }
+adb logcat -G 16M >/dev/null 2>&1 || true
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0

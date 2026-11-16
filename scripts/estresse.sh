@@ -10,6 +10,8 @@ PKG=com.whatsapp.web
 ACT=com.nocry.app.MainActivity
 R="$OUT/relatorio_estresse.txt"
 adb logcat -G 16M >/dev/null 2>&1 || true
+# o que o app registrou durante os prints (antes do estresse), pra não perder com a limpeza do logcat
+adb logcat -d -v brief 2>/dev/null | grep -E "NocryErro|FATAL EXCEPTION|ANR in" > "$OUT/.antes.txt" || true
 adb logcat -c
 abrir() { adb shell am start -n $PKG/$ACT --es tela "$1" --ei aba "${2:-0}" --ez demo "${3:-false}" >/dev/null 2>&1; sleep "${4:-2}"; }
 INI=$(date +%s)
@@ -48,7 +50,10 @@ adb logcat -d -v brief > "$OUT/logcat_tudo.txt" 2>/dev/null
   echo "== TRAVADAS (ANR) =="
   grep -E "ANR in|Application Not Responding|Input dispatching timed out" "$OUT/logcat_tudo.txt" | head -40
   echo
-  echo "== RELATÓRIO DE ERROS DO APP (tag NocryErro) =="
+  echo "== RELATÓRIO DE ERROS DO APP (tag NocryErro) · durante os prints =="
+  head -300 "$OUT/.antes.txt"
+  echo
+  echo "== RELATÓRIO DE ERROS DO APP (tag NocryErro) · durante o estresse =="
   grep -E "NocryErro" "$OUT/logcat_tudo.txt" | head -300
   echo
   echo "== STRICTMODE: trabalho pesado na thread principal, agrupado pelo ponto do app =="
@@ -93,5 +98,5 @@ PY
   echo "== MONKEY (fim) =="
   tail -n 30 "$OUT/monkey.txt"
 } > "$R" 2>&1
-rm -f "$OUT/logcat_tudo.txt"
+rm -f "$OUT/logcat_tudo.txt" "$OUT/.antes.txt"
 echo "relatorio em $R"
