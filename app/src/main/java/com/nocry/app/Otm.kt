@@ -61,6 +61,7 @@ object Otm {
     } catch (_: Exception) { emptyList() }
 
     private fun gravar(n: String, l: List<String>) {
+        if (n == "otm_estado") statusCache = null
         try {
             if (l.isEmpty()) f(n).delete() else f(n).writeText(l.joinToString("\n") + "\n")
         } catch (_: Exception) {
@@ -280,7 +281,16 @@ object Otm {
     fun estado(): List<String> = lerLinhas("otm_estado")
 
     /** "ligada" e quantos apps ficaram congelados */
+    @Volatile private var statusCache: Pair<Long, Pair<Boolean, Int>>? = null
+
+    /** a tela pergunta isso o tempo todo: confere o arquivo no máximo a cada 2 s */
     fun status(): Pair<Boolean, Int> {
+        val agora = android.os.SystemClock.elapsedRealtime()
+        statusCache?.let { if (agora - it.first < 2000) return it.second }
+        return lerStatus().also { statusCache = agora to it }
+    }
+
+    private fun lerStatus(): Pair<Boolean, Int> {
         val e = estado()
         val n = e.count { it.startsWith("E|") }
         val t = e.count { it.length > 1 && it[1] == '|' && it[0] in "EALWFG" }

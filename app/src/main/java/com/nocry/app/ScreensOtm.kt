@@ -483,7 +483,7 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
         if (itens.isNotEmpty()) {
             add(Ui.chips(c,
                 Ui.button(c, "compartilhar", Ui.Kind.PRIMARY) { compartilharErros(c) },
-                Ui.button(c, "apagar", Ui.Kind.DANGER) { Erros.apagar(); redesenha() }
+                Ui.button(c, "apagar", Ui.Kind.DANGER) { Bg.run({ Erros.apagar() }) { redesenha() } }
             ), 10)
         }
     }

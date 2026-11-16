@@ -60,9 +60,22 @@ object Downloader {
     // celulares): confere no disco no máximo a cada 3 s
     private val cachePastas = HashMap<String, Pair<Long, Pair<Boolean, Boolean>>>()
 
+    private val atualizando = java.util.Collections.synchronizedSet(HashSet<String>())
+
     fun pastasInstaladas(ff: String): Pair<Boolean, Boolean> {
         val agora = android.os.SystemClock.elapsedRealtime()
-        synchronized(cachePastas) { cachePastas[ff]?.let { if (agora - it.first < 3000) return it.second } }
+        val c = synchronized(cachePastas) { cachePastas[ff] }
+        if (c != null && agora - c.first < 3000) return c.second
+        // na thread da tela, com um valor já conhecido: devolve ele e confere o disco por trás
+        if (c != null && android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            if (atualizando.add(ff)) Bg.io {
+                try {
+                    val r = lerPastas(ff)
+                    synchronized(cachePastas) { cachePastas[ff] = android.os.SystemClock.elapsedRealtime() to r }
+                } finally { atualizando.remove(ff) }
+            }
+            return c.second
+        }
         val r = lerPastas(ff)
         synchronized(cachePastas) { cachePastas[ff] = agora to r }
         return r
