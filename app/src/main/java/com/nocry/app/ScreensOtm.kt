@@ -455,11 +455,15 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
 
     /** o que o app guardou sozinho quando fechou ou travou (Erros.kt), com botão pra mandar pra quem for arrumar */
     private fun relatorioErros(c: Context) {
-        val itens = Erros.itens()
+        val prontos = Erros.itensProntos()
+        if (prontos == null) Bg.run({ Erros.itens() }) { if (root.isAttachedToWindow) redesenha() }
+        val itens = prontos ?: emptyList()
         Erros.marcarVisto()
         add(Ui.secao(c, "relatório de erros"), 18)
         val card = Ui.card(c)
-        if (itens.isEmpty()) {
+        if (prontos == null) {
+            card.addView(Ui.text(c, "carregando...", 11f, Ui.MUTED))
+        } else if (itens.isEmpty()) {
             card.addView(Ui.text(c, "Nenhum erro registrado. Se o app fechar sozinho ou travar, o motivo aparece aqui.", 11f, Ui.MUTED))
         } else {
             val fmt = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.US)
@@ -485,7 +489,10 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
     }
 
     private fun verErro(c: Context, e: Erros.Item) {
-        val txt = try { e.arquivo.readText().take(60_000) } catch (t: Throwable) { "não consegui abrir: $t" }
+        Bg.run({ try { e.arquivo.readText().take(60_000) } catch (t: Throwable) { "não consegui abrir: $t" } }) { txt -> mostraErro(c, txt) }
+    }
+
+    private fun mostraErro(c: Context, txt: String) {
         val tv = Ui.text(c, txt, 10f, Ui.TEXT, code = true)
         tv.setTextIsSelectable(true)
         val sv = android.widget.ScrollView(c)

@@ -56,7 +56,21 @@ object Downloader {
         }
     }
 
+    // as telas perguntam isso a cada 1,2 s e a pasta fica no armazenamento compartilhado (lento em alguns
+    // celulares): confere no disco no máximo a cada 3 s
+    private val cachePastas = HashMap<String, Pair<Long, Pair<Boolean, Boolean>>>()
+
     fun pastasInstaladas(ff: String): Pair<Boolean, Boolean> {
+        val agora = android.os.SystemClock.elapsedRealtime()
+        synchronized(cachePastas) { cachePastas[ff]?.let { if (agora - it.first < 3000) return it.second } }
+        val r = lerPastas(ff)
+        synchronized(cachePastas) { cachePastas[ff] = agora to r }
+        return r
+    }
+
+    fun esquecerPastas() { synchronized(cachePastas) { cachePastas.clear() } }
+
+    private fun lerPastas(ff: String): Pair<Boolean, Boolean> {
         return if (ff == "max") {
             Pair(File("$DEST_SUJA_MAX/android").exists(), File("$DEST_LIMPA_MAX/android").exists())
         } else {

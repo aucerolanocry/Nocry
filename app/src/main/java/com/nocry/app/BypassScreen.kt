@@ -92,6 +92,7 @@ class BypassScreen(a: MainActivity) : Screen(a) {
                     return@button
                 }
                 val ff = Prefs.bypassFf
+                Downloader.esquecerPastas()              // na hora de ativar confere no disco de verdade
                 if (!Downloader.pastasInstaladas(ff).first) {
                     val nomeFf = if (ff == "max") "FF MAX" else "FF NORMAL"
                     Ui.dialogConfirma(act, "FALTA A PASTA SUJA", "A pasta suja do $nomeFf ainda não foi instalada. Sem ela o bypass não tem o que aplicar. Instalar agora?", "INSTALAR") {

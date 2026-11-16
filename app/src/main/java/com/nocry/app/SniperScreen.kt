@@ -69,8 +69,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     private var chatRolagem: ScrollView? = null
     private var chatLista: LinearLayout? = null
     private var chatSala = ""
-    private var chatPrimeiro: String? = null
-    private var chatQtd = 0
+    /** ids das bolhas que estão na tela, na ordem (pra só tirar as velhas e pôr as novas) */
+    private val chatIds = ArrayList<String>()
     private var tempoTxt: TextView? = null
     private var contagemTxt: TextView? = null
 
@@ -84,8 +84,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         chatLista = null
         chatCard = null
         chatSala = ""
-        chatQtd = 0
-        chatPrimeiro = null
+        chatIds.clear()
         contagemTxt = null
         val c = act
         if (!License.isOwner()) {
@@ -860,24 +859,49 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val s = salaAtual()
         val id = s?.id ?: ""
         val linhas = if (s == null) emptyList() else synchronized(s.chat) { s.chat.toList() }
-        if (id != chatSala || linhas.firstOrNull()?.id != chatPrimeiro || linhas.size < chatQtd) {
-            if (id != chatSala) marcados.clear()   // trocou de sala: @nome da outra sala não vale aqui
+        if (id != chatSala) {
+            marcados.clear()                // trocou de sala: @nome da outra sala não vale aqui
             lista.removeAllViews()
+            chatIds.clear()
             chatSala = id
-            chatQtd = 0
-            chatPrimeiro = linhas.firstOrNull()?.id
         }
         if (linhas.isEmpty()) {
-            if (lista.childCount == 0) lista.addView(texto(if (s == null) "o chat aparece aqui" else "carregando as mensagens...", 12.5f, Ui.MUTED))
+            if (chatIds.isNotEmpty() || lista.childCount == 0) {
+                lista.removeAllViews()
+                chatIds.clear()
+                lista.addView(texto(if (s == null) "o chat aparece aqui" else "carregando as mensagens...", 12.5f, Ui.MUTED))
+            }
             return
         }
-        if (chatQtd == 0) lista.removeAllViews()
-        if (linhas.size == chatQtd) return
-        val noFim = sv.scrollY + sv.height >= lista.height - Ui.dp(act, 80)
-        for (l in linhas.drop(chatQtd)) lista.addView(bolha(l))
-        val primeiraVez = chatQtd == 0
-        chatQtd = linhas.size
+        if (chatIds.isEmpty() && lista.childCount > 0) lista.removeAllViews()   // tira o "carregando..."
+        // a sala guarda só as últimas 120 mensagens: as mais velhas saem por cima. Antes isso refazia o chat
+        // inteiro (120 bolhas) a cada mensagem nova numa sala movimentada; agora só tira as que saíram
+        val novas = linhas.map { it.id }
+        val presentes = novas.toHashSet()
+        var alturaTirada = 0
+        while (chatIds.isNotEmpty() && chatIds[0] !in presentes) {
+            alturaTirada += lista.getChildAt(0)?.height ?: 0
+            lista.removeViewAt(0)
+            chatIds.removeAt(0)
+        }
+        // o que ficou na tela tem que ser o começo da lista nova; se não for (histórico recarregado), refaz
+        if (chatIds.size > novas.size || novas.subList(0, chatIds.size) != chatIds) {
+            lista.removeAllViews()
+            chatIds.clear()
+            alturaTirada = 0
+        }
+        if (novas.size == chatIds.size) {
+            if (alturaTirada > 0) sv.scrollBy(0, -alturaTirada)
+            return
+        }
+        val noFim = sv.scrollY + sv.height >= lista.height - alturaTirada - Ui.dp(act, 80)
+        val primeiraVez = chatIds.isEmpty()
+        for (l in linhas.drop(chatIds.size)) {
+            lista.addView(bolha(l))
+            chatIds.add(l.id)
+        }
         if (noFim || primeiraVez) sv.post { sv.fullScroll(View.FOCUS_DOWN) }
+        else if (alturaTirada > 0) sv.scrollBy(0, -alturaTirada)
     }
 
     private fun bolha(l: SChat): View {
@@ -1426,8 +1450,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val cab = Ui.hbox(c)
         cab.gravity = Gravity.CENTER_VERTICAL
         cab.addView(Ui.labelIcone(c, R.drawable.ic_log, "registro"), pesoUm())
-        val f = Sniper.arquivoRegistro()
-        val tam = if (f.exists()) f.length() else 0L
+        val tam = Sniper.tamanhoRegistro.coerceAtLeast(0L)
         cab.addView(Ui.selo(c, if (tam > 0) "%.0f KB".format(tam / 1024.0) else "vazio", Theme.accent, tam > 0))
         card.addView(cab)
         card.addView(nota("Tudo desde que liga, com data e detalhes. Deu problema? Compartilhe e me mande."), Ui.lp(top = 6, c = c))

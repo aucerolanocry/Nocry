@@ -46,8 +46,18 @@ object Otm {
     // ---------------- arquivos ----------------
     private fun f(n: String) = File(Sys.app.filesDir, n)
 
+    // a tela pergunta o estado a cada 1,2 s: só lê o arquivo de novo quando ele mudou
+    private val lidos = HashMap<String, Triple<Long, Long, List<String>>>()
+
     private fun lerLinhas(n: String): List<String> = try {
-        f(n).readLines().map { it.trim() }.filter { it.isNotEmpty() }
+        val arq = f(n)
+        val mt = arq.lastModified()
+        val tam = arq.length()
+        synchronized(lidos) {
+            val c = lidos[n]
+            if (c != null && c.first == mt && c.second == tam) c.third
+            else arq.readLines().map { it.trim() }.filter { it.isNotEmpty() }.also { lidos[n] = Triple(mt, tam, it) }
+        }
     } catch (_: Exception) { emptyList() }
 
     private fun gravar(n: String, l: List<String>) {

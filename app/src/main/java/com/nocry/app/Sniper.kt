@@ -259,7 +259,10 @@ object Sniper {
         lerEscolha()
         lerCache()
         // instalou de novo? volta sozinho o que estava no backup (Download/Nocry)
-        Thread { try { restaurarSozinho() } catch (_: Throwable) {} }.apply { isDaemon = true }.start()
+        Thread {
+            try { medirRegistro() } catch (_: Throwable) {}
+            try { restaurarSozinho() } catch (_: Throwable) {}
+        }.apply { isDaemon = true }.start()
     }
 
     private fun lerEscolha() {
@@ -626,9 +629,20 @@ object Sniper {
     private val travaArquivo = Object()
 
     /** tudo que acontece desde que o bot liga fica aqui (Sniper/registro.txt nos arquivos do app) */
+    @Volatile private var arqRegistro: java.io.File? = null
+    /** tamanho do registro em bytes, guardado na memória (a tela mostrava isso lendo o disco a cada 0,6 s) */
+    @Volatile var tamanhoRegistro = -1L
+        private set
+
     fun arquivoRegistro(): java.io.File {
+        arqRegistro?.let { return it }
         val base = app.getExternalFilesDir(null) ?: app.filesDir
-        return java.io.File(base, "sniper/registro.txt")
+        return java.io.File(base, "sniper/registro.txt").also { arqRegistro = it }
+    }
+
+    fun medirRegistro() {
+        tamanhoRegistro = try { arquivoRegistro().let { if (it.exists()) it.length() else 0L } } catch (_: Throwable) { 0L }
+        mudou()
     }
 
     private fun gravar(linha: String) {
@@ -644,6 +658,7 @@ object Sniper {
                     f.renameTo(velho)
                 }
                 f.appendText(synchronized(fmtArquivo) { fmtArquivo.format(Date()) } + " " + linha + "\n")
+                tamanhoRegistro = f.length()
             }
         } catch (_: Throwable) {}
     }
@@ -655,6 +670,7 @@ object Sniper {
         synchronized(travaArquivo) {
             try { arquivoRegistro().delete() } catch (_: Throwable) {}
             try { java.io.File(arquivoRegistro().parentFile, "registro_anterior.txt").delete() } catch (_: Throwable) {}
+            tamanhoRegistro = 0L
         }
         synchronized(registro) { registro.clear() }
         log("info", "registro apagado")

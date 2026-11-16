@@ -154,6 +154,7 @@ object Instalador {
             resultado = job.rotulo + " INSTALADA"
             resultadoOk = true
             NLog.add("instalar", "${job.rotulo}: instalada em ${job.destino}/android")
+            Downloader.esquecerPastas()
             Presenca.evento("recurso", job.rotulo)
             InstalaService.avisaFim(app, true, job.rotulo + " INSTALADA", if (job.suja) "PRONTA PRO BYPASS." else "PRONTA PRA RESTAURAR O JOGO.")
             true

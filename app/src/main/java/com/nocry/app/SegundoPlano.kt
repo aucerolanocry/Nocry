@@ -43,7 +43,18 @@ object SegundoPlano {
     }
 
     /** assinatura do estado (a tela redesenha quando muda, ex.: voltou das configuracoes) */
-    fun estado(c: Context): String = "${bateriaLivre(c)}|${autoInicio(c)}|${Adb.connected}"
+    // as telas perguntam isso a cada 1,2 s: consulta o sistema no máximo a cada 3 s
+    @Volatile private var estadoCache = ""
+    @Volatile private var estadoEm = 0L
+
+    fun estado(c: Context): String {
+        val agora = android.os.SystemClock.elapsedRealtime()
+        if (agora - estadoEm > 3000 || !estadoCache.endsWith("|${Adb.connected}")) {
+            estadoCache = "${bateriaLivre(c)}|${autoInicio(c)}|${Adb.connected}"
+            estadoEm = agora
+        }
+        return estadoCache
+    }
 
     /**
      * Pelo ADB (sem o usuario precisar mexer em nada): tira da economia de bateria, deixa rodar em segundo

@@ -202,6 +202,9 @@ object Erros {
 
     @Volatile private var cache: List<Item>? = null
 
+    /** a lista já lida (sem tocar no disco); null = ainda não leu */
+    fun itensProntos(): List<Item>? = cache
+
     fun itens(): List<Item> {
         cache?.let { return it }
         val d = dir ?: return emptyList()
