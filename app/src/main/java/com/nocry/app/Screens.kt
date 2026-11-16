@@ -612,7 +612,7 @@ class VolScreen(a: MainActivity) : Screen(a) {
         else add(Ui.button(c, "ligar monitor") {
             if (!KeyService.ativo && !Adb.connected) Ui.toast(act, "Sem escuta: ligue a acessibilidade ou conecte o ADB (CONEXÃO)")
             else if (!Toque.podeMexer()) Ui.toast(act, "Sem permissão para mudar o toque (CONEXÃO)")
-            else { Engine.iniciarVol(); Ui.toast(act, "MONITOR DE VOLUME LIGADO"); redesenha() }
+            else Bg.run({ Engine.iniciarVol() }) { Ui.toast(act, "MONITOR DE VOLUME LIGADO"); redesenha() }   // fora da tela: o motor pode estar ocupado
         }, 16)
 
         add(maisOpcoes(act, "volume"), 22)
@@ -674,7 +674,7 @@ class CargaScreen(a: MainActivity) : Screen(a) {
             add(Ui.segmento(c, listOf("1 vez", "2 vezes", "3 vezes"), rep - 1) { i -> rep = i + 1; redesenha() }, 8)
             add(Ui.button(c, "ligar monitor") {
                 if (!Toque.podeMexer()) Ui.toast(act, "Sem permissão para mudar o toque (CONEXÃO)")
-                else { Engine.iniciarCarga(gatilho, rep); Ui.toast(act, "MONITOR LIGADO — agora troque o carregador"); redesenha() }
+                else Bg.run({ Engine.iniciarCarga(gatilho, rep) }) { Ui.toast(act, "MONITOR LIGADO — agora troque o carregador"); redesenha() }
             }, 16)
         }
         add(maisOpcoes(act, "toque-carga"), 22)
@@ -752,7 +752,7 @@ class McScreen(a: MainActivity) : Screen(a) {
             add(Ui.segmento(c, listOf("1 vez", "2 vezes", "3 vezes"), rep - 1) { i -> rep = i + 1; redesenha() }, 8)
             add(Ui.button(c, "ligar monitor") {
                 if (!Adb.connected) Ui.toast(act, "Conecte o ADB primeiro (CONEXÃO)")
-                else { Engine.iniciarMc(ff, dens, rep); Ui.toast(act, "MODO CARREGADOR LIGADO — ligue o carregador"); redesenha() }
+                else Bg.run({ Engine.iniciarMc(ff, dens, rep) }) { Ui.toast(act, "MODO CARREGADOR LIGADO — ligue o carregador"); redesenha() }
             }, 16)
         }
         add(maisOpcoes(act, "carregador", comAjustes = false), 22)
