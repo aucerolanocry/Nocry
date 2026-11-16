@@ -465,8 +465,8 @@ class Discord(private val token: String, private val vendorId: String, private v
         val espera = (2000L * tentativas).coerceAtMost(30_000L)
         Thread {
             try { Thread.sleep(espera) } catch (_: InterruptedException) { return@Thread }
-            abre(sessao != null)
-        }.start()
+            try { abre(sessao != null) } catch (t: Throwable) { NLog.add("bot de fila", "reconectar: $t") }
+        }.apply { isDaemon = true }.start()
     }
 
     private fun trata(w: WebSocket, m: JSONObject, retomar: Boolean) {
@@ -487,8 +487,8 @@ class Discord(private val token: String, private val vendorId: String, private v
                 if (!volta) { sessao = null; seq = -1 }
                 Thread {
                     try { Thread.sleep(2500) } catch (_: InterruptedException) {}
-                    if (volta && sessao != null) w.close(4000, "retomar") else identifica(w)
-                }.start()
+                    try { if (volta && sessao != null) w.close(4000, "retomar") else identifica(w) } catch (_: Throwable) {}
+                }.apply { isDaemon = true }.start()
             }
             0 -> {
                 if (m.has("s") && !m.isNull("s")) seq = m.optLong("s", seq)

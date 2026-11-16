@@ -65,6 +65,13 @@ object NLog {
     private val fmt = SimpleDateFormat("dd/MM HH:mm:ss", Locale.US)
     private val lines = ArrayDeque<String>()
     private var file: File? = null
+    /** o arquivo é escrito numa thread só dele: quem chama add() (inclusive a tela) nunca espera o disco */
+    private val escrita = Executors.newSingleThreadExecutor { r -> Thread(r, "nocry-log").apply { isDaemon = true } }
+    private var desdeCompacta = 0
+
+    /** muda a cada linha nova: as telas comparam isso em vez de montar o texto todo pra ver se mudou */
+    @Volatile var versao = 0L
+        private set
 
     @Synchronized
     fun init(c: Context) {
@@ -75,21 +82,25 @@ object NLog {
             if (f.exists()) f.readLines().takeLast(MAX).forEach { lines.addLast(it) }
         } catch (_: Exception) {
         }
+        versao++
     }
 
-    @Synchronized
     fun add(tag: String, msg: String) {
-        val line = fmt.format(Date()) + " [" + tag + "] " + msg.replace('\n', ' ')
-        lines.addLast(line)
-        var rewrite = false
-        while (lines.size > MAX) {
-            lines.removeFirst()
-            rewrite = true
-        }
-        val f = file ?: return
-        try {
-            if (rewrite) f.writeText(lines.joinToString("\n") + "\n") else f.appendText(line + "\n")
-        } catch (_: Exception) {
+        synchronized(this) {
+            val line = fmt.format(Date()) + " [" + tag + "] " + msg.replace('\n', ' ')
+            lines.addLast(line)
+            while (lines.size > MAX) lines.removeFirst()
+            versao++
+            val f = file ?: return
+            // só acrescenta a linha; de 200 em 200 linhas regrava o arquivo só com as últimas (não cresce sem fim)
+            val copia = if (++desdeCompacta >= 200) { desdeCompacta = 0; lines.toList() } else null
+            try {
+                escrita.execute {
+                    try {
+                        if (copia != null) f.writeText(copia.joinToString("\n") + "\n") else f.appendText(line + "\n")
+                    } catch (_: Exception) {}
+                }
+            } catch (_: Throwable) {}
         }
     }
 
@@ -99,10 +110,16 @@ object NLog {
         return if (l.isEmpty()) "(sem registros ainda)" else l.takeLast(120).joinToString("\n")
     }
 
+    /** só a última linha (a tela inicial mostra ela), sem montar o texto todo */
+    @Synchronized
+    fun ultima(): String = lines.lastOrNull() ?: ""
+
     @Synchronized
     fun clear() {
         lines.clear()
-        try { file?.writeText("") } catch (_: Exception) {}
+        versao++
+        val f = file ?: return
+        try { escrita.execute { try { f.writeText("") } catch (_: Exception) {} } } catch (_: Throwable) {}
     }
 }
 

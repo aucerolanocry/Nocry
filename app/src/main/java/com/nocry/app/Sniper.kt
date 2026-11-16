@@ -1136,7 +1136,8 @@ object Sniper {
         val s = SSala(c.id, c.nome, o, c.guildId, c.ehThread)
         salas[c.id] = s
         ordem.add(c.id)
-        if (salaAtiva == null || !salas.containsKey(salaAtiva!!)) salaAtiva = c.id
+        val ativa = salaAtiva                 // a tela pode trocar a sala ativa ao mesmo tempo: lê uma vez só
+        if (ativa == null || !salas.containsKey(ativa)) salaAtiva = c.id
         log("ok", "sala ${numeroSala(c.id)} aberta · $o · ${c.nome}")
         if (sairAoAbrir) {
             if (buscando) { buscando = false; pausadoPorSala = true; log("info", "busca pausada enquanto a sala está aberta") }

@@ -379,6 +379,9 @@ class BgView(c: Context) : FrameLayout(c) {
     private var vw = 0
     private var vh = 0
     private var pausado = false
+    /** o vídeo terminou de carregar (antes disso não dá pra dar play: o player quebra) */
+    private var pronto = false
+    private var sup: Surface? = null
 
     init {
         val mm = LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -453,6 +456,8 @@ class BgView(c: Context) : FrameLayout(c) {
             while (o.outWidth / (s * 2) >= w && o.outHeight / (s * 2) >= h) s *= 2
             val o2 = BitmapFactory.Options()
             o2.inSampleSize = s
+            // fundo não precisa de transparência: metade da memória (foto grande de câmera estourava a memória)
+            o2.inPreferredConfig = Bitmap.Config.RGB_565
             val b = BitmapFactory.decodeFile(arq.absolutePath, o2) ?: return null
             val rot = try {
                 when (ExifInterface(arq.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, 1)) {
@@ -465,7 +470,7 @@ class BgView(c: Context) : FrameLayout(c) {
             if (rot == 0f) b else {
                 val m = Matrix()
                 m.postRotate(rot)
-                Bitmap.createBitmap(b, 0, 0, b.width, b.height, m, true)
+                Bitmap.createBitmap(b, 0, 0, b.width, b.height, m, true).also { if (it !== b) b.recycle() }
             }
         } catch (_: Throwable) { null }
     }
@@ -474,7 +479,11 @@ class BgView(c: Context) : FrameLayout(c) {
         val t = TextureView(context)
         tv = t
         t.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-            override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) { prepara(arq, Surface(st)) }
+            override fun onSurfaceTextureAvailable(st: SurfaceTexture, w: Int, h: Int) {
+                val s = Surface(st)
+                sup = s
+                prepara(arq, s)
+            }
             override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, w: Int, h: Int) { ajusta() }
             override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean { paraVideo(); return true }
             override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
@@ -486,13 +495,19 @@ class BgView(c: Context) : FrameLayout(c) {
         try {
             val m = MediaPlayer()
             mp = m
+            pronto = false
             m.setDataSource(arq.absolutePath)
             m.setSurface(s)
             m.isLooping = true
             m.setVolume(0f, 0f)                                   // fundo sempre mudo
             m.setOnVideoSizeChangedListener { _, w, h -> vw = w; vh = h; ajusta() }
             // alguns celulares ignoram o volume posto antes de preparar: zera de novo aqui
-            m.setOnPreparedListener { pl -> try { pl.setVolume(0f, 0f) } catch (_: Throwable) {}; if (!pausado) pl.start() }
+            m.setOnPreparedListener { pl ->
+                if (mp !== pl) return@setOnPreparedListener          // já trocou de fundo enquanto carregava
+                pronto = true
+                try { pl.setVolume(0f, 0f) } catch (_: Throwable) {}
+                if (!pausado) try { pl.start() } catch (_: Throwable) {}
+            }
             m.setOnErrorListener { _, _, _ ->
                 NLog.add("visual", "o video de fundo nao abriu; usando o fundo animado")
                 Bg.ui { paraVideo(); conteudo.removeAllViews(); animado() }
@@ -524,7 +539,10 @@ class BgView(c: Context) : FrameLayout(c) {
     private fun paraVideo() {
         val m = mp
         mp = null
+        pronto = false
         try { m?.release() } catch (_: Throwable) {}
+        try { sup?.release() } catch (_: Throwable) {}
+        sup = null
     }
 
     private fun libera() {
@@ -545,7 +563,7 @@ class BgView(c: Context) : FrameLayout(c) {
     fun retoma() {
         pausado = false
         anim?.retoma()
-        try { mp?.setVolume(0f, 0f); mp?.start() } catch (_: Throwable) {}
+        if (pronto) try { mp?.setVolume(0f, 0f); mp?.start() } catch (_: Throwable) {}
     }
 
     fun encerra() { libera() }

@@ -129,7 +129,7 @@ jobs:
   prints:
     if: github.event.inputs.prints == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -177,7 +177,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash scripts/prints.sh dist/Nocry.apk prints
+          script: bash scripts/prints.sh dist/Nocry.apk prints; bash scripts/estresse.sh prints
 
       - name: Guardar no branch prints
         env:

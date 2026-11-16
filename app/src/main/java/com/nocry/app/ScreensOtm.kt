@@ -366,7 +366,8 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
     /** tipo escolhido nos filtros de cima (null = tudo) */
     private var filtro: String? = null
 
-    override fun key(): String = NLog.text(tag).hashCode().toString() + "|" + filtro
+    // antes montava o texto inteiro do log a cada 1,2 s só pra ver se mudou; agora compara um número
+    override fun key(): String = "${NLog.versao}|$filtro|${Erros.novos()}"
 
     private class Item(val dia: String, val hora: String, val tipo: String, val msg: String)
 
@@ -403,6 +404,7 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
         limpa()
         val c = act
         add(Ui.dica(c, "Tudo o que o NOCRY fez, do mais novo pro mais antigo. Toque num filtro pra ver só um assunto.", Ui.Dica.INFO), 0)
+        if (tag == null) relatorioErros(c)
 
         val todos = le()
         val erros = todos.count { it.tipo.contains("erro") }
@@ -449,6 +451,69 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
             },
             Ui.button(c, "limpar", Ui.Kind.DANGER) { NLog.clear(); redesenha() }
         ), 14)
+    }
+
+    /** o que o app guardou sozinho quando fechou ou travou (Erros.kt), com botão pra mandar pra quem for arrumar */
+    private fun relatorioErros(c: Context) {
+        val itens = Erros.itens()
+        Erros.marcarVisto()
+        add(Ui.secao(c, "relatório de erros"), 18)
+        val card = Ui.card(c)
+        if (itens.isEmpty()) {
+            card.addView(Ui.text(c, "Nenhum erro registrado. Se o app fechar sozinho ou travar, o motivo aparece aqui.", 11f, Ui.MUTED))
+        } else {
+            val fmt = java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.US)
+            for ((k, e) in itens.take(5).withIndex()) {
+                val (ico, nome) = when (e.tipo) {
+                    "crash" -> R.drawable.ic_xcircle to "fechou"
+                    "travada" -> R.drawable.ic_warn to "travou"
+                    "memoria" -> R.drawable.ic_chip to "memória"
+                    else -> R.drawable.ic_info to "sistema"
+                }
+                val linha = Ui.item(c, e.titulo.ifEmpty { nome }, fmt.format(java.util.Date(e.quando)), ico, nome) { verErro(c, e) }
+                card.addView(linha, Ui.lp(top = if (k == 0) 0 else 2, c = c))
+            }
+            if (itens.size > 5) card.addView(Ui.text(c, "e mais ${itens.size - 5} no relatório completo", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        }
+        add(card, 10)
+        if (itens.isNotEmpty()) {
+            add(Ui.chips(c,
+                Ui.button(c, "compartilhar", Ui.Kind.PRIMARY) { compartilharErros(c) },
+                Ui.button(c, "apagar", Ui.Kind.DANGER) { Erros.apagar(); redesenha() }
+            ), 10)
+        }
+    }
+
+    private fun verErro(c: Context, e: Erros.Item) {
+        val txt = try { e.arquivo.readText().take(60_000) } catch (t: Throwable) { "não consegui abrir: $t" }
+        val tv = Ui.text(c, txt, 10f, Ui.TEXT, code = true)
+        tv.setTextIsSelectable(true)
+        val sv = android.widget.ScrollView(c)
+        val p = Ui.dp(c, 16)
+        sv.setPadding(p, Ui.dp(c, 8), p, 0)
+        sv.addView(tv)
+        android.app.AlertDialog.Builder(c, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            .setTitle(if (Prefs.maiusc) "DETALHES DO ERRO" else "Detalhes do erro")
+            .setView(sv)
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    private fun compartilharErros(c: Context) {
+        Bg.run({ try { Erros.montarRelatorio() } catch (_: Throwable) { null } }) { f ->
+            if (f == null) { Ui.toast(c, "não tem nada pra mandar"); return@run }
+            try {
+                val uri = androidx.core.content.FileProvider.getUriForFile(c, c.packageName + ".fileprovider", f)
+                val i = Intent(Intent.ACTION_SEND)
+                i.type = "text/plain"
+                i.putExtra(Intent.EXTRA_STREAM, uri)
+                i.putExtra(Intent.EXTRA_SUBJECT, "relatório de erros do NOCRY")
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                c.startActivity(Intent.createChooser(i, "Mandar relatório de erros"))
+            } catch (t: Throwable) {
+                Ui.toast(c, "não consegui compartilhar: ${t.message}")
+            }
+        }
     }
 
     /** pilulas de filtro roláveis na horizontal: "tudo" + os tipos que mais aparecem */

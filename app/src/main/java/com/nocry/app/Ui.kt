@@ -659,6 +659,7 @@ object Ui {
         if (sub.isNotEmpty()) {
             val s = text(c, sub, 11.5f, MUTED)
             s.setPadding(0, dp(c, 2), 0, 0)
+            s.tag = "sub"                       // quem quiser trocar só esse texto depois acha por aqui
             col.addView(s)
         }
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))

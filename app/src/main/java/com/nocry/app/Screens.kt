@@ -12,6 +12,7 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
 
 // =====================================================================================
 // ATALHOS DO INICIO (ordem e visibilidade escolhidas pelo usuario)
@@ -65,10 +66,32 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Adb.connected, 
     NocryService.rodando,
     Sys.acessibilidadeLigada(),
-    ultimaLinha(),
-    if (License.isOwner()) Sniper.resumo() + Sniper.estado else ""
+    License.isOwner(),
+    Erros.novos()
 ).joinToString("|")
-    private fun ultimaLinha(): String = NLog.text(null).substringAfterLast('\n')
+    private fun ultimaLinha(): String = NLog.ultima()
+
+    // textos que mudam toda hora: trocados no lugar (leve), sem refazer a tela inteira
+    private var ultimaTxt: TextView? = null
+    private var botSub: TextView? = null
+    private var versaoLog = -1L
+
+    private fun subBot(): String = when {
+        Sniper.buscando -> "buscando · ${Sniper.filasEntradas.size} filas · ${Sniper.salas.size} salas"
+        Sniper.estado == "online" -> "online · busca parada"
+        Sniper.ligado() -> Sniper.estado
+        else -> "filas de aposta do Discord · desligado"
+    }
+
+    private fun textoUltima(): String {
+        val ult = ultimaLinha()
+        return if (ult.isBlank() || ult.startsWith("(sem")) "nada ainda" else ult
+    }
+
+    override fun leve() {
+        botSub?.let { t -> val s = subBot(); if (t.text.toString() != s) t.text = s }
+        if (NLog.versao != versaoLog) { versaoLog = NLog.versao; ultimaTxt?.text = textoUltima() }
+    }
 
     private fun estComp(): String = if (Comp.ligado()) "ATIVO" else "desativado"
     private fun estVol(): String = if (Prefs.volAtivo) "VOL+ ${Prefs.clicksUp}x · VOL− ${Prefs.clicksDown}x" else "parado"
@@ -176,15 +199,20 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
         add(hero, 18)
 
+        // ---------------- o app teve erro desde a última vez ----------------
+        val novos = Erros.novos()
+        if (novos > 0) {
+            val aviso = Ui.dica(c, "O app registrou $novos erro(s) desde a última vez. Toque pra ver em Logs › Relatório de erros.", Ui.Dica.AVISO)
+            Ui.clique(aviso) { act.irAba(3) }
+            add(aviso, 12)
+        }
+
         // ---------------- SNIPER (só a key de dono vê) ----------------
+        botSub = null
         if (License.isOwner()) {
-            val sub = when {
-                Sniper.buscando -> "buscando · ${Sniper.filasEntradas.size} filas · ${Sniper.salas.size} salas"
-                Sniper.estado == "online" -> "online · busca parada"
-                Sniper.ligado() -> Sniper.estado
-                else -> "filas de aposta do Discord · desligado"
-            }
-            add(Ui.row(c, "Bot de fila", sub, R.drawable.ic_crown) { act.abre(SniperScreen(act)) }, 12)
+            val linhaBot = Ui.row(c, "Bot de fila", subBot(), R.drawable.ic_crown) { act.abre(SniperScreen(act)) }
+            botSub = linhaBot.findViewWithTag("sub")
+            add(linhaBot, 12)
         }
 
         // ---------------- modos em quadrados ----------------
@@ -212,7 +240,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         }
 
         // ---------------- ultima coisa que o app fez ----------------
-        val ult = ultimaLinha()
+        versaoLog = NLog.versao
         val faixa = Ui.hbox(c)
         faixa.background = Ui.ripple(c, Ui.glass(c))
         val pp = Ui.dp(c, 14)
@@ -223,8 +251,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         faixa.addView(ic, icp)
         val tc = Ui.vbox(c)
         tc.addView(Ui.label(c, "última ação"))
-        val txt = if (ult.isBlank() || ult.startsWith("(sem")) "nada ainda" else ult
-        val tl = Ui.text(c, txt, 11.5f, Ui.TEXT, code = true)
+        val tl = Ui.text(c, textoUltima(), 11.5f, Ui.TEXT, code = true)
+        ultimaTxt = tl
         tl.maxLines = 2
         tl.ellipsize = android.text.TextUtils.TruncateAt.END
         tc.addView(tl, Ui.lp(top = 3, c = c))

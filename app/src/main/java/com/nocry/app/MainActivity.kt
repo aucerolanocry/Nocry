@@ -67,8 +67,14 @@ abstract class Screen(val act: MainActivity) {
 
     fun tick() {
         val k = key()
-        if (k != ultimo) { ultimo = k; render() }
+        if (k != ultimo) { ultimo = k; render() } else leve()
     }
+
+    /**
+     * a cada volta do ciclo, quando nada importante mudou: troca só textos pequenos (hora, contadores),
+     * sem montar a tela de novo. Montar a tela inteira toda hora era o que deixava o app pesado.
+     */
+    open fun leve() {}
 
     fun redesenha() { ultimo = key(); render() }
 
@@ -447,6 +453,7 @@ class MainActivity : Activity() {
             v.animate().alpha(1f).translationY(0f).setDuration(220).setInterpolator(android.view.animation.DecelerateInterpolator()).start()
         }
         val s = pilha.last()
+        Erros.telaAtual = s.titulo
         barra.text = s.titulo
         val str = if (Prefs.maiusc) s.titulo.uppercase() else s.titulo
         val w = barra.paint.measureText(str)

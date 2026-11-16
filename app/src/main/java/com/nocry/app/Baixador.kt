@@ -262,6 +262,7 @@ object Baixador {
 
     private fun verificar(arq: File, tamanho: Long, sha: String?, o: Ouvinte) {
         Thread {
+          try {
             val erro: String? = when {
                 !arq.isFile -> "O arquivo não foi encontrado depois do download."
                 tamanho > 0 && arq.length() != tamanho ->
@@ -282,6 +283,9 @@ object Baixador {
                 }
             }
             main.post { o.aoTerminar(arq) }
+          } catch (t: Throwable) {
+            main.post { o.aoFalhar("Erro ao conferir o arquivo: ${t.message}") }
+          }
         }.start()
     }
 

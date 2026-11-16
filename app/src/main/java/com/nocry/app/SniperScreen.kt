@@ -1387,12 +1387,27 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     private fun compartilharRegistro() {
         val c = act
         val f = Sniper.arquivoRegistro()
-        if (!f.exists() || f.length() == 0L) { Ui.toast(c, "o registro ainda está vazio"); return }
+        Ui.toast(c, "preparando o registro...")
+        // junta o anterior (se o arquivo ficou grande e foi trocado) com o atual, copiando em segundo plano:
+        // o registro pode ter vários MB e ler tudo na tela travava o app
+        Bg.run({
+            try {
+                if (!f.exists() || f.length() == 0L) null else {
+                    val velho = java.io.File(f.parentFile, "registro_anterior.txt")
+                    val saida = java.io.File(f.parentFile, "registro_bot_de_fila.txt")
+                    saida.outputStream().buffered().use { o ->
+                        if (velho.exists()) velho.inputStream().use { it.copyTo(o) }
+                        f.inputStream().use { it.copyTo(o) }
+                    }
+                    saida
+                }
+            } catch (_: Throwable) { null }
+        }) { saida -> if (saida == null) Ui.toast(c, "o registro ainda está vazio") else enviarRegistro(saida) }
+    }
+
+    private fun enviarRegistro(saida: java.io.File) {
+        val c = act
         try {
-            // junta o anterior (se o arquivo ficou grande e foi trocado) com o atual
-            val velho = java.io.File(f.parentFile, "registro_anterior.txt")
-            val saida = java.io.File(f.parentFile, "registro_bot_de_fila.txt")
-            saida.writeText((if (velho.exists()) velho.readText() else "") + f.readText())
             val uri = androidx.core.content.FileProvider.getUriForFile(c, c.packageName + ".fileprovider", saida)
             val i = Intent(Intent.ACTION_SEND)
             i.type = "text/plain"
