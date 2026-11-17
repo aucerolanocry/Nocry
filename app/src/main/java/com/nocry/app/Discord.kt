@@ -308,6 +308,9 @@ class Discord(private val token: String, private val vendorId: String, private v
     fun servidores(): Resp = req("GET", "/users/@me/guilds")
     fun canais(gid: String): Resp = req("GET", "/guilds/$gid/channels")
     fun canal(cid: String): Resp = req("GET", "/channels/$cid")
+    /** convite do servidor (o mesmo que o app faz em "Convidar pessoas"); unique=false reaproveita um que já existe */
+    fun criarConvite(cid: String): Resp = req("POST", "/channels/$cid/invites",
+        JSONObject().put("max_age", 0).put("max_uses", 0).put("temporary", false).put("unique", false))
     fun threadsAtivas(gid: String): Resp = req("GET", "/guilds/$gid/threads/active")
 
     /** busca uma mensagem pelo id (conta de usuário usa o "around"). null se não estiver nesse canal */

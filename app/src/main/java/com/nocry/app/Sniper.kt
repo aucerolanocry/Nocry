@@ -175,6 +175,15 @@ object Sniper {
     @Volatile var progresso = ""
     /** procurando filas novas nos canais das orgs (IDs que a org trocou) */
     @Volatile var procurando = false
+    /** conferência de quando o bot liga: confere os IDs de todas as orgs antes de começar a buscar */
+    @Volatile var conferindoAoLigar = false
+    @Volatile var procuraFeitas = 0
+    @Volatile var procuraTotal = 0
+    /** pediram pra buscar enquanto conferia: começa sozinho quando terminar */
+    @Volatile private var buscarDepois = false
+    /** link de convite de cada org (fica salvo e vai no backup: serve pra entrar de novo numa conta nova) */
+    val convites = ConcurrentHashMap<String, String>()
+    private val vanity = ConcurrentHashMap<String, String>()
     fun qtdPendentes(): Int = pendentes.values.sumOf { m -> m.values.sumOf { it.size } }
     val listaOrgs: List<String> get() = listOf("TODAS") + orgs.keys
     var todosValores: List<String> = emptyList()
@@ -286,6 +295,10 @@ object Sniper {
 
     private fun lerCache() {
         try {
+            val cv = JSONObject(sp.getString("convites", "{}") ?: "{}")
+            cv.keys().forEach { k -> cv.s(k)?.let { convites[k] = it } }
+        } catch (_: Throwable) {}
+        try {
             val o = JSONObject(sp.getString("cache_filas", "{}") ?: "{}")
             o.optJSONObject("filas")?.let { f -> f.keys().forEach { k -> f.s(k)?.let { canalDaFila[k] = it } } }
             o.optJSONObject("servidores")?.let { f -> f.keys().forEach { k -> f.s(k)?.let { orgDoServidor[k] = it } } }
@@ -301,7 +314,7 @@ object Sniper {
     }
 
     // ======================================================================== backup (sobrevive a desinstalar)
-    private val CHAVES_BACKUP = listOf("aprendidos", "corrigidos", "respostas_form", "cache_filas", "nao_achou")
+    private val CHAVES_BACKUP = listOf("aprendidos", "corrigidos", "respostas_form", "cache_filas", "nao_achou", "convites")
     @Volatile private var backupMarcado = 0L
 
     /** tudo que o bot aprendeu + ajustes. O token NÃO vai (fica só no cofre do celular) */
@@ -766,6 +779,12 @@ object Sniper {
     fun alternarBusca() {
         if (!buscando) {
             if (!conectado) { log("erro", "ligue o bot primeiro (conta não conectada)"); return }
+            if (conferindoAoLigar) {
+                buscarDepois = !buscarDepois
+                log("info", if (buscarDepois) "conferindo os IDs das orgs antes · a busca começa sozinha quando terminar" else "ok, não vai começar sozinha")
+                mudou()
+                return
+            }
             if (modos.isEmpty()) { log("erro", "escolha pelo menos um modo"); return }
             if (valores.isEmpty()) { log("erro", "escolha pelo menos um valor"); return }
             val fs = filasAlvo()
@@ -847,6 +866,9 @@ object Sniper {
         buscando = true
         inicioBusca = agora() - 192_000
         apostas = 1
+        // prévia: a conta "está" em quase todas as orgs; duas de fora, uma com link guardado
+        for ((i, o) in orgs.keys.withIndex()) if (i < orgs.size - 2) guildas["90000000000000$i"] = "$o APOSTAS"
+        orgs.keys.toList().takeLast(2).firstOrNull()?.let { convites[it] = "https://discord.gg/exemplo" }
         for (o in orgs.keys.take(5)) statusOrg[o] = "✓ em 3 filas" to "ok"
         orgs.keys.drop(5).take(2).forEach { statusOrg[it] = "limite da org: espera 45s" to "pausa" }
         orgs.keys.drop(7).take(1).forEach { statusOrg[it] = "✗ a org não respondeu" to "erro" }
@@ -959,6 +981,8 @@ object Sniper {
             Thread.sleep(350)
         }
         log("info", "${guildas.size} servidores · ${dosOrgs.size} de org · escolha org, modo e valor e toque em INICIAR BUSCA")
+        guardarConvites()
+        conferirAoLigar()
         if (buscarAoLigar && !buscando) alternarBusca()
         mudou()
     }
@@ -967,6 +991,7 @@ object Sniper {
         val gid = g.s("id") ?: return
         val nome = g.s("name") ?: g.optJSONObject("properties")?.s("name")
         if (nome != null) guildas[gid] = nome
+        (g.s("vanity_url_code") ?: g.optJSONObject("properties")?.s("vanity_url_code"))?.let { if (it.isNotBlank()) vanity[gid] = it }
         g.optJSONArray("channels")?.let { cs ->
             val ids = ArrayList<String>()
             for (i in 0 until cs.length()) {
@@ -2455,6 +2480,73 @@ object Sniper {
             .any { it in n }
     }
 
+    private const val CONFERIR_DE_NOVO = 6 * 60 * 60_000L   // ao ligar, confere os IDs se a última foi há mais de 6 h
+
+    /** ao ligar o bot: confere os IDs de todas as orgs em que a conta está (antes de buscar) */
+    private fun conferirAoLigar() {
+        if (agora() - sp.getLong("ultima_conferencia", 0L) < CONFERIR_DE_NOVO) return
+        val alvos = orgs.keys.filter { servidoresDa(it).isNotEmpty() }
+        if (alvos.isEmpty()) return
+        conferindoAoLigar = true
+        if (buscarAoLigar) buscarDepois = true
+        log("info", "conferindo os IDs de ${alvos.size} orgs antes de buscar (só lê, uns segundos por org)")
+        procurarFilasNovas(alvos, sozinho = true)
+    }
+
+    /** a conta está no servidor da org? (só vale com o bot conectado) */
+    fun naConta(o: String): Boolean = servidoresDa(o).isNotEmpty()
+
+    fun servidoresCarregados(): Boolean = conectado && guildas.isNotEmpty()
+
+    /** guarda o link de convite de cada org em que a conta está (fica no backup, pra entrar de novo se precisar) */
+    private fun guardarConvites() {
+        val faltam = orgs.keys.filter { !convites.containsKey(it) && naConta(it) }
+        if (faltam.isEmpty()) return
+        Thread {
+            var novos = 0
+            for (o in faltam) {
+                val d = dc ?: break
+                val gid = servidoresDa(o).firstOrNull() ?: continue
+                val link = vanity[gid]?.let { "https://discord.gg/$it" } ?: run {
+                    var achou: String? = null
+                    // tenta nos canais que a conta usa da org, depois nos outros (no máximo 3)
+                    val cs = (canaisDaOrg[o]?.toList() ?: emptyList()) + textosDe(gid)
+                    for (cid in cs.distinct().take(3)) {
+                        val r = d.criarConvite(cid)
+                        r.obj()?.s("code")?.let { achou = "https://discord.gg/$it" }
+                        if (achou != null || r.codigo == 401) break
+                        Thread.sleep(800)
+                    }
+                    achou
+                } ?: continue
+                convites[o] = link
+                novos++
+                Thread.sleep(800)
+            }
+            if (novos > 0) {
+                salvarConvites()
+                log("info", "$novos links de convite das orgs guardados")
+                mudou()
+            }
+        }.apply { isDaemon = true; name = "sniper-convites" }.start()
+    }
+
+    private fun salvarConvites() {
+        val o = JSONObject()
+        for ((k, v) in convites) o.put(k, v)
+        sp.edit().putString("convites", o.toString()).apply()
+        marcarBackup()
+    }
+
+    /** link colado por você (pra org em que a conta nunca entrou) */
+    fun definirConvite(o: String, link: String) {
+        val l = link.trim()
+        val codigo = Regex("""(?:discord(?:app)?\.(?:gg|com/invite)/)?([A-Za-z0-9-]{2,32})$""").find(l.trimEnd('/'))?.groupValues?.get(1)
+        if (l.isEmpty() || codigo == null) { convites.remove(o) } else convites[o] = "https://discord.gg/$codigo"
+        salvarConvites()
+        mudou()
+    }
+
     /** automático: uma fila deu "ID velho" → procura as novas da org (no máximo a cada 30 min) */
     private fun agendarProcura(o: String) {
         if (agora() - (ultimaProcura[o] ?: 0L) < PROCURA_DE_NOVO) return
@@ -2470,6 +2562,8 @@ object Sniper {
         if (!conectado || dc == null) { if (!sozinho) log("erro", "ligue o bot primeiro"); return }
         if (paraProcurar.isEmpty()) return
         procurando = true
+        procuraFeitas = 0
+        procuraTotal = paraProcurar.size
         mudou()
         val th = Thread {
             val apr = try { JSONObject(sp.getString("aprendidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
@@ -2483,10 +2577,11 @@ object Sniper {
                     paraProcurar.remove(o)
                     val d = dc ?: break
                     ultimaProcura[o] = agora()
-                    progresso = "procurando as filas da $o"
+                    procuraTotal = maxOf(procuraTotal, procuraFeitas + 1 + paraProcurar.size)
+                    progresso = "conferindo os IDs da $o (${procuraFeitas + 1}/$procuraTotal)"
                     mudou()
                     val gids = servidoresDa(o)
-                    if (gids.isEmpty()) { semServidor.add(o); continue }
+                    if (gids.isEmpty()) { semServidor.add(o); procuraFeitas++; continue }
                     val achadas = LinkedHashMap<String, LinkedHashMap<String, String>>()   // modo -> valor -> id
                     val vistas = HashSet<String>()
                     for (gid in gids) {
@@ -2514,6 +2609,7 @@ object Sniper {
                             }
                         }
                     }
+                    procuraFeitas++
                     if (achadas.isEmpty()) { semFila.add(o); continue }
                     var daOrg = 0
                     for ((modo, vs) in achadas) for ((v, id) in vs) {
@@ -2542,12 +2638,18 @@ object Sniper {
                 carregarOrgs()
                 procurando = false
                 progresso = ""
-                log("ok", "procura pronta · $novas filas novas · $trocadas IDs velhos trocados")
+                val eraAoLigar = conferindoAoLigar
+                if (eraAoLigar) {
+                    conferindoAoLigar = false
+                    sp.edit().putLong("ultima_conferencia", agora()).apply()
+                }
+                log("ok", (if (eraAoLigar) "conferência pronta" else "procura pronta") + " · $novas filas novas · $trocadas IDs velhos trocados")
                 if (semServidor.isNotEmpty()) log("erro", "a conta não está no servidor de: ${semServidor.joinToString(", ")}")
                 if (semFila.isNotEmpty()) log("erro", "não achei fila nos canais de: ${semFila.joinToString(", ")} (o painel pode estar num canal que a conta não vê)")
                 mudou()
                 // apareceu outra org pra procurar enquanto esta rodava
                 if (paraProcurar.isNotEmpty() && conectado) procurarFilasNovas(null, sozinho = true)
+                else if (buscarDepois) { buscarDepois = false; if (conectado && !buscando) alternarBusca() }
             }
         }
         th.isDaemon = true

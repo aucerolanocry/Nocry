@@ -1209,8 +1209,131 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     // ======================================================================== BUSCA
     private fun abaBusca() {
+        add(pedaco({ assinaturaContaOrgs() }) { contaOrgs(it) }, 12)
         add(pedaco({ assinaturaAlvo() }) { alvo(it) }, 12)
         add(pedaco({ assinaturaOrgs() }) { orgs(it) }, 12)
+    }
+
+    private fun assinaturaContaOrgs(): String =
+        "${Sniper.servidoresCarregados()}|${Sniper.procurando}|${Sniper.conferindoAoLigar}|${Sniper.progresso}|${Sniper.procuraFeitas}|" +
+            Sniper.orgs.keys.joinToString("") { (if (Sniper.naConta(it)) "1" else "0") + (if (Sniper.convites.containsKey(it)) "L" else "") }
+
+    /**
+     * Suas orgs: em quais a conta está (✓) e em quais não (✗, com o link pra entrar pelo app do Discord).
+     * Enquanto o bot confere os IDs (ao ligar), mostra a barra de progresso aqui.
+     */
+    private fun contaOrgs(b: LinearLayout) {
+        val c = act
+        val todas = Sniper.orgs.keys.toList()
+        val card = Ui.card(c)
+        val topo = Ui.hbox(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        topo.addView(Ui.label(c, "suas orgs"), pesoUm())
+        if (!Sniper.servidoresCarregados()) {
+            card.addView(topo)
+            card.addView(nota("Ligue o bot pra ver em quais orgs a sua conta está e pegar o link das que faltam."), Ui.lp(top = 8, c = c))
+            b.addView(card)
+            return
+        }
+        val dentro = todas.count { Sniper.naConta(it) }
+        topo.addView(Ui.selo(c, "$dentro de ${todas.size} na conta", if (dentro == todas.size) Ui.OK else Ui.WARN, true))
+        card.addView(topo)
+        if (Sniper.procurando) {
+            val pct = if (Sniper.procuraTotal > 0) (Sniper.procuraFeitas.toFloat() / Sniper.procuraTotal).coerceIn(0f, 1f) else 0f
+            card.addView(barraProgresso(pct), Ui.lp(top = 12, h = Ui.dp(c, 6), c = c))
+            card.addView(texto(Sniper.progresso.ifEmpty { "conferindo os IDs..." }, 11.5f, Ui.WARN), Ui.lp(top = 6, c = c))
+            if (Sniper.conferindoAoLigar) card.addView(nota("Conferindo os IDs antes de buscar. Só lê, não entra em fila."), Ui.lp(top = 2, c = c))
+        }
+        for ((k, o) in todas.withIndex()) {
+            val ok = Sniper.naConta(o)
+            val link = Sniper.convites[o]
+            val (txt, cor) = when {
+                ok -> "✓ na conta" to Ui.OK
+                link != null -> "✗ fora · entrar ›" to Ui.BAD
+                else -> "✗ fora · pôr link" to Ui.MUTED
+            }
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.CENTER_VERTICAL
+            linha.minimumHeight = Ui.dp(c, 42)
+            linha.setPadding(0, Ui.dp(c, 6), 0, Ui.dp(c, 6))
+            val ponto = View(c)
+            ponto.background = Ui.shape(c, cor, 4)
+            linha.addView(ponto, LinearLayout.LayoutParams(Ui.dp(c, 8), Ui.dp(c, 8)).also { it.rightMargin = Ui.dp(c, 10) })
+            linha.addView(Ui.text(c, o, 12.5f, Ui.TEXT, true, mono = true).also { Ui.umaLinha(it, 9) }, pesoUm())
+            linha.addView(texto(txt, 12f, cor))
+            Ui.clique(linha) {
+                when {
+                    !ok && link != null -> abrirLink(link)
+                    !ok -> pedirLink(o)
+                    link != null -> copiar(link, "link da $o copiado")
+                    else -> Ui.toast(c, "a conta já está na $o")
+                }
+            }
+            if (k > 0) card.addView(divisoria())
+            card.addView(linha, Ui.lp(top = if (k == 0) 8 else 0, c = c))
+        }
+        card.addView(Ui.chips(c,
+            Ui.button(c, "ver todos os links", Ui.Kind.GHOST) { dialogLinks() }
+        ), Ui.lp(top = 10, c = c))
+        b.addView(card)
+    }
+
+    private fun divisoria(): View = View(act).also {
+        it.setBackgroundColor(Theme.alpha(android.graphics.Color.WHITE, 0x10))
+        it.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxOf(1, Ui.dp(act, 1)))
+    }
+
+    private fun barraProgresso(pct: Float): View {
+        val c = act
+        val trilho = LinearLayout(c)
+        trilho.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x18), 3)
+        val cheio = View(c)
+        cheio.background = Botao(c, "grad", 3)
+        trilho.addView(cheio, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, maxOf(pct, 0.03f)))
+        trilho.addView(View(c), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, maxOf(1f - pct, 0f)))
+        return trilho
+    }
+
+    private fun abrirLink(link: String) {
+        try { act.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+        catch (_: Throwable) { copiar(link, "link copiado (abra no Discord)") }
+    }
+
+    private fun pedirLink(o: String) {
+        Ui.dialogTexto(act, "LINK DA $o", "cole o convite (discord.gg/...)") { t ->
+            Sniper.definirConvite(o, t)
+            if (Sniper.convites[o] == null) Ui.toast(act, "não parece um link de convite")
+        }
+    }
+
+    /** todos os links das orgs: toque pra abrir no Discord, ou copie tudo de uma vez */
+    private fun dialogLinks() {
+        val c = act
+        val lista = Sniper.orgs.keys.mapNotNull { o -> Sniper.convites[o]?.let { o to it } }
+        if (lista.isEmpty()) {
+            Ui.toast(c, "ainda não tem link guardado: ligue o bot que ele pega os das orgs em que você está")
+            return
+        }
+        val col = Ui.vbox(c)
+        val p = Ui.dp(c, 18)
+        col.setPadding(p, Ui.dp(c, 8), p, Ui.dp(c, 8))
+        var dlg: android.app.AlertDialog? = null
+        for ((o, link) in lista) {
+            val l = Ui.vbox(c)
+            l.setPadding(0, Ui.dp(c, 9), 0, Ui.dp(c, 9))
+            l.addView(Ui.text(c, o, 12.5f, if (Sniper.naConta(o)) Ui.OK else Ui.TEXT, true, mono = true))
+            l.addView(Ui.text(c, link.removePrefix("https://"), 11.5f, Ui.MUTED, code = true))
+            Ui.clique(l) { dlg?.dismiss(); abrirLink(link) }
+            col.addView(l)
+        }
+        val sv = android.widget.ScrollView(c)
+        sv.addView(col)
+        dlg = android.app.AlertDialog.Builder(c, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            .setTitle(if (Prefs.maiusc) "LINKS DAS ORGS" else "Links das orgs")
+            .setView(sv)
+            .setPositiveButton("COPIAR TODOS") { _, _ -> copiar(lista.joinToString("\n") { "${it.first}: ${it.second}" }, "${lista.size} links copiados") }
+            .setNegativeButton("FECHAR", null)
+            .show()
     }
 
     private fun assinaturaAlvo() = listOf(Sniper.org, Sniper.gelo, Sniper.modos.sorted(), Sniper.valores.sorted(),
