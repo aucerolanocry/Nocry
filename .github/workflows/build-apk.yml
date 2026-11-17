@@ -25,13 +25,21 @@ on:
         description: "Só tirar print das telas (prévia no emulador, não gera APK pra ninguém)"
         type: boolean
         default: false
+      ocultar:
+        description: "Só esconder uma versão já lançada (ex.: v1.0.44): volta pra rascunho, some do app e do link"
+        required: false
+        default: ""
+      mostrar:
+        description: "Só lançar de novo uma versão escondida (ex.: v1.0.44): vira pública e aparece no app"
+        required: false
+        default: ""
 
 permissions:
   contents: write
 
 jobs:
   build:
-    if: github.event.inputs.prints != 'true'
+    if: github.event.inputs.prints != 'true' && github.event.inputs.ocultar == '' && github.event.inputs.mostrar == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -125,6 +133,30 @@ jobs:
           else
             gh release create "$TAG" dist/Nocry.apk --title "Nocry $TAG" --notes "$NOTAS" --target "${GITHUB_SHA}"
           fi
+
+  ocultar:
+    if: github.event.inputs.ocultar != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Voltar a versão pra rascunho
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.ocultar }}
+        run: |
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=true
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft
+
+  mostrar:
+    if: github.event.inputs.mostrar != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lançar a versão de novo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.mostrar }}
+        run: |
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft
 
   prints:
     if: github.event.inputs.prints == 'true'
