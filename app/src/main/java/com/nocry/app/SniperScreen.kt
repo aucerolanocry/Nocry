@@ -36,6 +36,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     override val titulo = "BOT DE FILA"
 
     private var abaAtual = 0
+    /** lista "suas orgs": as que já estão na conta ficam juntas numa linha até abrir */
+    private var orgsAbertas = false
 
     /** abre direto numa aba (0 partidas, 1 busca, 2 conta) */
     fun irPraAba(i: Int) { abaAtual = i.coerceIn(0, 2) }
@@ -1216,7 +1218,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     private fun assinaturaContaOrgs(): String =
         "${Sniper.servidoresCarregados()}|${Sniper.procurando}|${Sniper.conferindoAoLigar}|${Sniper.progresso}|${Sniper.procuraFeitas}|" +
-            Sniper.orgs.keys.joinToString("") { (if (Sniper.naConta(it)) "1" else "0") + (if (Sniper.convites.containsKey(it)) "L" else "") }
+            Sniper.orgs.keys.joinToString("") { (if (Sniper.naConta(it)) "1" else "0") + (if (Sniper.convites.containsKey(it)) "L" else "") } + "|$orgsAbertas"
 
     /**
      * Suas orgs: em quais a conta está (✓) e em quais não (✗, com o link pra entrar pelo app do Discord).
@@ -1244,7 +1246,11 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             card.addView(texto(Sniper.progresso.ifEmpty { "conferindo os IDs..." }, 11.5f, Ui.WARN), Ui.lp(top = 6, c = c))
             if (Sniper.conferindoAoLigar) card.addView(nota("Conferindo os IDs antes de buscar. Só lê, não entra em fila."), Ui.lp(top = 2, c = c))
         }
-        for ((k, o) in todas.withIndex()) {
+        // as que faltam primeiro; as que já estão na conta numa linha só (toque pra ver)
+        val fora = todas.filter { !Sniper.naConta(it) }
+        val mostrar = if (orgsAbertas || dentro == 0) fora + todas.filter { Sniper.naConta(it) } else fora
+        if (fora.isEmpty() && !orgsAbertas) card.addView(nota("A conta está em todas as orgs. Nada pra entrar."), Ui.lp(top = 8, c = c))
+        for ((k, o) in mostrar.withIndex()) {
             val ok = Sniper.naConta(o)
             val link = Sniper.convites[o]
             val (txt, cor) = when {
@@ -1271,6 +1277,16 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             }
             if (k > 0) card.addView(divisoria())
             card.addView(linha, Ui.lp(top = if (k == 0) 8 else 0, c = c))
+        }
+        if (dentro > 0) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.CENTER_VERTICAL
+            linha.minimumHeight = Ui.dp(c, 40)
+            linha.addView(texto(if (orgsAbertas) "esconder as que já estão na conta" else "✓ $dentro orgs na conta", 12f, if (orgsAbertas) Ui.MUTED else Ui.OK), pesoUm())
+            linha.addView(texto(if (orgsAbertas) "▴" else "ver ▾", 12f, Ui.MUTED))
+            Ui.clique(linha) { orgsAbertas = !orgsAbertas; for (p in pedacos) p.atualiza() }
+            if (mostrar.isNotEmpty()) card.addView(divisoria())
+            card.addView(linha, Ui.lp(top = if (mostrar.isEmpty()) 4 else 0, c = c))
         }
         card.addView(Ui.chips(c,
             Ui.button(c, "ver todos os links", Ui.Kind.GHOST) { dialogLinks() }
