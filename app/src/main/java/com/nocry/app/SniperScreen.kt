@@ -69,8 +69,13 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     private var chatRolagem: ScrollView? = null
     private var chatLista: LinearLayout? = null
     private var chatSala = ""
-    /** ids das bolhas que estão na tela, na ordem (pra só tirar as velhas e pôr as novas) */
+    /** ids das bolhas que estão na tela, na ordem (pra só pôr as novas, sem refazer o chat) */
     private val chatIds = ArrayList<String>()
+    /** aviso "mensagens anteriores" no alto do chat (some quando a conversa toda já está na tela) */
+    private var chatTopo: TextView? = null
+    private var carregandoAnteriores = false
+    private val CHAT_JANELA = 120
+    private val CHAT_LOTE = 100
     private var tempoTxt: TextView? = null
     private var contagemTxt: TextView? = null
 
@@ -85,6 +90,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         chatCard = null
         chatSala = ""
         chatIds.clear()
+        chatTopo = null
         contagemTxt = null
         val c = act
         if (!License.isOwner()) {
@@ -532,6 +538,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         card.addView(sv, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (altura * 0.40).toInt()).also { it.topMargin = Ui.dp(c, 10) })
         chatRolagem = sv
         chatLista = lista
+        // chegou no topo do chat: põe as mensagens anteriores (a conversa da sala fica inteira)
+        sv.setOnScrollChangeListener { _, _, y, _, _ -> if (y < Ui.dp(c, 60) && chatTopo != null) carregarAnteriores() }
 
         // respostas rápidas (um toque e já manda)
         val hs = HorizontalScrollView(c)
@@ -854,55 +862,106 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     }
 
     /** só acrescenta as mensagens novas no fim (não refaz o chat inteiro) */
+    private fun chatLinhas(s: SSala?): List<SChat> = if (s == null) emptyList() else synchronized(s.chat) { s.chat.toList() }
+
+    private fun limpaChat(lista: LinearLayout) {
+        lista.removeAllViews()
+        chatIds.clear()
+        chatTopo = null
+    }
+
+    /**
+     * O chat guarda a conversa inteira da sala. Ao abrir, mostra as últimas [CHAT_JANELA] (desenhar centenas de
+     * bolhas de uma vez travaria a tela) e, quando você rola até o topo, vai pondo as anteriores, até a primeira.
+     */
     private fun atualizaChat() {
         val lista = chatLista ?: return
         val sv = chatRolagem ?: return
         val s = salaAtual()
         val id = s?.id ?: ""
-        val linhas = if (s == null) emptyList() else synchronized(s.chat) { s.chat.toList() }
+        val linhas = chatLinhas(s)
         if (id != chatSala) {
             marcados.clear()                // trocou de sala: @nome da outra sala não vale aqui
-            lista.removeAllViews()
-            chatIds.clear()
+            limpaChat(lista)
             chatSala = id
         }
         if (linhas.isEmpty()) {
             if (chatIds.isNotEmpty() || lista.childCount == 0) {
-                lista.removeAllViews()
-                chatIds.clear()
+                limpaChat(lista)
                 lista.addView(texto(if (s == null) "o chat aparece aqui" else "carregando as mensagens...", 12.5f, Ui.MUTED))
             }
             return
         }
-        if (chatIds.isEmpty() && lista.childCount > 0) lista.removeAllViews()   // tira o "carregando..."
-        // a sala guarda só as últimas 120 mensagens: as mais velhas saem por cima. Antes isso refazia o chat
-        // inteiro (120 bolhas) a cada mensagem nova numa sala movimentada; agora só tira as que saíram
+        if (chatIds.isEmpty() && lista.childCount > 0) limpaChat(lista)   // tira o "carregando..."
         val novas = linhas.map { it.id }
-        val presentes = novas.toHashSet()
-        var alturaTirada = 0
-        while (chatIds.isNotEmpty() && chatIds[0] !in presentes) {
-            alturaTirada += lista.getChildAt(0)?.height ?: 0
-            lista.removeViewAt(0)
-            chatIds.removeAt(0)
+        val ini = if (chatIds.isEmpty()) -1 else novas.indexOf(chatIds[0])
+        // o que está na tela tem que continuar igual, na mesma ordem, dentro da conversa; se não (histórico recarregado), refaz
+        if (chatIds.isNotEmpty() && (ini < 0 || ini + chatIds.size > novas.size || novas.subList(ini, ini + chatIds.size) != chatIds)) {
+            limpaChat(lista)
         }
-        // o que ficou na tela tem que ser o começo da lista nova; se não for (histórico recarregado), refaz
-        if (chatIds.size > novas.size || novas.subList(0, chatIds.size) != chatIds) {
-            lista.removeAllViews()
-            chatIds.clear()
-            alturaTirada = 0
-        }
-        if (novas.size == chatIds.size) {
-            if (alturaTirada > 0) sv.scrollBy(0, -alturaTirada)
+        if (chatIds.isEmpty()) {
+            val de = maxOf(0, linhas.size - CHAT_JANELA)
+            for (l in linhas.subList(de, linhas.size)) {
+                lista.addView(bolha(l))
+                chatIds.add(l.id)
+            }
+            atualizaTopo(de)
+            sv.post { sv.fullScroll(View.FOCUS_DOWN) }
             return
         }
-        val noFim = sv.scrollY + sv.height >= lista.height - alturaTirada - Ui.dp(act, 80)
-        val primeiraVez = chatIds.isEmpty()
-        for (l in linhas.drop(chatIds.size)) {
+        atualizaTopo(ini)
+        val fim = ini + chatIds.size
+        if (fim >= linhas.size) return
+        val noFim = sv.scrollY + sv.height >= lista.height - Ui.dp(act, 80)
+        for (l in linhas.subList(fim, linhas.size)) {
             lista.addView(bolha(l))
             chatIds.add(l.id)
         }
-        if (noFim || primeiraVez) sv.post { sv.fullScroll(View.FOCUS_DOWN) }
-        else if (alturaTirada > 0) sv.scrollBy(0, -alturaTirada)
+        if (noFim) sv.post { sv.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    /** o aviso no alto do chat: quantas mensagens ainda tem antes (toque ou role até ele pra ver) */
+    private fun atualizaTopo(qtd: Int) {
+        val lista = chatLista ?: return
+        val t = chatTopo
+        if (qtd <= 0) {
+            if (t != null) { lista.removeView(t); chatTopo = null }
+            return
+        }
+        val txt = "↑ $qtd mensagens anteriores · role pra cima"
+        if (t == null) {
+            val n = texto(txt, 11f, Ui.MUTED)
+            n.gravity = Gravity.CENTER
+            n.setPadding(0, Ui.dp(act, 4), 0, Ui.dp(act, 10))
+            Ui.clique(n) { carregarAnteriores() }
+            lista.addView(n, 0)
+            chatTopo = n
+        } else if (t.text.toString() != txt) t.text = txt
+    }
+
+    /** põe mais um lote de mensagens antigas em cima, sem a tela pular de lugar */
+    private fun carregarAnteriores() {
+        if (carregandoAnteriores) return
+        val lista = chatLista ?: return
+        val sv = chatRolagem ?: return
+        if (chatIds.isEmpty()) return
+        val linhas = chatLinhas(salaAtual())
+        val ini = linhas.indexOfFirst { it.id == chatIds[0] }
+        if (ini <= 0) { atualizaTopo(0); return }
+        carregandoAnteriores = true
+        val de = maxOf(0, ini - CHAT_LOTE)
+        val alturaAntes = lista.height
+        val yAntes = sv.scrollY
+        val pos = if (chatTopo != null) 1 else 0
+        val lote = linhas.subList(de, ini)
+        for ((k, l) in lote.withIndex()) lista.addView(bolha(l), pos + k)
+        chatIds.addAll(0, lote.map { it.id })
+        atualizaTopo(de)
+        // depois de medir, desce o tanto que entrou em cima: quem estava lendo continua no mesmo ponto
+        lista.post {
+            sv.scrollTo(0, yAntes + (lista.height - alturaAntes))
+            carregandoAnteriores = false
+        }
     }
 
     private fun bolha(l: SChat): View {

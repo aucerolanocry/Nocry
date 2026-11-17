@@ -323,8 +323,9 @@ class Discord(private val token: String, private val vendorId: String, private v
     }
 
     /** últimas mensagens (mais nova primeiro, igual o Discord devolve). depois = só as mais novas que esse id */
-    fun historico(cid: String, limite: Int, depois: String? = null, gid: String? = null): Pair<List<DMsg>, Resp> {
-        val q = "/channels/$cid/messages?limit=$limite" + (if (depois != null) "&after=$depois" else "")
+    fun historico(cid: String, limite: Int, depois: String? = null, gid: String? = null, antes: String? = null): Pair<List<DMsg>, Resp> {
+        val q = "/channels/$cid/messages?limit=$limite" + (if (depois != null) "&after=$depois" else "") +
+            (if (antes != null) "&before=$antes" else "")
         val r = req("GET", q)
         if (!r.ok) return emptyList<DMsg>() to r
         val a = r.arr() ?: return emptyList<DMsg>() to r

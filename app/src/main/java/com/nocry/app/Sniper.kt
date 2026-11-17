@@ -858,6 +858,7 @@ object Sniper {
         a.pessoas["111111111111111111"] = SPessoa("111111111111111111", "Kauã", "jogador")
         a.pessoas["222222222222222222"] = SPessoa("222222222222222222", "Mediador Leo", "adm")
         synchronized(a.chat) {
+            for (i in 1..180) a.chat.add(SChat("h$i", h, if (i % 3 == 0) "voce" else "pessoa", if (i % 3 == 0) "você" else "Kauã", "mensagem antiga $i"))
             a.chat.add(SChat("1", h, "bot", "WHALE APOSTAS", "", card = "3x3 Mobile · R$ 2,00\nJogadores: @VOCÊ vs @Kauã\nConfirmem em até 60 segundos.",
                 botoes = listOf("CONFIRMAR", "CANCELAR")))
             a.chat.add(SChat("2", h, "voce", "você", "FULL UMP E XM8 SEM MOBILADOR E SEM BUG DE KIT"))
@@ -1222,10 +1223,27 @@ object Sniper {
         return listOf(semTitulo, soLetras, "full ump e xm8", "on").filter { it.isNotBlank() && it != msgAuto }.distinct()
     }
 
+    /** a sala guarda a conversa inteira (até esse tanto, só pra não estourar a memória numa sala gigante) */
+    const val CHAT_MAX = 1000
+
+    /** a conversa inteira da sala, de 100 em 100 mensagens, da mais nova pra trás */
+    private fun historicoInteiro(d: Discord, s: SSala): List<DMsg> {
+        val todas = ArrayList<DMsg>()
+        var antes: String? = null
+        while (todas.size < CHAT_MAX) {
+            val (ms, r) = d.historico(s.id, 100, null, s.guildId, antes)
+            if (!r.ok || ms.isEmpty()) break
+            todas.addAll(ms)
+            if (ms.size < 100) break
+            antes = ms.minByOrNull { it.id.toLongOrNull() ?: Long.MAX_VALUE }?.id ?: break
+        }
+        return todas
+    }
+
     private fun carregarHistorico(s: SSala) {
         val d = dc ?: return
-        val (ms, _) = d.historico(s.id, 50, null, s.guildId)
-        val lista = ms.sortedBy { it.id.toLongOrNull() ?: 0L }
+        val ms = historicoInteiro(d, s)
+        val lista = ms.distinctBy { it.id }.sortedBy { it.id.toLongOrNull() ?: 0L }
         val ultimoHist = lista.lastOrNull()?.id?.toLongOrNull() ?: 0L
         synchronized(s.chat) {
             val depois = s.chat.filter { (it.id.toLongOrNull() ?: 0L) > ultimoHist }
@@ -1428,7 +1446,7 @@ object Sniper {
         s.inativa = false
         if (!vazia(m)) synchronized(s.chat) {
             s.chat.add(linhaChat(m))
-            while (s.chat.size > 120) s.chat.removeAt(0)
+            while (s.chat.size > CHAT_MAX) s.chat.removeAt(0)
         }
         if (temBotaoConfirmar(m)) s.temConfirmar = true
         diag("chat sala ${numeroSala(s.id)} (${s.org}) ${if (m.autorBot) "bot " else ""}${m.autorNome}: ${textoMsg(m).take(400)}" +
