@@ -609,7 +609,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val col = Ui.vbox(c)
         col.addView(Ui.text(c, if (s == null) "chat da sala" else "sala ${Sniper.numeroSala(s.id)} · ${s.org}", 14f, Ui.TEXT, true))
         if (s != null) {
-            val n = texto(s.nome, 11f, Ui.MUTED)
+            val n = texto(if (s.fila.isNotEmpty()) "${s.fila} · ${s.nome}" else s.nome, 11f, Ui.MUTED)
             n.maxLines = 1
             n.ellipsize = android.text.TextUtils.TruncateAt.END
             col.addView(n, Ui.lp(top = 1, c = c))
@@ -644,7 +644,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val sb = StringBuilder(Sniper.salaAtiva ?: "-")
         for (id in Sniper.ordem) {
             val s = Sniper.salas[id] ?: continue
-            sb.append('|').append(id).append(s.naoLidas).append(s.respondida).append(s.apostaOk).append(s.confirmada).append(s.somenteLeitura).append(s.encerrada)
+            sb.append('|').append(id).append(s.fila).append(s.naoLidas).append(s.respondida).append(s.apostaOk).append(s.confirmada).append(s.somenteLeitura).append(s.encerrada)
                 .append((agora - s.aberta) / 10_000)
         }
         return sb.toString()
@@ -714,6 +714,11 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         org.maxLines = 1
         org.ellipsize = android.text.TextUtils.TruncateAt.END
         col.addView(org, Ui.lp(top = 5, c = c))
+        if (s.fila.isNotEmpty()) {
+            val fl = Ui.text(c, s.fila, 11f, if (sel) Theme.alpha(Theme.sobreGrad(), 0xE0) else Theme.accent, true, mono = true)
+            Ui.umaLinha(fl, 8)
+            col.addView(fl, Ui.lp(top = 1, c = c))
+        }
         val est = texto(txt, 11f, if (sel) Theme.alpha(Theme.sobreGrad(), 0xD0) else cor)
         est.maxLines = 1
         col.addView(est, Ui.lp(top = 1, c = c))
@@ -1377,11 +1382,11 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         )))
     }
 
-    private fun assinaturaFerramentas() = "${Sniper.descobrindo}|${Sniper.progresso}|${Sniper.qtdPendentes()}|${Sniper.conectado}|${Sniper.buscando}|${Sniper.qtdRespostasSalvas()}"
+    private fun assinaturaFerramentas() = "${Sniper.descobrindo}|${Sniper.procurando}|${Sniper.progresso}|${Sniper.qtdPendentes()}|${Sniper.conectado}|${Sniper.buscando}|${Sniper.qtdRespostasSalvas()}"
 
     private fun ferramentas(b: LinearLayout) {
         val c = act
-        if (Sniper.descobrindo) {
+        if (Sniper.descobrindo || Sniper.procurando) {
             val card = Ui.card(c, forte = true)
             card.addView(Ui.status(c, "LENDO AS FILAS", "AGUARDE", null))
             card.addView(Ui.text(c, Sniper.progresso.ifEmpty { "lendo as filas..." }, 12.5f, Ui.WARN, true, mono = true), Ui.lp(top = 6, c = c))
@@ -1400,6 +1405,13 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                 }
             })
         }
+        itens.add(Ui.item(c, "Procurar filas novas", "A org postou o painel de novo e deu \"ID velho\"? Lê os canais de todas as orgs e pega os IDs novos sozinho. Também roda sozinho quando aparece ID velho.", R.drawable.ic_sparkle, null) {
+            when {
+                Sniper.descobrindo || Sniper.procurando -> Ui.toast(c, "já está lendo as filas")
+                !Sniper.conectado -> Ui.toast(c, "ligue o bot primeiro")
+                else -> Sniper.procurarFilasNovas()
+            }
+        })
         itens.add(Ui.item(c, "Conferir todos os valores", "Abre cada fila de todas as orgs e corrige ID com valor trocado. Uns 5 min. Pause a busca antes.", R.drawable.ic_check, null) {
             when {
                 Sniper.descobrindo -> Ui.toast(c, "já está lendo as filas")
@@ -1414,7 +1426,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                 Ui.dialogConfirma(c, "APAGAR RESPOSTAS", "Apaga as $nr respostas salvas. Da próxima vez que uma org pedir formulário, ele pergunta de novo.", "APAGAR") { Sniper.apagarRespostas() }
             })
         }
-        b.addView(Ui.grupo(c, "ferramentas", itens), Ui.lp(top = if (Sniper.descobrindo) 12 else 0, c = c))
+        b.addView(Ui.grupo(c, "ferramentas", itens), Ui.lp(top = if (Sniper.descobrindo || Sniper.procurando) 12 else 0, c = c))
     }
 
     private fun backup(b: LinearLayout) {

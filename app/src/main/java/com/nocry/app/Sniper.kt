@@ -99,6 +99,10 @@ class SSala(val id: String, val nome: String, val org: String, val guildId: Stri
     val aberta = System.currentTimeMillis()
     /** a org cancelou/fechou (te tirou da sala ou não deixa mais escrever) */
     @Volatile var encerrada = false
+    /** a fila que puxou essa sala, tipo "2X2 R$ 10" (vazio = não sabe) */
+    @Volatile var fila = ""
+    /** a fila já foi lida do card da própria sala (mais certo que a última fila em que entrou) */
+    @Volatile var filaDoCard = false
     /** abriu só porque a org te colocou na thread (nome não parece sala): só cancela sozinho se tiver card de confirmar */
     @Volatile var incerta = false
     @Volatile var temConfirmar = false
@@ -169,6 +173,8 @@ object Sniper {
         private set
     @Volatile var descobrindo = false
     @Volatile var progresso = ""
+    /** procurando filas novas nos canais das orgs (IDs que a org trocou) */
+    @Volatile var procurando = false
     fun qtdPendentes(): Int = pendentes.values.sumOf { m -> m.values.sumOf { it.size } }
     val listaOrgs: List<String> get() = listOf("TODAS") + orgs.keys
     var todosValores: List<String> = emptyList()
@@ -853,6 +859,7 @@ object Sniper {
         }
         val h = hora(agora())
         val a = sala("9000000000000000001", "aguardando-4908657", "WHALE", 0)
+        a.fila = "2X2 R$ 10"
         a.respondida = true
         a.naoLidas = 0
         a.pessoas["111111111111111111"] = SPessoa("111111111111111111", "Kauã", "jogador")
@@ -866,8 +873,10 @@ object Sniper {
             a.chat.add(SChat("4", h, "bot", "Mediador Leo", "Chave pix: leo.mediador@gmail.com\nID da sala: 482913577 senha: 4321"))
         }
         val b = sala("9000000000000000002", "partida-0754", "MOREIRA", 0)
+        b.fila = "1X1 R$ 5"
         b.naoLidas = 2
         val c = sala("9000000000000000003", "Aguardando 646", "MORRO", 0)
+        c.fila = "4X4 R$ 20"
         c.apostaOk = true
         salaAtiva = a.id
         log("ok", "entrou na fila WHALE 3X3 R$ 2")
@@ -1151,6 +1160,8 @@ object Sniper {
         salas[c.id]?.let { return it }
         val o = adivinharOrg(c.guildId, c.nome)
         val s = SSala(c.id, c.nome, o, c.guildId, c.ehThread)
+        // a última fila em que entrou nessa org (o card da sala corrige se for outra)
+        s.fila = ultimaFila[o]?.second?.removePrefix("$o ")?.trim() ?: ""
         salas[c.id] = s
         ordem.add(c.id)
         val ativa = salaAtiva                 // a tela pode trocar a sala ativa ao mesmo tempo: lê uma vez só
@@ -1447,6 +1458,7 @@ object Sniper {
         if (!vazia(m)) synchronized(s.chat) {
             s.chat.add(linhaChat(m))
             while (s.chat.size > CHAT_MAX) s.chat.removeAt(0)
+            if (!s.filaDoCard && m.autorBot) filaDoCard(m)?.let { s.fila = it; s.filaDoCard = true }
         }
         if (temBotaoConfirmar(m)) s.temConfirmar = true
         diag("chat sala ${numeroSala(s.id)} (${s.org}) ${if (m.autorBot) "bot " else ""}${m.autorNome}: ${textoMsg(m).take(400)}" +
@@ -1875,7 +1887,10 @@ object Sniper {
                 log("erro", "não achei as filas da $o (você está no servidor?) · tento de novo em 10 min")
                 status(o, "✗ não achei as filas (está no servidor?)", "erro")
             }
-        } else status(o, "✗ uma fila dela não existe mais (ID velho)", "erro")
+        } else {
+            status(o, "✗ ID velho · procurando o novo", "erro")
+            agendarProcura(o)
+        }
         return null
     }
 
@@ -2386,6 +2401,157 @@ object Sniper {
         }
         th.isDaemon = true
         th.name = "sniper-descobrir"
+        th.start()
+    }
+
+    // ======================================================================== procurar filas novas (IDs)
+    /*
+     * Quando a org apaga o painel e posta de novo, todos os IDs mudam e as filas antigas viram "ID velho".
+     * Isso abre os canais da org, lê as mensagens recentes e acha sozinho as filas: mensagem de bot, com botão,
+     * com valor (R$) e modo (1x1...4x4) escritos nela ou no nome do canal. Guarda os IDs novos (ficam no backup).
+     * Só lê: não clica em nada e não entra em nenhuma fila.
+     */
+    private val MODO_RX = Regex("""(?<![0-9])([1-4])\s*[xXvV]\s*([1-4])(?![0-9])""")
+    private val ultimaProcura = ConcurrentHashMap<String, Long>()
+    private val paraProcurar: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    private const val PROCURA_DE_NOVO = 30 * 60_000L     // a mesma org no máximo a cada 30 min (automático)
+
+    /** modo escrito na mensagem da fila (ou, se ela não diz, no nome do canal) */
+    fun modoDe(m: DMsg, canal: String = ""): String? {
+        fun achar(t: String): Set<String> = MODO_RX.findAll(t).mapNotNull { r ->
+            val a = r.groupValues[1]
+            if (a == r.groupValues[2]) "${a}X$a" else null
+        }.toSet()
+        val t = achar(textoCard(m))
+        if (t.size == 1) return t.first()
+        val n = canal.replace('-', ' ').replace('_', ' ')
+        val c = achar(n)
+        if (c.size == 1) return c.first()
+        // gíria das orgs: canal "fila-x1" = 1x1
+        if (t.isEmpty() && c.isEmpty() && Regex("(^|[^0-9a-z])x1([^0-9]|$)").containsMatchIn(n.lowercase())) return "1X1"
+        return null
+    }
+
+    /** "2X2 R$ 10" lido do card que a org manda na sala */
+    private fun filaDoCard(m: DMsg): String? {
+        val v = lerValor(m) ?: return null
+        val modo = modoDe(m) ?: return null
+        return "$modo ${rotuloValor(v)}"
+    }
+
+    /** os servidores da org que a conta conhece */
+    private fun servidoresDa(o: String): Set<String> {
+        val g = LinkedHashSet<String>()
+        canaisDaOrg[o]?.forEach { cid -> canais[cid]?.guildId?.let { g.add(it) } }
+        for ((gid, org) in orgDoServidor) if (org == o) g.add(gid)
+        val n = normal(o)
+        if (n.isNotEmpty()) for ((gid, nome) in guildas) if (n in normal(nome)) g.add(gid)
+        return g
+    }
+
+    private fun pareceCanalDeFila(nome: String): Boolean {
+        val n = nome.lowercase()
+        return listOf("fila", "x1", "1v1", "2v2", "3v3", "4v4", "1x1", "2x2", "3x3", "4x4", "mob", "emu", "apost", "x2", "x3", "x4", "aposta")
+            .any { it in n }
+    }
+
+    /** automático: uma fila deu "ID velho" → procura as novas da org (no máximo a cada 30 min) */
+    private fun agendarProcura(o: String) {
+        if (agora() - (ultimaProcura[o] ?: 0L) < PROCURA_DE_NOVO) return
+        ultimaProcura[o] = agora()
+        paraProcurar.add(o)
+        if (!procurando) procurarFilasNovas(null, sozinho = true)
+    }
+
+    /** procura as filas das orgs (todas, ou só [alvos]) nos canais delas e guarda os IDs novos */
+    fun procurarFilasNovas(alvos: Collection<String>? = null, sozinho: Boolean = false) {
+        if (alvos != null) paraProcurar.addAll(alvos) else if (!sozinho) paraProcurar.addAll(orgs.keys)
+        if (procurando) return
+        if (!conectado || dc == null) { if (!sozinho) log("erro", "ligue o bot primeiro"); return }
+        if (paraProcurar.isEmpty()) return
+        procurando = true
+        mudou()
+        val th = Thread {
+            val apr = try { JSONObject(sp.getString("aprendidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
+            var novas = 0
+            var trocadas = 0
+            val semServidor = ArrayList<String>()
+            val semFila = ArrayList<String>()
+            try {
+                while (true) {
+                    val o = paraProcurar.firstOrNull() ?: break
+                    paraProcurar.remove(o)
+                    val d = dc ?: break
+                    ultimaProcura[o] = agora()
+                    progresso = "procurando as filas da $o"
+                    mudou()
+                    val gids = servidoresDa(o)
+                    if (gids.isEmpty()) { semServidor.add(o); continue }
+                    val achadas = LinkedHashMap<String, LinkedHashMap<String, String>>()   // modo -> valor -> id
+                    val vistas = HashSet<String>()
+                    for (gid in gids) {
+                        val (deFila, outros) = textosDe(gid).partition { pareceCanalDeFila(canais[it]?.nome ?: "") }
+                        // primeiro os canais com cara de fila; os outros só se ali não tinha nenhuma
+                        for ((k, grupo) in listOf(deFila, outros.take(30)).withIndex()) {
+                            if (k == 1 && achadas.isNotEmpty()) break
+                            for (cid in grupo) {
+                                if (dc == null) break
+                                val (ms, r) = d.historico(cid, 50, null, gid)
+                                if (r.codigo == 401) return@Thread
+                                val nomeCanal = canais[cid]?.nome ?: ""
+                                for (m in ms) {
+                                    vistas.add(m.id)
+                                    if (!m.autorBot || m.botoes.isEmpty()) continue
+                                    val v = lerValor(m) ?: continue
+                                    if ((v.toIntOrNull() ?: 0) < VALOR_MINIMO) continue
+                                    val modo = modoDe(m, nomeCanal) ?: continue
+                                    achadas.getOrPut(modo) { LinkedHashMap() }.putIfAbsent(v, m.id)
+                                    canalDaFila[m.id] = cid
+                                    canaisDaOrg.getOrPut(o) { ConcurrentHashMap.newKeySet() }.add(cid)
+                                    orgDoServidor[gid] = o
+                                }
+                                Thread.sleep(350)
+                            }
+                        }
+                    }
+                    if (achadas.isEmpty()) { semFila.add(o); continue }
+                    var daOrg = 0
+                    for ((modo, vs) in achadas) for ((v, id) in vs) {
+                        daOrg++
+                        val antigo = orgs[o]?.filas?.get(modo)?.get(v)
+                        if (antigo == id) continue
+                        if (antigo != null && antigo in vistas) continue          // as duas existem: fica com a que já usava
+                        if (antigo != null) { corrigirValor(antigo, "-"); trocadas++ } else novas++
+                        val jo = apr.optJSONObject(o) ?: JSONObject().also { apr.put(o, it) }
+                        val jm = jo.optJSONObject(modo) ?: JSONObject().also { jo.put(modo, it) }
+                        jm.put(v, id)
+                        sumida.remove(id)
+                    }
+                    orgSumida.remove(o)
+                    falhasOrg[o] = 0
+                    log("ok", "$o: $daOrg filas lidas nos canais (" + achadas.entries.joinToString(" · ") { (m, vs) -> "$m ${vs.size}" } + ")")
+                    status(o, "filas atualizadas", "info")
+                }
+            } catch (_: InterruptedException) {
+            } catch (t: Throwable) {
+                log("erro", "procurar filas: ${t.message ?: t.javaClass.simpleName}")
+            } finally {
+                sp.edit().putString("aprendidos", apr.toString()).apply()
+                salvarCache()
+                marcarBackup()
+                carregarOrgs()
+                procurando = false
+                progresso = ""
+                log("ok", "procura pronta · $novas filas novas · $trocadas IDs velhos trocados")
+                if (semServidor.isNotEmpty()) log("erro", "a conta não está no servidor de: ${semServidor.joinToString(", ")}")
+                if (semFila.isNotEmpty()) log("erro", "não achei fila nos canais de: ${semFila.joinToString(", ")} (o painel pode estar num canal que a conta não vê)")
+                mudou()
+                // apareceu outra org pra procurar enquanto esta rodava
+                if (paraProcurar.isNotEmpty() && conectado) procurarFilasNovas(null, sozinho = true)
+            }
+        }
+        th.isDaemon = true
+        th.name = "sniper-procurar"
         th.start()
     }
 
