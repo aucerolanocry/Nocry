@@ -61,11 +61,16 @@ object Config {
      * e so devolve true se a copia terminou de verdade (antes dava "aplicado" mesmo quando falhava).
      */
     private fun troca(destino: String, origem: String, oQue: String): Boolean {
+        // copia primeiro pra uma pasta ao lado e só depois troca (mv é na hora): se a cópia falhar no meio,
+        // a pasta que o jogo já tinha continua lá inteira (antes o jogo ficava sem a pasta)
+        val novo = "$destino/.nocry_novo"
         val r = Adb.exec(
             "if [ -d \"$origem/android\" ]; then " +
-                "rm -rf \"$destino/android\" && mkdir -p \"$destino\" && cp -rf \"$origem/android\" \"$destino/\" && echo NOCRY_OK; " +
+                "rm -rf \"$novo\"; mkdir -p \"$destino\" && cp -rf \"$origem/android\" \"$novo\" && " +
+                "rm -rf \"$destino/android\" && mv \"$novo\" \"$destino/android\" && [ -d \"$destino/android\" ] && echo NOCRY_OK " +
+                "|| { rm -rf \"$novo\"; echo NOCRY_FALHOU; }; " +
                 "else echo NOCRY_SEM_PASTA; fi",
-            180000
+            300000
         )
         if (r.out.contains("NOCRY_OK")) return true
         if (r.out.contains("NOCRY_SEM_PASTA")) {
@@ -77,6 +82,7 @@ object Config {
         return false
     }
 
+    @Synchronized
     fun aplicar(ff: String = "normal", tipo: String = "completo"): Boolean {
         if (!Adb.ensure(Sys.app)) return false
         val (destino, srcA, _) = destinos(ff)
@@ -96,6 +102,7 @@ object Config {
     }
 
     /** apaga a pasta "android" da suja instalada (call_rec no normal, BugReportCache/image no max) */
+    @Synchronized
     fun apagarSuja(ff: String = "normal"): Boolean {
         if (!Adb.ensure(Sys.app)) return false
         val (_, srcA, _) = destinos(ff)
@@ -109,6 +116,7 @@ object Config {
         }
     }
 
+    @Synchronized
     fun restaurar(ff: String = "normal"): Boolean {
         if (!Adb.ensure(Sys.app)) return false
         val (destino, _, srcB) = destinos(ff)

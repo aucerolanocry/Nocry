@@ -174,7 +174,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         secao("salas", listOf(
             "Formou partida: a sala aparece em Partidas, a mensagem automática sai na hora e chega notificação.",
             "Ninguém respondeu em ${Sniper.tempoResposta / 1000}s: ele cancela e volta a procurar.",
-            "Aposta confirmada (★) fica no painel até a org apagar ou você tirar."))
+            "Ninguém confirmou em 3 min: a sala sai do painel sozinha (se ainda estão conversando, espera parar).",
+            "Aposta confirmada (★) fica no painel até a org encerrar; aí sai sozinha 3 min depois."))
         secao("chat", listOf(
             "@ jogador e @ ADM põem a marcação no campo: escreve o resto e manda.",
             "Copiar: ícone no canto da mensagem, botões de link/chave pix/ID embaixo dela, ou segure o dedo no texto.",
@@ -628,12 +629,16 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     private fun estadoSala(): String {
         val s = salaAtual() ?: return ""
+        val agora = System.currentTimeMillis()
+        val saiEm = mmss(Sniper.SALA_SEM_CONFIRMAR - (agora - s.aberta))
         return when {
+            s.encerrada -> (if (s.apostaOk) "★ CONFIRMADA · A ORG ENCERROU" else "✗ A ORG ENCERROU") +
+                " · SAI EM ${mmss(Sniper.SALA_SEM_CONFIRMAR - (agora - s.ultima))}"
             s.apostaOk -> "★ APOSTA CONFIRMADA"
-            s.encerrada -> "✗ A ORG ENCERROU ESSA SALA"
             s.confirmada -> "✓ VOCÊ CONFIRMOU"
-            s.somenteLeitura -> "SÓ LEITURA"
-            s.respondida -> "ADVERSÁRIO RESPONDEU"
+            s.somenteLeitura -> "SÓ LEITURA · SAI EM $saiEm SE NINGUÉM CONFIRMAR"
+            s.respondida -> if (agora - s.aberta < Sniper.SALA_SEM_CONFIRMAR) "ADVERSÁRIO RESPONDEU · SEM CONFIRMAR SAI EM $saiEm"
+                else "SEM CONFIRMAR · SAI QUANDO A CONVERSA PARAR"
             else -> {
                 val falta = ((Sniper.tempoResposta - (System.currentTimeMillis() - s.aberta)) / 1000).coerceAtLeast(0)
                 "ESPERANDO · CANCELA EM ${falta}s"
@@ -678,12 +683,17 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         b.addView(grade(itens, 2), Ui.lp(top = 8, c = c))
     }
 
+    private fun mmss(ms: Long): String {
+        val seg = (ms / 1000).coerceAtLeast(0)
+        return "${seg / 60}:${(seg % 60).toString().padStart(2, '0')}"
+    }
+
     /** cor e texto curto do estado da sala (usado no quadradinho e no chat) */
     private fun estadoCurto(s: SSala): Pair<String, Int> {
         val agora = System.currentTimeMillis()
         return when {
-            s.apostaOk -> "★ aposta confirmada" to Ui.OK
             s.encerrada -> "a org encerrou" to Theme.alpha(Ui.MUTED, 0xB0)
+            s.apostaOk -> "★ aposta confirmada" to Ui.OK
             s.confirmada -> "✓ você confirmou" to Ui.OK
             s.somenteLeitura -> "só leitura" to Ui.MUTED
             s.respondida -> "adversário respondeu" to Ui.ACC2
@@ -736,7 +746,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     private fun acoes(b: LinearLayout) {
         val c = act
         val sa = salaAtual()
-        if (sa != null && sa.encerrada && !sa.protegida) {
+        if (sa != null && sa.encerrada) {
             b.addView(Ui.dica(c, "A org já fechou essa sala (cancelou ou acabou). Ela some sozinha em 3 min.", Ui.Dica.AVISO))
             b.addView(Ui.button(c, "tirar do painel agora", Ui.Kind.GHOST, R.drawable.ic_trash) { Sniper.largar() }, Ui.lp(top = 8, c = c))
             return

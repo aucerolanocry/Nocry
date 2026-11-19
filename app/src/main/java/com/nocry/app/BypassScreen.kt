@@ -9,9 +9,13 @@ import android.widget.LinearLayout
 class BypassScreen(a: MainActivity) : Screen(a) {
     override val titulo = "Bypass"
 
+    /** um toque em ativar/desativar está rodando: não aceita outro (o toque duplo ativava e desativava) */
+    private var mexendo = false
+
     override fun key(): String = listOf(
         Prefs.bypassAtivo, Prefs.bypassGatilho, Prefs.bypassFf, Prefs.bypassTipo,
-        Prefs.bypassMark, Prefs.bypassVolAtivo, Prefs.bypassCliques, Adb.connected, SegundoPlano.estado(act), Prefs.vibrarAvisos
+        Prefs.bypassMark, Prefs.bypassVolAtivo, Prefs.bypassCliques, Adb.connected, SegundoPlano.estado(act), Prefs.vibrarAvisos,
+        EngineBypass.trabalhando, mexendo
     ).joinToString("|")
 
     override fun render() {
@@ -25,16 +29,21 @@ class BypassScreen(a: MainActivity) : Screen(a) {
         val travado = ativo || Prefs.bypassMark
         val gat = if (Prefs.bypassVolAtivo) "volume" else Prefs.bypassGatilho
         val nomeGat = when (gat) { "dnd" -> "NÃO PERTURBE"; "bt" -> "BLUETOOTH"; "carga" -> "CARREGADOR"; "volume" -> "VOLUME"; else -> gat.uppercase() }
+        val trabalho = EngineBypass.trabalhando
+        val nomeFf = if (Prefs.bypassFf == "max") "FF MAX" else "FF NORMAL"
         val hero = Ui.hero(c, R.drawable.ic_shield, "bypass", if (ativo) "Ativo" else "Desativado", ativo,
             when {
-                ativo && Prefs.bypassMark -> "Aplicado agora no ${if (Prefs.bypassFf == "max") "FF MAX" else "FF NORMAL"}."
+                trabalho == "aplicando" -> "Aplicando a pasta suja no $nomeFf... espera terminar."
+                trabalho == "restaurando" -> "Restaurando o padrão do $nomeFf... espera terminar."
+                ativo && Prefs.bypassMark -> "Aplicado agora no $nomeFf."
                 ativo -> "Escutando o gatilho em segundo plano."
                 else -> "Escolha o gatilho, o Free Fire e o tipo."
             })
         hero.addView(Ui.chips(c,
             Ui.chip(c, "ADB", if (Adb.connected) "OK" else "OFF", Adb.connected),
             Ui.chip(c, "GATILHO", nomeGat, if (ativo) true else null),
-            Ui.chip(c, "AGORA", if (Prefs.bypassMark) "APLICADO" else "PADRÃO", if (Prefs.bypassMark) true else null)
+            Ui.chip(c, "AGORA", when (trabalho) { "aplicando" -> "APLICANDO"; "restaurando" -> "RESTAURANDO"; else -> if (Prefs.bypassMark) "APLICADO" else "PADRÃO" },
+                if (trabalho != null || Prefs.bypassMark) true else null)
         ), Ui.lp(top = 16, c = c))
         add(hero, 12)
 
@@ -75,54 +84,48 @@ class BypassScreen(a: MainActivity) : Screen(a) {
             }, 8)
         }
 
-        add(Ui.button(c, if (ativo) "desativar bypass" else "ativar bypass",
+        add(Ui.button(c, when { mexendo -> "aguarde..."; ativo -> "desativar bypass"; else -> "ativar bypass" },
             if (ativo) Ui.Kind.DANGER else Ui.Kind.PRIMARY, R.drawable.ic_check) {
+            if (mexendo) return@button
+            mexendo = true
+            redesenha()
             if (ativo) {
-                Bg.run({ EngineBypass.parar(); EngineBypass.pararVolume(); 0 }) { _ ->
-                    Ui.toast(act, "BYPASS DESATIVADO")
+                // desliga a escuta, espera a troca que estiver rodando e restaura (tudo fora da tela)
+                Bg.run({ EngineBypass.parar() }) { rc ->
+                    mexendo = false
+                    Ui.toast(act, when (rc) {
+                        0 -> "BYPASS DESATIVADO E RESTAURADO"
+                        1 -> "DESATIVADO, MAS NÃO RESTAUREI (ADB). TOQUE EM RESTAURAR PADRÃO"
+                        else -> "BYPASS DESATIVADO"
+                    })
                     redesenha()
                 }
             } else {
-                if (!Adb.connected) {
-                    Ui.toast(act, "CONECTE O ADB PRIMEIRO")
-                    return@button
-                }
-                if (!Config.verificarLimite()) {
-                    Ui.toast(act, "LIMITE DIÁRIO ATINGIDO")
-                    return@button
-                }
                 val ff = Prefs.bypassFf
-                Downloader.esquecerPastas()              // na hora de ativar confere no disco de verdade
-                if (!Downloader.pastasInstaladas(ff).first) {
-                    val nomeFf = if (ff == "max") "FF MAX" else "FF NORMAL"
-                    Ui.dialogConfirma(act, "FALTA A PASTA SUJA", "A pasta suja do $nomeFf ainda não foi instalada. Sem ela o bypass não tem o que aplicar. Instalar agora?", "INSTALAR") {
-                        act.abre(RecursosScreen(act, ff))
+                val volume = Prefs.bypassGatilho == "volume"
+                Bg.run({ prepararAtivacao(ff, volume) }) { r ->
+                    mexendo = false
+                    when (r) {
+                        "adb" -> Ui.toast(act, "CONECTE O ADB PRIMEIRO (TELA DE CONEXÃO)")
+                        "pasta" -> Ui.dialogConfirma(act, "FALTA A PASTA SUJA", "A pasta suja do ${if (ff == "max") "FF MAX" else "FF NORMAL"} ainda não foi instalada. Sem ela o bypass não tem o que aplicar. Instalar agora?", "INSTALAR") {
+                            act.abre(RecursosScreen(act, ff))
+                        }
+                        "limite" -> Ui.toast(act, "LIMITE DIÁRIO ATINGIDO")
+                        "escuta" -> Ui.toast(act, "LIGUE A ESCUTA DO VOLUME (TELA DE CONEXÃO, PASSO 5)")
+                        else -> Ui.toast(act, if (volume) "BYPASS ATIVO — VOL+ ${Prefs.bypassCliques}X APLICA" else "BYPASS ATIVO · ${Prefs.bypassGatilho}")
                     }
-                    return@button
-                }
-                if (Prefs.bypassGatilho == "volume") {
-                    // primeiro confere a escuta do volume; só liga (e avisa) se ela estiver funcionando
-                    Bg.run({
-                        val ok = Sys.acessibilidadeLigada() || Sys.ligarAcessibilidade() || Sys.acessibilidadeLigada()
-                        if (ok) EngineBypass.iniciarVolume()
-                        ok
-                    }) { ok ->
-                        if (ok) Ui.toast(act, "BYPASS ATIVO — VOL+ ${Prefs.bypassCliques}X APLICA")
-                        else Ui.toast(act, "LIGUE A ESCUTA DO VOLUME (TELA DE CONEXÃO, PASSO 5)")
-                        redesenha()
-                    }
-                } else {
-                    Bg.run({ EngineBypass.iniciar(Prefs.bypassGatilho, Prefs.bypassFf, Prefs.bypassTipo); 0 }) { _ ->
-                        Ui.toast(act, "BYPASS ATIVO · ${Prefs.bypassGatilho}")
-                        redesenha()
-                    }
+                    redesenha()
                 }
             }
         }, 18)
 
         if (Prefs.bypassMark) {
-            add(Ui.button(c, "restaurar padrão agora", Ui.Kind.GHOST, R.drawable.ic_stop) {
-                Bg.run({ Config.restaurar(Prefs.bypassFf).also { if (it) Prefs.bypassMark = false } }) { ok ->
+            add(Ui.button(c, if (EngineBypass.trabalhando == "restaurando") "restaurando..." else "restaurar padrão agora", Ui.Kind.GHOST, R.drawable.ic_stop) {
+                if (mexendo) return@button
+                mexendo = true
+                redesenha()
+                Bg.run({ EngineBypass.restaurarAgora() }) { ok ->
+                    mexendo = false
                     Ui.toast(act, if (ok) "PADRÃO RESTAURADO" else "NÃO DEU PRA RESTAURAR (ADB). TENTE DE NOVO")
                     redesenha()
                 }
@@ -134,6 +137,22 @@ class BypassScreen(a: MainActivity) : Screen(a) {
             redesenha()
         })), 18)
         add(SegundoPlano.grupo(act) { redesenha() }, 14)
+    }
+
+    /**
+     * confere tudo fora da tela antes de ligar. Antes lia o ADB "guardado" na tela (podia estar velho e dizer
+     * que não estava conectado) e gastava o limite do dia mesmo quando faltava a pasta.
+     * "" = ligou; senão o motivo: adb, pasta, limite, escuta
+     */
+    private fun prepararAtivacao(ff: String, volume: Boolean): String {
+        if (!Adb.ensure(Sys.app)) return "adb"
+        Downloader.esquecerPastas()              // confere no disco de verdade
+        if (!Downloader.pastasInstaladas(ff).first) return "pasta"
+        if (volume && !(Sys.acessibilidadeLigada() || Sys.ligarAcessibilidade() || Sys.acessibilidadeLigada())) return "escuta"
+        if (!Config.verificarLimite()) return "limite"
+        if (volume) EngineBypass.iniciarVolume()
+        else EngineBypass.iniciar(Prefs.bypassGatilho, ff, Prefs.bypassTipo)
+        return ""
     }
 
     /** um gatilho dentro do grupo: icone, nome, como funciona e o marcador de escolhido */

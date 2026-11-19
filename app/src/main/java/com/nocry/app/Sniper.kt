@@ -117,9 +117,9 @@ class SSala(val id: String, val nome: String, val org: String, val guildId: Stri
     @Volatile var gatewayEm = 0L
     /** a sala não deixa escrever (fica no painel só pra ver) */
     @Volatile var somenteLeitura = false
-    /** saiu "aposta confirmada": a sala fica no painel até a org apagar ou você tirar */
+    /** saiu "aposta confirmada": a sala fica no painel até a org encerrar (aí some 3 min depois) ou você tirar */
     @Volatile var apostaOk = false
-    /** confirmada (aposta ou você tocou em confirmar): nada de sumir sozinha */
+    /** confirmada (aposta ou você tocou em confirmar): só some quando a org encerrar */
     val protegida: Boolean get() = apostaOk || confirmada
     val vistos: MutableSet<String> = ConcurrentHashMap.newKeySet()
     val chat = ArrayList<SChat>()
@@ -138,7 +138,10 @@ object Sniper {
     const val COOLDOWN = 3_000L           // espera depois de entrar numa fila
     const val PAUSA_ENTRE_FILAS = 600L    // dentro da mesma org (as orgs rodam todas ao mesmo tempo)
     const val TIMEOUT_RESPOSTA = 30_000L  // padrão do "tempo pra responder" (dá pra mudar em Ajustes)
-    const val TIMEOUT_INATIVA = 10 * 60_000L
+    /** sala sem confirmação (sua ou "aposta confirmada") há 3 min sai do painel; encerrada pela org também, 3 min depois */
+    const val SALA_SEM_CONFIRMAR = 3 * 60_000L
+    /** se ainda estão conversando na sala sem confirmar, espera esse silêncio antes de tirar */
+    private const val SILENCIO_PRA_TIRAR = 60_000L
     const val ESQUECER_SUMIDA = 10 * 60_000L
     const val SALA_NOVA = 30 * 60_000L
     const val PAUSA_SEM_MEDIADOR = 5 * 60_000L
@@ -157,6 +160,9 @@ object Sniper {
     private val CANCELADA = listOf(Regex("(partida|aposta|sala|fila) (foi )?(cancelad|encerrad|finalizad|expirad)"), Regex("foi cancelad"),
         Regex("tempo (esgotado|expirou|acabou)"), Regex("expirou"), Regex("nao confirm(ou|aram) (a tempo|em)"))
     private val PALAVRAS_SAIR = listOf("SAIR", "CANCEL")
+    /** sala já confirmada: a org avisou que a partida/aposta acabou (fila não conta: "fila encerrada" sai quando a fila enche) */
+    private val FIM_PARTIDA = listOf(Regex("(partida|aposta|sala) (foi )?(cancelad|encerrad|finalizad|conclu)"), Regex("foi cancelad"),
+        Regex("(sala|partida|ticket|canal) (sera|vai ser) (fechad|encerrad|apagad|deletad)"))
     private val NUNCA_CLICAR = listOf("TICKET", "SUPORTE", "ATENDIMENTO", "REGRA", "DENUN", "AJUDA", "SAQUE", "SACAR",
         "DEPOSIT", "PIX", "PERFIL", "CADASTR", "VERIFIC", "ABRIR")
     private val DINHEIRO = Regex("R\\$\\s*(\\d{1,5})(?:[.,](\\d{1,2}))?", RegexOption.IGNORE_CASE)
@@ -237,6 +243,8 @@ object Sniper {
     private val registro = ArrayList<SLinha>()
 
     private val largadas: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /** salas que saíram do painel por ficar 3 min sem confirmar: voltam se a org confirmar a aposta depois */
+    private val semConfirmar: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val canalDaFila = ConcurrentHashMap<String, String>()
     private val canaisDaOrg = ConcurrentHashMap<String, MutableSet<String>>()
     private val sumida = ConcurrentHashMap<String, Long>()
@@ -1159,8 +1167,12 @@ object Sniper {
 
     fun numeroSala(id: String): Int = ordem.indexOf(id) + 1
 
-    /** a org cancelou/fechou a sala: fica no painel só pra ver (some em 3 min, a não ser que a aposta tenha sido confirmada) */
-    private fun salaEncerrada(id: String, motivo: String) {
+    /**
+     * a org cancelou/fechou a sala. Sem confirmação: sai do painel na hora.
+     * Confirmada: fica só pra ver e sai sozinha 3 min depois (se continuar chegando mensagem, espera parar).
+     * trancar = false quando só a mensagem diz que acabou (ainda dá pra escrever se for engano).
+     */
+    private fun salaEncerrada(id: String, motivo: String, trancar: Boolean = true) {
         val s = salas[id] ?: return
         if (s.encerrada) return
         if (!s.protegida) {
@@ -1170,11 +1182,11 @@ object Sniper {
             fecharSala(id)
             return
         }
-        // aposta confirmada fica no painel (só pra ver), até você tirar
+        // confirmada: fica 3 min no painel (só pra ver) e sai sozinha
         s.encerrada = true
-        s.somenteLeitura = true
+        if (trancar) s.somenteLeitura = true
         s.ultima = agora()
-        log("info", "sala ${numeroSala(id)} (${s.org}): $motivo")
+        log("info", "sala ${numeroSala(id)} (${s.org}): $motivo · sai do painel em 3 min")
         if (!s.protegida) liberarFilasDa(s.org)
         mudou()
     }
@@ -1469,7 +1481,13 @@ object Sniper {
             else c0 ?: (if (marcou) dc?.canal(m.canalId)?.obj()?.let { canalDe(it, m.guildId, eu, aoVivo = viaGateway) } else null)
             if (c != null) {
                 canais[c.id] = c
-                if (ehMinhaSala(c, marcou)) s = abrirSala(c)
+                if (semConfirmar.contains(c.id) && m.autorBot && PALAVRAS_APOSTA.any { it in m.conteudo.lowercase() || m.embeds.any { e -> it in e.titulo.lowercase() } }) {
+                    // tinha saído do painel por demorar a confirmar, mas a org confirmou a aposta: volta
+                    semConfirmar.remove(c.id)
+                    largadas.remove(c.id)
+                    s = abrirSala(c)
+                    log("info", "a aposta saiu depois dos 3 min: a sala voltou pro painel")
+                } else if (ehMinhaSala(c, marcou)) s = abrirSala(c)
             }
         }
         if (s == null) return
@@ -1510,10 +1528,14 @@ object Sniper {
             salaEncerrada(s.id, "a org cancelou a partida")
             return
         }
+        if (m.autorBot && s.protegida && !s.encerrada && FIM_PARTIDA.any { it.containsMatchIn(tudo) }) {
+            salaEncerrada(s.id, "a org encerrou a partida", trancar = false)
+            return
+        }
         if (!s.apostaOk && PALAVRAS_APOSTA.any { it in txt }) {
             s.apostaOk = true
             apostas++
-            log("ganhou", "aposta confirmada · sala ${numeroSala(s.id)} · ${s.org} · a sala fica no painel")
+            log("ganhou", "aposta confirmada · sala ${numeroSala(s.id)} · ${s.org} · a sala fica no painel até a org encerrar")
             notificar("Aposta confirmada · ${s.org}", s.nome)
         }
         mudou()
@@ -1530,23 +1552,31 @@ object Sniper {
         }
         for (s in salas.values.toList()) {
             val n = numeroSala(s.id)
-            if (s.somenteLeitura) {
-                // sala só pra ver / encerrada: some sozinha depois de 3 min parada (não clica em nada). Confirmada fica.
-                if (!s.protegida && t - s.ultima > 3 * 60_000) { fecharSala(s.id); continue }
-                if (s.encerrada) continue
-            } else if (!s.protegida && !s.respondida && t - s.aberta > tempoResposta && (!s.incerta || s.temConfirmar)) {
-                log("info", "ninguém respondeu em ${tempoResposta / 1000}s na sala $n (${s.org}), cancelando e voltando a procurar")
-                if (!clicarSair(s)) log("info", "sala $n: não achei botão de sair/cancelar, só larguei a sala")
-                fecharSala(s.id)
-                liberarFilasDa(s.org)
+            // a org encerrou (confirmada ou não): sai do painel 3 min depois da última mensagem (não clica em nada)
+            if (s.encerrada) {
+                if (t - s.ultima > SALA_SEM_CONFIRMAR) {
+                    fecharSala(s.id)
+                    log("info", "sala $n (${s.org}) encerrada pela org · saiu do painel")
+                }
                 continue
             }
-            if (!s.protegida && t - s.ultima > TIMEOUT_INATIVA && !s.inativa) {
-                s.inativa = true
-                liberarFilasDa(s.org)
-                fecharSala(s.id)
-                log("info", "sala $n (${s.org}) parada há 10 min: saiu do painel")
-                continue
+            if (!s.protegida) {
+                if (!s.somenteLeitura && !s.respondida && t - s.aberta > tempoResposta && (!s.incerta || s.temConfirmar)) {
+                    log("info", "ninguém respondeu em ${tempoResposta / 1000}s na sala $n (${s.org}), cancelando e voltando a procurar")
+                    if (!clicarSair(s)) log("info", "sala $n: não achei botão de sair/cancelar, só larguei a sala")
+                    fecharSala(s.id)
+                    liberarFilasDa(s.org)
+                    continue
+                }
+                // 3 min e ninguém confirmou: sai do painel (se ainda estão conversando, espera 1 min de silêncio)
+                if (t - s.aberta > SALA_SEM_CONFIRMAR && t - s.ultima > SILENCIO_PRA_TIRAR) {
+                    s.inativa = true
+                    liberarFilasDa(s.org)
+                    fecharSala(s.id)
+                    semConfirmar.add(s.id)
+                    log("info", "sala $n (${s.org}): 3 min sem confirmar · saiu do painel")
+                    continue
+                }
             }
             // o Discord não mandou nada dessa sala há um tempo: busca as mensagens novas direto
             if (s.ultimoId != null && t - s.gatewayEm > 15_000 && t - s.ultimoPoll > 3_000) {

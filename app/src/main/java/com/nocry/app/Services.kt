@@ -300,7 +300,8 @@ class NocryService : Service() {
         Prefs.mcAtivo || Prefs.otmAuto || Prefs.bypassAtivo || Prefs.bypassVolAtivo || (Engine.precisaTeclas() && !KeyService.ativo)
 
     private fun cuidaAdb() {
-        if (precisaAdb()) {
+        // com cópia rodando não testa a conexão (o teste demorado derrubava o ADB no meio e o bypass falhava)
+        if (precisaAdb() && !Adb.ocupado()) {
             if (!Adb.alive()) {
                 watcher?.stop()
                 watcher = null

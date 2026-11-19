@@ -204,7 +204,19 @@ object Adb {
     }
 
     /** roda um comando no shell do aparelho e devolve tudo que ele escreveu. ok=false se estourou o tempo ou nao conectou */
+    /** comandos longos rodando agora (cópia de pasta, otimização) */
+    private val longos = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** tem cópia/comando longo rodando: aí o "echo ok" pode demorar e NÃO é motivo pra derrubar a conexão (mataria a cópia) */
+    fun ocupado(): Boolean = longos.get() > 0
+
     fun exec(cmd: String, timeoutMs: Long = 12000): Res {
+        if (timeoutMs <= 15000) return execAgora(cmd, timeoutMs)
+        longos.incrementAndGet()
+        try { return execAgora(cmd, timeoutMs) } finally { longos.decrementAndGet() }
+    }
+
+    private fun execAgora(cmd: String, timeoutMs: Long): Res {
         val s = open(cmd) ?: return Res(false, "")
         val buf = ByteArrayOutputStream()
         val t = Thread {
@@ -267,6 +279,8 @@ object Adb {
     /** garante a conexao (reconecta se preciso). false = sem ADB agora */
     fun ensure(ctx: Context): Boolean {
         if (alive()) return true
+        // celular ocupado (copiando pasta etc.): o teste pode demorar. Tenta de novo com mais calma antes de derrubar
+        if (connected && (ocupado() || execAgora("echo ok", 9000).out.trim() == "ok")) return true
         try { disconnect() } catch (_: Throwable) {}
         return connect(ctx) && alive()
     }
