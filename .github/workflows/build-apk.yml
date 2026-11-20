@@ -25,6 +25,10 @@ on:
         description: "Só tirar print das telas (prévia no emulador, não gera APK pra ninguém)"
         type: boolean
         default: false
+      so_dono:
+        description: "Lançar só pro dono: aparece como atualização no app só pra key de dono (os outros continuam na versão pública)"
+        type: boolean
+        default: false
       ocultar:
         description: "Só esconder uma versão já lançada (ex.: v1.0.44): volta pra rascunho, some do app e do link"
         required: false
@@ -121,6 +125,23 @@ jobs:
           gh release create "$TAG" dist/Nocry.apk --draft --title "Nocry $TAG (só dono)" \
             --notes "Versão com o SNIPER. Rascunho: não aparece pros usuários e não vira atualização." --target "${GITHUB_SHA}"
 
+      - name: Lançar só pro dono (pré-lançamento)
+        if: github.event.inputs.so_dono == 'true' && github.event.inputs.publicar != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.v.outputs.name }}
+        run: |
+          # pré-lançamento nunca vira "latest": o app dos usuários (que segue /releases/latest) não vê.
+          # Só o app com a key de dono procura também os pré-lançamentos.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/Nocry.apk --clobber
+            gh release edit "$TAG" --prerelease --draft=false
+          else
+            gh release create "$TAG" dist/Nocry.apk --prerelease --title "Nocry $TAG (só dono)" \
+              --notes "Pré-lançamento: aparece como atualização só no app do dono. Pra todos: rode o workflow com mostrar=$TAG." --target "${GITHUB_SHA}"
+          fi
+          gh release view "$TAG" --json tagName,isPrerelease,isDraft
+
       - name: Publicar em Releases
         if: github.event_name == 'push' || github.event.inputs.publicar == 'true'
         env:
@@ -155,8 +176,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.mostrar }}
         run: |
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease
 
   prints:
     if: github.event.inputs.prints == 'true'

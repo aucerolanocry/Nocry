@@ -674,6 +674,43 @@ object Update {
 
     private fun nums(v: String): List<Int> = v.trim().removePrefix("v").split('.', '-', '+').map { it.filter { c -> c.isDigit() }.toIntOrNull() ?: 0 }
 
+    // ---------------- canal do dono ----------------
+    /** a última versão "só pro dono" conhecida (o app dos outros nunca procura isso) */
+    @Volatile private var donoConhecido: Info? = null
+    @Volatile private var donoEm = 0L
+
+    /**
+     * Só a key de dono: a versão mais nova contando os pré-lançamentos ("só pro dono").
+     * O /releases/latest ignora pré-lançamento, então pros usuários nada muda. Usa a API (60/h): no máximo a cada 2 min.
+     */
+    private fun buscarDono(): Info? {
+        return try {
+            val cx = URL("https://api.github.com/repos/" + Const.REPO + "/releases?per_page=10").openConnection() as HttpURLConnection
+            cx.connectTimeout = 8000
+            cx.readTimeout = 8000
+            cx.setRequestProperty("Accept", "application/vnd.github+json")
+            cx.setRequestProperty("User-Agent", "NOCRY-app")
+            if (cx.responseCode != 200) return null
+            val arr = org.json.JSONArray(cx.inputStream.bufferedReader().use { it.readText() })
+            var melhor: Info? = null
+            for (k in 0 until arr.length()) {
+                val j = arr.getJSONObject(k)
+                val tag = j.optString("tag_name")
+                if (j.optBoolean("draft") || !tag.startsWith("v")) continue
+                var apk: String? = null
+                val assets = j.optJSONArray("assets")
+                if (assets != null) for (i in 0 until assets.length()) {
+                    val a = assets.getJSONObject(i)
+                    if (a.optString("name").endsWith(".apk")) { apk = a.optString("browser_download_url"); break }
+                }
+                if (apk == null) continue
+                val atual = melhor
+                if (atual == null || maisNova(atual.tag, tag)) melhor = Info(tag, j.optString("html_url"), apk)
+            }
+            melhor
+        } catch (_: Throwable) { null }
+    }
+
     /** a versao publicada e mais nova que a instalada? */
     fun maisNova(atual: String, publicada: String): Boolean {
         val a = nums(atual)
@@ -701,7 +738,14 @@ object Update {
         val passou = agora - Prefs.updateUltimaChecagem
         if (passou in 0 until (if (forcar) INTERVALO_MINIMO else INTERVALO_CHECAGEM)) return
         Prefs.updateUltimaChecagem = agora
-        val i = buscarRapido() ?: buscar() ?: return
+        var i = buscarRapido() ?: buscar() ?: return
+        if (License.isOwner()) {
+            if (agora - donoEm > 2 * 60_000L || donoConhecido == null) {
+                donoEm = agora
+                buscarDono()?.let { donoConhecido = it }
+            }
+            donoConhecido?.let { d -> if (maisNova(i.tag, d.tag)) i = d }
+        }
         Prefs.updateTagConhecida = i.tag
         Prefs.updatePaginaConhecida = i.pagina
         Prefs.updateApkConhecida = i.apk ?: ""
