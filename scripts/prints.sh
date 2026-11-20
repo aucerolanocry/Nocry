@@ -48,9 +48,6 @@ shot 02_conexao conexao
 shot 03_bypass bypass
 shot 04_recursos recursos
 shot 05_comp comp
-shot 06_vol vol
-shot 07_carga carga
-shot 08_mc mc
 shot 09_ajustes ajustes
 shot 10_testar testar
 shot 11_otm otm

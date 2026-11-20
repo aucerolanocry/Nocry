@@ -129,6 +129,41 @@ object SegundoPlano {
         }
     }
 
+    private const val REQ_VIGIA = 79
+    private const val VIGIA_MS = 30_000L
+
+    private fun piVigia(ctx: Context, criar: Boolean): PendingIntent? = PendingIntent.getForegroundService(
+        ctx, REQ_VIGIA, Intent(ctx, NocryService::class.java),
+        PendingIntent.FLAG_IMMUTABLE or (if (criar) PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_NO_CREATE)
+    )
+
+    /**
+     * Vigia: o serviço empurra este alarme pra frente a cada 10 s enquanto está vivo, então ele nunca toca.
+     * Se a limpeza do celular (Xiaomi: limpar tudo, Game Turbo, Segurança) matar o NOCRY, ele toca em até 30 s
+     * e religa o serviço sozinho (bypass e otimização voltam a escutar).
+     */
+    fun vigiar(c: Context) {
+        try {
+            val ctx = c.applicationContext
+            val am = ctx.getSystemService(AlarmManager::class.java) ?: return
+            val pi = piVigia(ctx, true) ?: return
+            val quando = SystemClock.elapsedRealtime() + VIGIA_MS
+            val exato = Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()
+            if (exato) am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, quando, pi)
+            else am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, quando, pi)
+        } catch (_: Throwable) {}
+    }
+
+    /** nada mais ligado: tira a vigia */
+    fun pararVigia(c: Context) {
+        try {
+            val ctx = c.applicationContext
+            val pi = piVigia(ctx, false) ?: return
+            ctx.getSystemService(AlarmManager::class.java)?.cancel(pi)
+            pi.cancel()
+        } catch (_: Throwable) {}
+    }
+
     /** grupo pras telas do bypass e da instalacao */
     fun grupo(act: MainActivity, depois: () -> Unit): View {
         val c = act

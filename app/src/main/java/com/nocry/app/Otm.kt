@@ -23,6 +23,8 @@ object Otm {
     private val HARD = Regex("^(com[.]termux|com[.]dts[.]freefire(th|max)\$|moe[.]shizuku|com[.]draco[.]ladb|com[.]nocry[.]app)")
     private val LIB = Regex("^(com[.]termux([.][a-z0-9_]+)?|com[.]dts[.]freefire(th|max)|com[.]nocry[.]app)\$")
     private val PKG_OK = Regex("[A-Za-z0-9_]+([.][A-Za-z0-9_]+)+")
+    /** nunca entram sozinhos no FULL: fechar à força cancela o alarme do despertador, lembretes, pagamento por aproximação, contagem de passos */
+    private val NUNCA_NO_FULL = Regex("(clock|alarm|calendar|agenda|wallet|[.]pay|pay[.]|health|fitness|[.]fit\\b|tasks|reminder)", RegexOption.IGNORE_CASE)
     private val NOME_OK = Regex("[A-Za-z0-9_.]+")
 
     private val ROT = mapOf(
@@ -39,7 +41,7 @@ object Otm {
         "global.sem_enhanced_cpu_responsiveness", "global.adaptive_battery_management_enabled", "global.low_power",
         "global.ble_scan_always_enabled", "global.wifi_scan_always_enabled", "global.wifi_networks_available_notification_on",
         "global.heads_up_notifications_enabled", "global.location_background_throttle_interval_ms",
-        "system.haptic_feedback_enabled", "global.disable_window_blurs", "global.automatic_power_save_mode",
+        "system.haptic_feedback_enabled", "system.show_touches", "system.pointer_location", "global.disable_window_blurs", "global.automatic_power_save_mode",
         "global.cached_apps_freezer", "global.settings_enable_monitor_phantom_procs", "dc.max_phantom_processes"
     )
 
@@ -86,7 +88,7 @@ object Otm {
     class Plano(
         val props: Map<String, String>,
         val memTotal: Long, val memAvail: Long, val memFree: Long,
-        val hz: Int, val setFail: Boolean,
+        val hz: Int, val setFail: Boolean, val svc: Set<String>,
         val libs: List<String>,
         val c: List<Cand>, val x: List<Prot>, val s: List<Sis>, val n: List<Nat>
     ) {
@@ -116,9 +118,13 @@ object Otm {
 
     fun lerPlano(): Plano? {
         if (!Adb.connected) return null
-        val r = Adb.exec(asset("otm_cfg.sh") + "\n" + asset("otm_leitura.sh"), 40000)
-        if (!r.out.lines().any { it.trim() == "@FIM" }) return null
-        return parse(r.out)
+        // celular lento ou com muitos apps: tempo maior e uma segunda tentativa antes de desistir
+        for (tentativa in 0 until 2) {
+            val r = Adb.exec(asset("otm_cfg.sh") + "\n" + asset("otm_leitura.sh"), 75000)
+            if (r.out.lines().any { it.trim() == "@FIM" }) return parse(r.out)
+            if (tentativa == 0) { NLog.add("otimizacao", "leitura incompleta, tentando de novo"); Thread.sleep(1500) }
+        }
+        return null
     }
 
     private val reFg = Regex("[A-Za-z0-9_.]+/[A-Za-z0-9_.$]+")
@@ -139,6 +145,7 @@ object Otm {
         val home = HashSet<String>()
         val setp = HashMap<String, String>()
         val fgs = HashSet<String>()
+        val svc = HashSet<String>()
         var hz = 0
         var setfail = false
         var cur = ""
@@ -204,6 +211,10 @@ object Otm {
                         }
                     }
                 }
+                "SVC" -> {
+                    val p = line.trim().substringBefore('/')
+                    if (NOME_OK.matches(p) && p.contains('.')) svc.add(p)
+                }
                 "HZ" -> {
                     val t = line.trim()
                     if (t.isNotEmpty() && t.all { it.isDigit() }) hz = t.toIntOrNull() ?: 0
@@ -223,7 +234,8 @@ object Otm {
         val mg = MSG_APPS.split(' ').toSet()
         val ex = HashSet<String>(EXTRAS.split(' '))
         if (props["ro.miui.ui.version.name"].orEmpty().isNotEmpty() || props["ro.mi.os.version.name"].orEmpty().isNotEmpty()) ex.addAll(MIUI.split(' '))
-        val msgFecha = Prefs.otmMsg == "fechar"
+        val full = Prefs.otmNivel == "full"
+        val msgFecha = full || Prefs.otmMsg == "fechar"
 
         fun razao(pk: String): String {
             if (HARD.containsMatchIn(pk)) return "NOCRY/FF"
@@ -233,6 +245,8 @@ object Otm {
             if (pk in home) return "LAUNCHER"
             val sp = setp[pk]
             if (sp != null) return ROT[sp] ?: sp
+            // não deu pra ler as configurações: protege todo teclado, acessibilidade, leitor de notificação, SMS e telefone
+            if (setfail && pk in svc) return "TECLADO/ACESSIBILIDADE"
             if (pk in fgs) return "SERVICO ATIVO"
             return ""
         }
@@ -249,7 +263,7 @@ object Otm {
                 continue
             }
             val sel = pk in launch && !CRIT.containsMatchIn(pk) && !HARD.containsMatchIn(pk)    // app do sistema com icone, nao essencial
-            if (sel && pk in uex) {
+            if (sel && (pk in uex || (full && !NUNCA_NO_FULL.containsMatchIn(pk)))) {
                 if (why.isEmpty()) c.add(Cand(pk, kb, true)) else x.add(Prot(pk, kb, why))
                 continue
             }
@@ -260,7 +274,7 @@ object Otm {
         c.sortByDescending { it.kb }
         x.sortByDescending { it.kb }
         s.sortByDescending { it.kb }
-        return Plano(props, mt, ma, mf, hz, setfail, libs, c, x, s, n)
+        return Plano(props, mt, ma, mf, hz, setfail, svc, libs, c, x, s, n)
     }
 
     // ---------------- textos ----------------
@@ -293,7 +307,7 @@ object Otm {
     private fun lerStatus(): Pair<Boolean, Int> {
         val e = estado()
         val n = e.count { it.startsWith("E|") }
-        val t = e.count { it.length > 1 && it[1] == '|' && it[0] in "EALWFG" }
+        val t = e.count { it.length > 1 && it[1] == '|' && it[0] in "EALWFGN" }
         return Pair(t > 0, n)
     }
 
@@ -307,6 +321,7 @@ object Otm {
                 "E", "L" -> if (NOME_OK.matches(p[1]) && !tem("${p[0]}|${p[1]}|")) e.add(l)
                 "W" -> if (p.size == 3 && NOME_OK.matches(p[1]) && (p[2] == "0" || p[2] == "1") && !tem("W|${p[1]}|")) e.add(l)
                 "F" -> if (l == "F|1" && !tem("F|")) e.add(l)
+                "N" -> if (l == "N|1" && !tem("N|")) e.add(l)
                 "G" -> if (p.size == 3 && NOME_OK.matches(p[1]) && (p[2] == "standard" || p[2] == "performance" || p[2] == "battery") && !tem("G|${p[1]}|")) e.add(l)
                 "A" -> if (p.size >= 3 && p[1] in CHAVES_OK && !tem("A|${p[1]}|")) e.add(l)
             }
@@ -340,10 +355,17 @@ object Otm {
             return false
         }
         if (plano.setFail) {
-            log("[x] O CELULAR NAO DEIXOU LER AS CONFIGURACOES — NADA FOI MUDADO")
-            log("    Reinicie o celular e tente de novo.")
-            return false
+            // antes cancelava tudo aqui (era o "não funciona" em alguns celulares). Agora protege pelo plano B e continua
+            if (plano.svc.isEmpty()) {
+                log("[x] O CELULAR NAO DEIXOU LER AS CONFIGURACOES — NADA FOI MUDADO")
+                log("    Reinicie o celular e tente de novo.")
+                return false
+            }
+            log("⚠ O celular não deixou ler as configurações: protegendo todos os teclados, acessibilidade e notificações")
         }
+        val full = Prefs.otmNivel == "full"
+        // voltou pro NORMAL: o que só o FULL liga (vigia e toque rápido) volta ao que era
+        if (!full && (Prefs.otmVigia || Prefs.otmComp)) desfazFull(log)
         val cand = plano.c.map { it.pk }
         val kbDe = plano.c.associate { it.pk to it.kb }
         val nC = cand.size
@@ -358,16 +380,16 @@ object Otm {
         val script = "PKGS=\"" + cand.joinToString(" ") + "\"\n" +
             "LIB=\"" + libs.joinToString(" ") + "\"\n" +
             "GAMES=\"" + games.joinToString(" ") + "\"\n" +
-            "ANIM=1\nREDE=1\nEXTRA=1\nPERF=$perf\nHZ=$hz\n" +
+            "ANIM=1\nREDE=1\nEXTRA=1\nPERF=$perf\nHZ=$hz\nFULL=${if (full) 1 else 0}\n" +
             asset("otm_cfg.sh") + "\n" + asset("otm_aplica.sh")
 
-        log("OTIMIZANDO...")
+        log(if (full) "OTIMIZANDO NO NÍVEL FULL..." else "OTIMIZANDO...")
         log("• CELULAR: " + plano.perfil())
         if (nC == 0) log("• APPS EM 2O PLANO: nenhum — ja estava limpo")
         else log("• FECHANDO $nC APPS (~${mb(tot)} MB):")
 
         var kn = 0
-        val res = Adb.execLines(script, 90000) { l ->
+        val res = Adb.execLines(script, 240000) { l ->
             if (l.startsWith("K|")) {
                 val p = l.substring(2)
                 val kb = kbDe[p]
@@ -435,13 +457,37 @@ object Otm {
                 log("    Reinicie o celular e rode de novo para aplicar animacoes, tela e bateria.")
             } else log("⚠ AJUSTES DE SISTEMA: o celular recusou $nRec de $nTot (o resto foi aplicado e conferido)")
         }
+        if (lines.any { it == "N|1" }) log("• WI-FI: BAIXA LATÊNCIA LIGADA")
+        else if (full && plano.sdk >= 29) log("• WI-FI: o celular não deixa ligar a baixa latência pelo ADB (normal na maioria)")
+        if (full) {
+            // toque rápido (valores de Ajustes do toque); se o modo competitivo já estava ligado, não mexe
+            if (!Comp.ligado()) {
+                if (Comp.ativar()) { Prefs.otmComp = true; log("• TOQUE: RÁPIDO (long ${Prefs.longOn} · multi ${Prefs.multiOn})") }
+                else log("⚠ TOQUE: o celular não aceitou o toque rápido")
+            } else log("• TOQUE: o modo competitivo já estava ligado")
+            Prefs.otmVigia = true
+            NocryService.sync(Sys.app)
+            log("• VIGIA: com o FF aberto, fecha de novo o que tentar voltar")
+        }
         log("• Apps fechados nao avisam nada ate voce abrir · PROTEGER APP e OPCOES mudam isso")
-        NLog.add("otimizacao", "ativada: $nC apps fechados")
+        NLog.add("otimizacao", "ativada${if (full) " (FULL)" else ""}: $nC apps fechados")
         return true
     }
 
     // ---------------- DESATIVAR ----------------
     fun desativar(log: (String) -> Unit): Boolean = synchronized(opLock) { desativarSeguro(log) }
+
+    /** o que o FULL ligou fora do script: a vigia e o toque rápido */
+    private fun desfazFull(log: (String) -> Unit) {
+        if (Prefs.otmVigia) {
+            Prefs.otmVigia = false
+            NocryService.sync(Sys.app)
+        }
+        if (Prefs.otmComp) {
+            if (Comp.desativar(false)) { Prefs.otmComp = false; log("• Toque voltou ao normal") }
+            else log("⚠ Não consegui devolver o toque: desative o Modo competitivo")
+        }
+    }
 
     private fun desativarSeguro(log: (String) -> Unit): Boolean {
         val ctx: Context = Sys.app
@@ -451,6 +497,7 @@ object Otm {
         }
         val e = estado()
         if (e.isEmpty()) {
+            desfazFull(log)
             log("[!] NADA PRA DESFAZER")
             log("• A otimizacao nao esta ativa")
             return true
@@ -463,6 +510,7 @@ object Otm {
         val anims = ArrayList<String>()
         val gms = ArrayList<String>()
         var fperf = 0
+        var redeLat = 0
         for (l in e) {
             val p = l.split('|')
             when (p[0]) {
@@ -477,6 +525,7 @@ object Otm {
                 }
                 "G" -> if (p.size >= 3 && NOME_OK.matches(p[1]) && (p[2] == "standard" || p[2] == "performance" || p[2] == "battery")) gms.add("${p[1]}:${p[2]}")
                 "F" -> if (l == "F|1") fperf = 1
+                "N" -> if (l == "N|1") redeLat = 1
             }
         }
         val script = "LISTA=\"" + tokens.joinToString(" ") + "\"\n" +
@@ -484,10 +533,11 @@ object Otm {
             "ANIMS=\"" + anims.joinToString(" ") + "\"\n" +
             "WLIMPA=\"" + wlimpa.joinToString(" ") + "\"\n" +
             "GAMES=\"" + gms.joinToString(" ") + "\"\n" +
-            "FPERF=$fperf\n" +
+            "FPERF=$fperf\nREDELAT=$redeLat\n" +
             asset("otm_cfg.sh") + "\n" + asset("otm_desfaz.sh")
         log("DESFAZENDO...")
-        val r = Adb.exec(script, 90000)
+        desfazFull(log)
+        val r = Adb.exec(script, 180000)
         if (!r.out.lines().any { it.trim() == "FIM" }) {
             log("[x] O CELULAR NAO RESPONDEU — NADA FOI DESFEITO")
             log("• Tente de novo (o registro do que mudou continua guardado)")
@@ -605,7 +655,8 @@ object OtmAuto {
     private var sessao = false
     private var fora = 0
 
-    private const val SONDA =
+    /** echo FG (FF na tela), BG (aberto atrás) ou OFF */
+    const val SONDA =
         "p=\$(pidof com.dts.freefireth com.dts.freefiremax 2>/dev/null); if [ -n \"\$p\" ]; then " +
             "if dumpsys activity activities </dev/null 2>/dev/null | grep -E \"ResumedActivity\" | head -3 | grep -q \"com.dts.freefire\"; " +
             "then echo FG; else echo BG; fi; else echo OFF; fi"
@@ -672,5 +723,29 @@ object OtmAuto {
         NLog.add("otm-auto", "desligado")
         NocryService.sync(Sys.app)
         if (estava) Presenca.evento("modo_off", "OTIMIZAÇÃO AUTOMÁTICA")
+    }
+}
+
+/**
+ * Vigia do FULL: com a otimização FULL ativa e o FF aberto na tela, a cada ~20 s fecha de novo os apps
+ * congelados que voltaram sozinhos (notificação, alarme do próprio app...). Chamado pelo serviço a cada 3 s.
+ */
+object OtmVigia {
+    private var ciclo = 0
+    private val PKG = Regex("[A-Za-z0-9_]+([.][A-Za-z0-9_]+)+")
+
+    fun tick() {
+        if (!Prefs.otmVigia) return
+        if (++ciclo % 7 != 0) return
+        if (!Adb.connected) return
+        val pkgs = Otm.estado().filter { it.startsWith("E|") }.mapNotNull { it.split('|').getOrNull(1) }.filter { PKG.matches(it) }.distinct()
+        if (pkgs.isEmpty()) return
+        val script = "fg=\$(" + OtmAuto.SONDA + "); [ \"\$fg\" = FG ] || { echo FORA; exit 0; }; " +
+            "psl=\$(ps -A -o NAME </dev/null 2>/dev/null); " +
+            "for p in " + pkgs.joinToString(" ") + "; do echo \"\$psl\" | grep -qE \"^\$p(:.*)?\\\$\" && " +
+            "{ am force-stop \"\$p\" </dev/null >/dev/null 2>&1; echo \"K|\$p\"; }; done; echo FIM"
+        val r = Adb.exec(script, 15000)
+        val fechou = r.out.lines().filter { it.startsWith("K|") }.map { Otm.nome(it.substring(2)) }
+        if (fechou.isNotEmpty()) NLog.add("otm-vigia", "voltaram e fechei de novo: " + fechou.joinToString(", "))
     }
 }

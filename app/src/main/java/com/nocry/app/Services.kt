@@ -144,7 +144,7 @@ class KeyWatcher {
 }
 
 // =====================================================================================
-// Servico em primeiro plano: mantem os monitores vivos (volume, carregador, modo carregador, otimizacao automatica)
+// Servico em primeiro plano: mantem os monitores vivos (bypass, otimizacao automatica, vigia do FF, bot)
 // =====================================================================================
 class NocryService : Service() {
     companion object {
@@ -185,7 +185,6 @@ class NocryService : Service() {
             return START_NOT_STICKY
         }
         rodando = true
-        registraReceptor()
         inicia()
         InstalaService.retoma(applicationContext)
         return START_STICKY
@@ -223,20 +222,6 @@ class NocryService : Service() {
         }
     }
 
-    private fun registraReceptor() {
-        if (rx != null) return
-        val r = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                Engine.carregador()
-            }
-        }
-        val f = IntentFilter()
-        f.addAction(Intent.ACTION_POWER_CONNECTED)
-        f.addAction(Intent.ACTION_POWER_DISCONNECTED)
-        if (Build.VERSION.SDK_INT >= 33) registerReceiver(r, f, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(r, f)
-        rx = r
-    }
-
     private fun inicia() {
         // o Android fechou o app com o SNIPER ligado: o serviço voltou, liga o bot de novo
         if (Sniper.ligadoPref && !Sniper.ligado() && License.isOwner()) Sniper.ligar()
@@ -250,8 +235,9 @@ class NocryService : Service() {
             var ultimo = ""
             while (go) {
                 try {
-                    Engine.tick()
                     EngineBypass.tick()
+                    // vigia: se a limpeza do celular matar o app, o alarme religa em até 30 s
+                    if (n % 10 == 0) SegundoPlano.vigiar(applicationContext)
                     if (n % 5 == 0) {
                         val r = Engine.resumo()
                         if (r != ultimo) { ultimo = r; atualizaNotificacao(r) }
@@ -283,6 +269,7 @@ class NocryService : Service() {
                     // uma vez por abertura: tira o app da economia de bateria etc. (pra nao ser fechado em segundo plano)
                     if (Adb.connected) SegundoPlano.garantePeloAdb()
                     if (Prefs.otmAuto) OtmAuto.tick(this)
+                    if (Prefs.otmVigia) OtmVigia.tick()
                 } catch (t: Throwable) {
                     NLog.add("servico", "adb: $t")
                 }
@@ -297,7 +284,7 @@ class NocryService : Service() {
     }
 
     private fun precisaAdb(): Boolean =
-        Prefs.mcAtivo || Prefs.otmAuto || Prefs.bypassAtivo || Prefs.bypassVolAtivo || (Engine.precisaTeclas() && !KeyService.ativo)
+        Prefs.otmAuto || Prefs.otmVigia || Prefs.bypassAtivo || Prefs.bypassVolAtivo || (Engine.precisaTeclas() && !KeyService.ativo)
 
     private fun cuidaAdb() {
         // com cópia rodando não testa a conexão (o teste demorado derrubava o ADB no meio e o bypass falhava)
@@ -340,6 +327,8 @@ class NocryService : Service() {
     override fun onDestroy() {
         go = false
         rodando = false
+        // parou porque nada mais está ligado: tira a vigia (se foi morto pela limpeza, isto nem roda e a vigia religa)
+        if (!Prefs.precisaServico()) SegundoPlano.pararVigia(applicationContext)
         loop?.interrupt()
         adbTh?.interrupt()
         watcher?.stop()

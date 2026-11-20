@@ -390,9 +390,6 @@ class MainActivity : Activity() {
         val t: Screen = when (i.getStringExtra("tela") ?: "") {
             "conexao" -> SetupScreen(this)
             "comp" -> CompScreen(this)
-            "vol" -> VolScreen(this)
-            "carga" -> CargaScreen(this)
-            "mc" -> McScreen(this)
             "ajustes" -> AjustesScreen(this)
             "testar" -> TestarScreen(this)
             "otm" -> OtmScreen(this)

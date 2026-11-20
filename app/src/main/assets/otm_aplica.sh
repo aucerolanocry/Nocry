@@ -65,6 +65,14 @@ if [ "$EXTRA" = 1 ]; then      # ajustes de sistema (so os seguros): nada de avi
     if [ "$(cmd device_config get activity_manager max_phantom_processes </dev/null 2>/dev/null)" = 2147483647 ]; then echo "PH|1"; else echo "PH|0"; fi
   fi
 fi
+if [ "${FULL:-0}" = 1 ]; then      # FULL: nada desenhando por cima dos toques e wi-fi em baixa latência (só se o celular aceitar)
+  setg system show_touches 0
+  setg system pointer_location 0
+  if [ "$SDK" -ge 29 ]; then
+    r=$(cmd wifi force-low-latency-mode enabled </dev/null 2>&1)
+    case "$r" in *nknown*|*xception*|*rror*|*nvalid*|*"Can't find"*|*ermission*|*ailure*|*"not allowed"*|*"does not have"*|*rivileg*|*"Failed transaction"*) ;; *) echo "N|1" ;; esac
+  fi
+fi
 if [ "$PERF" = 1 ] && [ "$SDK" -ge 30 ]; then      # desempenho fixo da CPU/GPU (comando oficial do Android 11+; so vale se o aparelho aceitar). OPCIONAL: trava num nivel estavel, nao no maximo
   r=$(cmd power set-fixed-performance-mode-enabled true </dev/null 2>&1)
   case "$r" in *nknown*|*xception*|*rror*|*nvalid*|*"Can't find"*|*ailure*|*"Failed transaction"*) ;; *) echo "F|1" ;; esac

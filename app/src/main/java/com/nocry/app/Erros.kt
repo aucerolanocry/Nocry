@@ -80,12 +80,13 @@ object Erros {
     }
 
     @Synchronized
-    private fun salvar(tipo: String, titulo: String, detalhes: String, quando: Long = System.currentTimeMillis()) {
+    private fun salvar(tipo: String, titulo: String, detalhes: String, quando: Long = System.currentTimeMillis(), doMomento: Boolean = true) {
         val d = dir ?: return
         try {
             d.mkdirs()
             val f = File(d, "${quando}_$tipo.txt")
-            f.writeText("tipo: $tipo\nquando: ${fmt.format(Date(quando))}\nresumo: $titulo\n----\n${cabecalho()}----\n$detalhes\n")
+            val cab = if (doMomento) cabecalho() else cabecalho().lines().take(2).joinToString("\n", postfix = "\n")
+            f.writeText("tipo: $tipo\nquando: ${fmt.format(Date(quando))}\nresumo: $titulo\n----\n$cab----\n$detalhes\n")
             Log.e(TAG, "$titulo\n$detalhes")
             cache = null
             novosCache = -1
@@ -156,12 +157,20 @@ object Erros {
                     if (visivel) "memoria" to "O Android fechou o app por falta de memória" else continue
                 ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE ->
                     "memoria" to "O Android fechou o app por usar demais o celular"
-                ApplicationExitInfo.REASON_SIGNALED, ApplicationExitInfo.REASON_OTHER ->
-                    if (visivel && !desc.contains("remove task", true) && !desc.contains("stop user", true))
-                        "sistema" to "O sistema fechou o app ($desc)" else continue
+                ApplicationExitInfo.REASON_SIGNALED, ApplicationExitInfo.REASON_OTHER -> when {
+                    !visivel || desc.contains("remove task", true) || desc.contains("stop user", true) -> continue
+                    // limpeza da Xiaomi/HyperOS (OneKeyClean, GameClean, OptimizationClean, GarbageClean...): não é erro do app
+                    limpezaXiaomi(desc) != null -> "limpeza" to limpezaXiaomi(desc)!!
+                    else -> "sistema" to "O sistema fechou o app ($desc)"
+                }
                 else -> continue
             }
             val detalhes = buildString {
+                if (tipo == "limpeza") {
+                    append("Não é erro do NOCRY: foi a limpeza de memória do próprio celular.\n")
+                    append("Pra não acontecer: abra os recentes, segure o NOCRY e toque no cadeado.\n")
+                    append("Se o bypass ou a otimização automática estavam ligados, o NOCRY volta sozinho em até 30 s.\n\n")
+                }
                 append("motivo do Android: ${e.reason} · $desc\n")
                 append("importância: ${e.importance} · memória usada: ${e.pss / 1024} MB (pss) / ${e.rss / 1024} MB (rss)\n")
                 append("processo: ${e.processName} · status ${e.status}\n")
@@ -170,9 +179,23 @@ object Erros {
                     if (!trace.isNullOrBlank()) append("\n").append(trace)
                 }
             }
-            salvar(tipo, titulo, detalhes, e.timestamp)
+            // o resto do cabeçalho (memória, tela, tempo aberto) seria de AGORA, não de quando fechou: fica de fora
+            salvar(tipo, titulo, detalhes, e.timestamp, doMomento = false)
         }
         if (maior != visto) sp.edit().putLong("saida_vista", maior).apply()
+    }
+
+    /** "O Xiaomi fechou o app: ..." se a saída foi uma limpeza da Xiaomi/HyperOS; null se não foi */
+    private fun limpezaXiaomi(desc: String): String? {
+        val d = desc.lowercase()
+        return when {
+            "onekeyclean" in d -> "O celular fechou o app: \"limpar tudo\" nos recentes"
+            "gameclean" in d -> "O celular fechou o app: Game Turbo limpou a memória ao abrir o jogo"
+            "optimizationclean" in d || "garbageclean" in d -> "O celular fechou o app: limpeza do app Segurança"
+            "lockscreenclean" in d -> "O celular fechou o app: limpeza ao bloquear a tela"
+            "clean" in d || "autopowerkill" in d || "powerkeeper" in d -> "O celular fechou o app: limpeza de memória ($desc)"
+            else -> null
+        }
     }
 
     /** do trace gigante do ANR, guarda o começo e a thread principal (é ela que trava a tela) */
@@ -231,7 +254,8 @@ object Erros {
         if (!::app.isInitialized) return 0
         val visto = app.getSharedPreferences("nocry_erros", Context.MODE_PRIVATE).getLong("visto_ate", 0L)
         val nomes = dir?.list() ?: return 0
-        return nomes.count { (it.substringBefore('_').toLongOrNull() ?: 0L) > visto }.also { novosCache = it }
+        // limpeza do celular não é erro do app: não entra no aviso da tela inicial
+        return nomes.count { !it.endsWith("_limpeza.txt") && (it.substringBefore('_').toLongOrNull() ?: 0L) > visto }.also { novosCache = it }
     }
 
     fun marcarVisto() {

@@ -244,9 +244,7 @@ object License {
     @Volatile var saiu: (() -> Unit)? = null
 
     private fun desfaz() {
-        try { if (Prefs.volAtivo) Engine.pararVol() } catch (_: Throwable) {}
-        try { if (Prefs.cargaAtivo) Engine.pararCarga() } catch (_: Throwable) {}
-        try { if (Prefs.mcAtivo || Prefs.densOrig != null) Engine.pararMc() } catch (_: Throwable) {}
+        try { Engine.desligarModosAntigos() } catch (_: Throwable) {}
         try { if (Comp.ligado()) Comp.desativar(true) } catch (_: Throwable) {}
         try { if (Prefs.otmAuto) OtmAuto.desligar() } catch (_: Throwable) {}
     }

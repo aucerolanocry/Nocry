@@ -19,5 +19,7 @@ class App : Application() {
         Notif.init(this)
         Sniper.init(this)
         NLog.add("app", "iniciou")
+        // toque via volume/carregador e modo carregador saíram: quem tinha algum ligado volta ao normal sozinho
+        if (Engine.temModoAntigo()) Bg.io { Engine.desligarModosAntigos() }
     }
 }

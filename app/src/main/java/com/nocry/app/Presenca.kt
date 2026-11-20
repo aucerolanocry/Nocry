@@ -77,9 +77,6 @@ object Presenca {
             o.put("tipo", Prefs.bypassTipo)
             o.put("apl", Prefs.bypassMark)
         }
-        o.put("vol", Prefs.volAtivo)
-        o.put("carga", Prefs.cargaAtivo)
-        o.put("mc", Prefs.mcAtivo)
         o.put("comp", Prefs.compFlag)
         o.put("otm", Prefs.otmAuto)
         return o

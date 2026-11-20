@@ -80,7 +80,7 @@ class RunScreen(a: MainActivity, override val titulo: String, private val work: 
 class OtmScreen(a: MainActivity) : Screen(a) {
     override val titulo = "Otimização"
 
-    override fun key(): String = listOf(Otm.status(), Prefs.otmAuto, Prefs.otmMsg, Prefs.otmPerf, Adb.connected).joinToString("|")
+    override fun key(): String = listOf(Otm.status(), Prefs.otmAuto, Prefs.otmMsg, Prefs.otmPerf, Prefs.otmNivel, Prefs.otmVigia, Adb.connected).joinToString("|")
 
     override fun render() {
         limpa()
@@ -92,11 +92,26 @@ class OtmScreen(a: MainActivity) : Screen(a) {
             if (on) "${st.second} apps congelados agora." else "Os apps em segundo plano estão livres.")
         hero.addView(Ui.chips(c,
             Ui.chip(c, "ADB", if (Adb.connected) "OK" else "OFF", Adb.connected),
+            Ui.chip(c, "NÍVEL", if (Prefs.otmNivel == "full") "FULL" else "NORMAL", if (Prefs.otmNivel == "full") true else null),
             Ui.chip(c, "AUTOMÁTICO", if (Prefs.otmAuto) "LIGADO" else "DESLIGADO", if (Prefs.otmAuto) true else null),
             Ui.chip(c, "CONGELADOS", if (on) st.second.toString() else "0", if (on) true else null)
         ), Ui.lp(top = 16, c = c))
         add(hero, 12)
         add(Ui.dica(c, "Os protegidos ficam de fora. Desativar devolve tudo como estava.", Ui.Dica.INFO), 12)
+
+        val full = Prefs.otmNivel == "full"
+        add(Ui.secao(c, "nível"), 18)
+        add(Ui.segmento(c, listOf("NORMAL", "FULL"), if (full) 1 else 0) { i ->
+            val novo = if (i == 1) "full" else "normal"
+            if (novo == Prefs.otmNivel) return@segmento
+            Prefs.otmNivel = novo
+            if (Otm.status().first) Ui.toast(act, "VALE QUANDO OTIMIZAR DE NOVO")
+            redesenha()
+        }, 8)
+        add(Ui.dica(c, if (full)
+            "FULL: foco total no Free Fire. Fecha tudo (até apps do sistema e de mensagem), fecha de novo o que tentar voltar enquanto o FF está aberto, liga o toque rápido (Ajustes do toque) e o Wi-Fi em baixa latência, se o celular deixar. Despertador, agenda e pagamento ficam de fora."
+            else "NORMAL: fecha e congela os apps que você instalou e os do Google/Xiaomi que são seguros de fechar.",
+            if (full) Ui.Dica.AVISO else Ui.Dica.INFO), 8)
 
         if (on) {
             add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "Desativando") { log -> Otm.desativar(log).also { if (it) Presenca.evento("modo_off", "OTIMIZAÇÃO") } }) }, 14)
@@ -129,7 +144,7 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         )), 20)
 
         add(Ui.grupo(c, "opções", listOf(
-            Ui.itemChave(c, "Mensagens fecham", "WhatsApp, Telegram, Signal, Messenger e Discord saem da memória, mas ficam sem avisar até você abrir o app", Prefs.otmMsg == "fechar", R.drawable.ic_xcircle) { v ->
+            Ui.itemChave(c, "Mensagens fecham", if (Prefs.otmNivel == "full") "no FULL elas sempre fecham (ficam sem avisar até você abrir o app)" else "WhatsApp, Telegram, Signal, Messenger e Discord saem da memória, mas ficam sem avisar até você abrir o app", Prefs.otmMsg == "fechar" || Prefs.otmNivel == "full", R.drawable.ic_xcircle) { v ->
                 Prefs.otmMsg = if (v) "fechar" else "proteger"
             },
             Ui.itemChave(c, "CPU/GPU em nível fixo", "estável, não mais forte (esquenta mais). Vale na próxima ativação", Prefs.otmPerf, R.drawable.ic_chip) { v -> Prefs.otmPerf = v }
@@ -472,6 +487,7 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
                     "crash" -> R.drawable.ic_xcircle to "fechou"
                     "travada" -> R.drawable.ic_warn to "travou"
                     "memoria" -> R.drawable.ic_chip to "memória"
+                    "limpeza" -> R.drawable.ic_info to "limpeza"
                     else -> R.drawable.ic_info to "sistema"
                 }
                 val linha = Ui.item(c, e.titulo.ifEmpty { nome }, fmt.format(java.util.Date(e.quando)), ico, nome) { verErro(c, e) }
@@ -764,7 +780,7 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         marca.addView(mc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val km = Ui.card(c)
         km.addView(marca)
-        km.addView(Ui.text(c, "Toque via volume e carregador, com monitores de segundo plano direto no celular.", 11f, Ui.MUTED), Ui.lp(top = 12, c = c))
+        km.addView(Ui.text(c, "Bypass, otimização (até no nível FULL) e modo competitivo, rodando em segundo plano direto no celular.", 11f, Ui.MUTED), Ui.lp(top = 12, c = c))
         add(km, 4)
 
         // ---------------- sua conta: avatar, nome, cargo e grade de informacoes ----------------

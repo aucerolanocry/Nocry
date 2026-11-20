@@ -6,7 +6,7 @@ enum class Mark { VOL, CARGA }
 private const val K_LONG = "long_press_timeout"
 private const val K_MULTI = "multi_press_timeout"
 
-/** Toque via volume / carregador: so long_press_timeout e multi_press_timeout (sem density, sem abrir app). */
+/** Toque rapido: so long_press_timeout e multi_press_timeout (modo competitivo, otimizacao FULL e o teste). */
 object Toque {
     fun getMark(m: Mark): Boolean = if (m == Mark.VOL) Prefs.markVol else Prefs.markCarga
     fun setMark(m: Mark, v: Boolean) { if (m == Mark.VOL) Prefs.markVol = v else Prefs.markCarga = v }
@@ -54,7 +54,7 @@ object Comp {
     /** true = o toque rapido esta ligado agora (por aqui, pelo volume ou pelo carregador) */
     fun ligado(): Boolean {
         val l = Sys.getSecure(K_LONG)
-        val on = l == "1" || Prefs.markVol || Prefs.markCarga
+        val on = Prefs.compOrig != null || (l == Prefs.longOn.toString() && l != Prefs.normal.toString())
         Prefs.compFlag = on
         return on
     }
@@ -66,11 +66,11 @@ object Comp {
             val m = Sys.getSecure(K_MULTI)
             var ls = l ?: "null"
             var ms = m ?: "null"
-            if (ls == "1") { ls = "100"; ms = "100" }     // ja estava rapido por fora: o "normal" e 100/100
+            if (ls == "1" || ls == Prefs.longOn.toString()) { ls = "100"; ms = "100" }     // ja estava rapido por fora: o "normal" e 100/100
             Prefs.compOrig = "$ls|$ms"
         }
-        val a = Sys.putSecure(K_LONG, "1")
-        val b = Sys.putSecure(K_MULTI, "0")
+        val a = Sys.putSecure(K_LONG, Prefs.longOn.toString())
+        val b = Sys.putSecure(K_MULTI, Prefs.multiOn.toString())
         val ok = a && b
         val antes = Prefs.compFlag
         if (ok) Prefs.compFlag = true

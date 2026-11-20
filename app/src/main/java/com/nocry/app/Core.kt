@@ -171,8 +171,8 @@ var bypassVolAtivo: Boolean
         get() = gi("long_on", 1, 1, 600)
         set(v) = pi("long_on", v.coerceIn(1, 600))
     var multiOn: Int
-        get() = gi("multi_on", 1, 1, 600)
-        set(v) = pi("multi_on", v.coerceIn(1, 600))
+        get() = gi("multi_on", 0, 0, 600)      // padrão 0: o mesmo que o modo competitivo sempre usou
+        set(v) = pi("multi_on", v.coerceIn(0, 600))
     var normal: Int
         get() = gi("normal", 100, 1, 600)
         set(v) = pi("normal", v.coerceIn(1, 600))
@@ -255,6 +255,18 @@ var bypassVolAtivo: Boolean
     var otmPerf: Boolean
         get() = gb("otm_perf")
         set(v) = pb("otm_perf", v)
+    /** "normal" ou "full" (foco máximo no FF: fecha tudo, vigia o FF, toque rápido, rede) */
+    var otmNivel: String
+        get() = if (gs("otm_nivel") == "full") "full" else "normal"
+        set(v) = ps("otm_nivel", if (v == "full") "full" else "normal")
+    /** a otimização FULL está ativa agora (o serviço vigia o FF e fecha o que voltar) */
+    var otmVigia: Boolean
+        get() = gb("otm_vigia")
+        set(v) = pb("otm_vigia", v)
+    /** o modo competitivo foi ligado pela otimização FULL (o desativar devolve) */
+    var otmComp: Boolean
+        get() = gb("otm_comp")
+        set(v) = pb("otm_comp", v)
 
     // ---- geral ----
     var onboardingFeito: Boolean
@@ -438,7 +450,7 @@ var bypassVolAtivo: Boolean
         set(v) = ps("lic_sig", v)
 
     /** precisa do servico em primeiro plano? */
-    fun precisaServico(): Boolean = volAtivo || cargaAtivo || mcAtivo || otmAuto || bypassAtivo || bypassVolAtivo || Sniper.ligadoPref
+    fun precisaServico(): Boolean = otmAuto || bypassAtivo || bypassVolAtivo || Sniper.ligadoPref || (otmNivel == "full" && otmVigia)
 }
 
 /** Estado do carregador (sem ADB). */
