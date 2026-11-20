@@ -197,7 +197,7 @@ object Adb {
 
     private fun open(cmd: String): AdbStream? {
         val m = mgr ?: return null
-        return try { m.openStream("shell:$cmd") } catch (t: Throwable) {
+        return try { m.openStream("shell:" + soAscii(cmd)) } catch (t: Throwable) {
             lastError = (t.message ?: t.javaClass.simpleName).take(120)
             null
         }
@@ -246,6 +246,45 @@ object Adb {
     }
 
     /** roda e entrega cada linha assim que chega (ex.: apps fechando ao vivo). ok=false se estourou o tempo */
+    /** o pedido de abertura do ADB quebra com acento em alguns celulares: tira o acento (comentário/texto, nada de código) */
+    private fun soAscii(s: String): String {
+        if (s.all { it.code < 128 }) return s
+        val n = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+        val b = StringBuilder(n.length)
+        for (ch in n) b.append(if (ch.code < 128) ch else '-')
+        return b.toString()
+    }
+
+    /**
+     * Script grande (otimização): antes ia inteiro dentro do pedido de abertura do ADB, que tem limite de tamanho
+     * em alguns celulares ("não consegui ler o celular"). Agora vai em pedaços base64 (só letras e números)
+     * pra um arquivo em /data/local/tmp e roda de lá. Se não der pra gravar, tenta do jeito antigo.
+     */
+    private fun gravarScript(script: String): String? {
+        val nome = "/data/local/tmp/.nocry_" + System.nanoTime() + ".sh"
+        val b64 = android.util.Base64.encodeToString(soAscii(script).toByteArray(Charsets.US_ASCII), android.util.Base64.NO_WRAP)
+        if (!execAgora("rm -f $nome.b64; : > $nome.b64 && echo GRAVOU", 8000).out.contains("GRAVOU")) return null
+        for (pedaco in b64.chunked(2400)) {
+            if (!execAgora("printf %s '$pedaco' >> $nome.b64 && echo GRAVOU", 8000).out.contains("GRAVOU")) {
+                execAgora("rm -f $nome.b64", 4000)
+                return null
+            }
+        }
+        val r = execAgora("base64 -d $nome.b64 > $nome 2>/dev/null; rm -f $nome.b64; [ -s $nome ] && echo GRAVOU", 8000)
+        if (!r.out.contains("GRAVOU")) { execAgora("rm -f $nome", 4000); return null }
+        return nome
+    }
+
+    fun execScript(script: String, timeoutMs: Long): Res {
+        val arq = gravarScript(script) ?: return exec(script, timeoutMs)
+        return exec("sh $arq </dev/null 2>&1; rm -f $arq", timeoutMs)
+    }
+
+    fun execScriptLines(script: String, timeoutMs: Long, onLine: (String) -> Unit): Res {
+        val arq = gravarScript(script) ?: return execLines(script, timeoutMs, onLine)
+        return execLines("sh $arq </dev/null 2>&1; rm -f $arq", timeoutMs, onLine)
+    }
+
     fun execLines(cmd: String, timeoutMs: Long, onLine: (String) -> Unit): Res {
         val s = open(cmd) ?: return Res(false, "")
         val all = StringBuilder()

@@ -6,14 +6,14 @@ AO="cmd appops"; $AO help </dev/null >/dev/null 2>&1 || AO=appops
 DI="cmd deviceidle"; $DI help </dev/null >/dev/null 2>&1 || DI="dumpsys deviceidle"
 mem() { grep -E '^MemAvailable:' /proc/meminfo | tr -s ' ' | cut -d' ' -f2; }
 op() { $AO get "$1" "$2" </dev/null 2>/dev/null | grep -oE 'allow|ignore|deny|default|foreground' | head -1; }
-setg() {      # ns chave valor: guarda o de antes (A|), muda e CONFERE lendo de volta · R|ns.chave = o celular recusou (nao ficou)
+setg() {      # ns chave valor: guarda o de antes (A|), muda e CONFERE lendo de volta - R|ns.chave = o celular recusou (nao ficou)
   if ! cget "$1" "$2"; then echo "R|$1.$2"; return 1; fi
   echo "A|$1.$2|$CV"
   cigual "$CV" "$3" && return 0
   cput "$1" "$2" "$3" || { echo "R|$1.$2"; return 1; }
 }
 echo "MEM_ANTES=$(mem)"
-work() {      # $2 = 0: o app está parado, só congela (sem force-stop)
+work() {      # $2 = 0: o app esta parado, so congela (sem force-stop)
   p="$1"
   if [ "$SDK" -ge 26 ]; then
     b=$($AM get-standby-bucket "$p" </dev/null 2>/dev/null | tr -dc '0-9')
@@ -66,29 +66,29 @@ if [ "$EXTRA" = 1 ]; then      # ajustes de sistema (so os seguros): nada de avi
     if [ "$(cmd device_config get activity_manager max_phantom_processes </dev/null 2>/dev/null)" = 2147483647 ]; then echo "PH|1"; else echo "PH|0"; fi
   fi
 fi
-if [ "${FULL:-0}" = 1 ]; then      # FULL: tudo que é real e volta ao desativar (do bypass antigo, sem os que estragam o celular)
+if [ "${FULL:-0}" = 1 ]; then      # FULL: tudo que e real e volta ao desativar (do bypass antigo, sem os que estragam o celular)
   setg system show_touches 0
   setg system pointer_location 0
   setg system sound_effects_enabled 0                # som de toque na tela
-  setg global notification_bubbles 0                 # balões de conversa por cima do jogo
+  setg global notification_bubbles 0                 # baloes de conversa por cima do jogo
   setg secure spell_checker_enabled 0
   setg global network_recommendations_enabled 0
-  setg global tcp_default_init_rwnd 60               # conexões começam mais rápido (atualização/download do jogo)
-  if [ "$SDK" -ge 30 ]; then                         # menos apps parados guardados na memória
+  setg global tcp_default_init_rwnd 60               # conexoes comecam mais rapido (atualizacao/download do jogo)
+  if [ "$SDK" -ge 30 ]; then                         # menos apps parados guardados na memoria
     echo "A|dc.max_cached_processes|$(cmd device_config get activity_manager max_cached_processes </dev/null 2>/dev/null)"
     cmd device_config put activity_manager max_cached_processes 8 </dev/null >/dev/null 2>&1
     [ "$(cmd device_config get activity_manager max_cached_processes </dev/null 2>/dev/null)" = 8 ] && echo "MC|1"
-    if [ "$(cmd location is-location-enabled </dev/null 2>/dev/null)" = true ]; then      # localização (o FF não usa)
+    if [ "$(cmd location is-location-enabled </dev/null 2>/dev/null)" = true ]; then      # localizacao (o FF nao usa)
       cmd location set-location-enabled false </dev/null >/dev/null 2>&1
       [ "$(cmd location is-location-enabled </dev/null 2>/dev/null)" = false ] && echo "Q|1"
     fi
   fi
   if [ "${HZ:-0}" -ge 90 ] 2>/dev/null && [ -n "$(getprop ro.miui.ui.version.name)$(getprop ro.mi.os.version.name)" ]; then
-    setg system user_refresh_rate $HZ                # Xiaomi/HyperOS: a taxa que o sistema escolhe (senão ele baixa sozinho)
+    setg system user_refresh_rate $HZ                # Xiaomi/HyperOS: a taxa que o sistema escolhe (senao ele baixa sozinho)
   fi
-  r=$(cmd wifi force-hi-perf-mode enabled </dev/null 2>&1)      # Wi-Fi em alto desempenho (só se o celular aceitar)
+  r=$(cmd wifi force-hi-perf-mode enabled </dev/null 2>&1)      # Wi-Fi em alto desempenho (so se o celular aceitar)
   case "$r" in *nknown*|*xception*|*rror*|*nvalid*|*"Can't find"*|*ermission*|*ailure*|*"not allowed"*|*"does not have"*|*rivileg*|*"Failed transaction"*) ;; *) echo "H|1" ;; esac
-  if [ -n "$(getprop ro.miui.ui.version.name)$(getprop ro.mi.os.version.name)" ]; then      # propaganda e coleta de dados da Xiaomi: desligadas até desativar
+  if [ -n "$(getprop ro.miui.ui.version.name)$(getprop ro.mi.os.version.name)" ]; then      # propaganda e coleta de dados da Xiaomi: desligadas ate desativar
     dis=$(pm list packages -d </dev/null 2>/dev/null)
     for p in com.miui.msa.global com.miui.systemAdSolution com.miui.analytics; do
       pm path "$p" </dev/null >/dev/null 2>&1 || continue
@@ -97,7 +97,7 @@ if [ "${FULL:-0}" = 1 ]; then      # FULL: tudo que é real e volta ao desativar
       pm list packages -d </dev/null 2>/dev/null | grep -q "^package:$p\$" && echo "X|$p"
     done
   fi
-  case "$(cmd netpolicy get restrict-background </dev/null 2>/dev/null)" in      # economia de dados: em 2º plano só o FF e o NOCRY
+  case "$(cmd netpolicy get restrict-background </dev/null 2>/dev/null)" in      # economia de dados: em 2o plano so o FF e o NOCRY
     *disabled*)
       wl=$(cmd netpolicy list restrict-background-whitelist </dev/null 2>/dev/null)
       for p in $LIB; do
@@ -140,7 +140,7 @@ for p in $PKGS; do
   n=$((n+1)); [ $((n % 8)) -eq 0 ] && wait
 done
 wait
-for p in $FRIO; do      # FULL: instalados que estão parados
+for p in $FRIO; do      # FULL: instalados que estao parados
   work "$p" 0 &
   n=$((n+1)); [ $((n % 8)) -eq 0 ] && wait
 done

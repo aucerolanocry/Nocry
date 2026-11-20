@@ -1,4 +1,4 @@
-T=""; command -v timeout >/dev/null 2>&1 && T="timeout 25"      # celular lento: o dumpsys não trava a leitura inteira
+T=""; command -v timeout >/dev/null 2>&1 && T="timeout 25"      # celular lento: o dumpsys nao trava a leitura inteira
 echo @PROP
 for k in ro.product.manufacturer ro.product.model ro.product.marketname ro.build.version.release ro.build.version.sdk ro.miui.ui.version.name ro.mi.os.version.name ro.build.version.emui; do echo "$k=$(getprop $k)"; done
 echo @MEM
@@ -25,7 +25,7 @@ echo @LAUNCH
 l=$(cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER </dev/null 2>/dev/null | grep -oE '[A-Za-z0-9_.]+/[A-Za-z0-9_.$]+')
 [ -n "$l" ] || l=$(pm query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER </dev/null 2>/dev/null | grep -oE '[A-Za-z0-9_.]+/[A-Za-z0-9_.$]+')
 echo "$l" | cut -d/ -f1 | sort -u
-echo @SVC      # plano B quando o celular não deixa ler as configurações: todo app que oferece teclado, acessibilidade, leitor de notificação, SMS ou telefone
+echo @SVC      # plano B quando o celular nao deixa ler as configuracoes: todo app que oferece teclado, acessibilidade, leitor de notificacao, SMS ou telefone
 for a in android.view.InputMethod android.accessibilityservice.AccessibilityService android.service.notification.NotificationListenerService; do
   s=$(cmd package query-services --brief -a $a </dev/null 2>/dev/null); [ -n "$s" ] || s=$(pm query-services --brief -a $a </dev/null 2>/dev/null)
   echo "$s" | grep -oE '^ *[A-Za-z0-9_.]+/' | tr -d ' /'

@@ -128,13 +128,24 @@ object Otm {
         }
     }
 
+    /** por que a última leitura falhou (aparece no registro) */
+    @Volatile var motivoLeitura = ""
+
     fun lerPlano(): Plano? {
         if (!Adb.connected) return null
         // celular lento ou com muitos apps: tempo maior e uma segunda tentativa antes de desistir
         for (tentativa in 0 until 2) {
-            val r = Adb.exec(asset("otm_cfg.sh") + "\n" + asset("otm_leitura.sh"), 75000)
-            if (r.out.lines().any { it.trim() == "@FIM" }) return parse(r.out)
-            if (tentativa == 0) { NLog.add("otimizacao", "leitura incompleta, tentando de novo"); Thread.sleep(1500) }
+            val r = Adb.execScript(asset("otm_cfg.sh") + "\n" + asset("otm_leitura.sh"), 75000)
+            if (r.out.lines().any { it.trim() == "@FIM" }) { motivoLeitura = ""; return parse(r.out) }
+            val fim = r.out.trim().lines().takeLast(2).joinToString(" | ").take(140)
+            motivoLeitura = when {
+                !Adb.connected -> "o ADB desconectou"
+                r.out.isBlank() -> "o celular não respondeu" + (if (Adb.lastError.isNotEmpty()) " (${Adb.lastError})" else "")
+                !r.ok -> "demorou demais (${r.out.lines().size} linhas lidas)"
+                else -> "leitura cortada: $fim"
+            }
+            NLog.add("otimizacao", "leitura falhou (tentativa ${tentativa + 1}): $motivoLeitura")
+            if (tentativa == 0) Thread.sleep(1500)
         }
         return null
     }
@@ -379,6 +390,7 @@ object Otm {
         }
         if (plano == null) {
             log("[x] NAO CONSEGUI LER O CELULAR — NADA FOI MUDADO")
+            if (motivoLeitura.isNotEmpty()) log("    motivo: $motivoLeitura")
             return false
         }
         if (plano.setFail) {
@@ -419,7 +431,7 @@ object Otm {
         if (frio.isNotEmpty()) log("• CONGELANDO ${frio.size} APPS INSTALADOS QUE ESTÃO PARADOS (não ligam sozinhos)")
 
         var kn = 0
-        val res = Adb.execLines(script, 240000) { l ->
+        val res = Adb.execScriptLines(script, 240000) { l ->
             if (l.startsWith("K|")) {
                 val p = l.substring(2)
                 val kb = kbDe[p]
@@ -591,7 +603,7 @@ object Otm {
             asset("otm_cfg.sh") + "\n" + asset("otm_desfaz.sh")
         log("DESFAZENDO...")
         desfazFull(log)
-        val r = Adb.exec(script, 180000)
+        val r = Adb.execScript(script, 180000)
         if (!r.out.lines().any { it.trim() == "FIM" }) {
             log("[x] O CELULAR NAO RESPONDEU — NADA FOI DESFEITO")
             log("• Tente de novo (o registro do que mudou continua guardado)")
