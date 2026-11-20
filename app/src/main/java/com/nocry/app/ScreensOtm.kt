@@ -80,12 +80,12 @@ class RunScreen(a: MainActivity, override val titulo: String, private val work: 
 class OtmScreen(a: MainActivity) : Screen(a) {
     override val titulo = "Otimização"
 
-    override fun key(): String = listOf(Otm.status(), Prefs.otmAuto, Prefs.otmMsg, Prefs.otmPerf, Prefs.otmNivel, Prefs.otmVigia, Adb.connected).joinToString("|")
+    override fun key(): String = listOf(Otm.status(), Prefs.otmAuto, Prefs.otmNivel, Prefs.otmVigia, Adb.connected).joinToString("|")
 
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Otimização", "Fecha e congela os apps em segundo plano para liberar RAM.")
+        cabecalho("Otimização", "Deixa o celular só pro Free Fire. Desativar volta tudo como era.")
         val st = Otm.status()
         val on = st.first
         val hero = Ui.hero(c, R.drawable.ic_chip, "otimização", if (on) "Ativa" else "Desativada", on,
@@ -109,33 +109,26 @@ class OtmScreen(a: MainActivity) : Screen(a) {
             redesenha()
         }, 8)
         add(Ui.dica(c, if (full)
-            "FULL: foco total no Free Fire. Fecha e congela tudo (até apps parados, do sistema e de mensagem) e fecha de novo o que tentar voltar com o FF aberto. Também desliga som de toque, balões, localização e dados móveis em 2º plano (menos FF e NOCRY), e liga o Wi-Fi em baixa latência se o celular deixar. Despertador, agenda e pagamento ficam de fora. Desativar volta tudo."
-            else "NORMAL: fecha e congela os apps que você instalou e os do Google/Xiaomi que são seguros de fechar.",
+            "FULL: fecha e congela tudo, até mensagens e apps do sistema. Com o FF aberto, fecha de novo o que voltar. Desliga localização, notificações por cima e dados móveis em 2º plano (menos FF e NOCRY). WhatsApp e cia só avisam depois que desativar."
+            else "NORMAL: fecha e congela os apps que você instalou e o lixo do Google/Xiaomi. Mensagens (WhatsApp etc.) continuam avisando.",
             if (full) Ui.Dica.AVISO else Ui.Dica.INFO), 8)
 
         if (on) {
             add(Ui.button(c, "desativar (descongela tudo)", Ui.Kind.DANGER, R.drawable.ic_stop) { act.abre(RunScreen(act, "Desativando") { log -> Otm.desativar(log).also { if (it) Presenca.evento("modo_off", "OTIMIZAÇÃO") } }) }, 14)
-            add(Ui.button(c, "otimizar de novo", Ui.Kind.GHOST, R.drawable.ic_check) { act.abre(RunScreen(act, "Otimizando") { log -> Otm.ativar(log).also { if (it) Presenca.evento("modo_on", "OTIMIZAÇÃO") } }) }, 10)
+            add(Ui.button(c, "aplicar de novo", Ui.Kind.GHOST, R.drawable.ic_check) { act.abre(RunScreen(act, "Otimizando") { log -> Otm.ativar(log).also { if (it) Presenca.evento("modo_on", "OTIMIZAÇÃO") } }) }, 10)
         } else {
             add(Ui.button(c, "ativar otimização", Ui.Kind.PRIMARY, R.drawable.ic_check) { act.abre(RunScreen(act, "Otimizando") { log -> Otm.ativar(log).also { if (it) Presenca.evento("modo_on", "OTIMIZAÇÃO") } }) }, 14)
         }
 
         add(Ui.grupo(c, "ferramentas", listOf(
-            Ui.item(c, "Ver apps (NGC)", "o que vai fechar, o que fica protegido e por quê", R.drawable.ic_eye) { act.abre(OtmVerScreen(act)) },
+            Ui.item(c, "Ver o que vai fechar", "o que fecha, o que fica protegido e por quê", R.drawable.ic_eye) { act.abre(OtmVerScreen(act)) },
             Ui.item(c, "Proteger app", "escolha o que nunca fecha", R.drawable.ic_shield) { act.abre(OtmProtegerScreen(act)) },
-            Ui.item(c, "Fechar mais apps", "apps do sistema com ícone que você quer fechar junto", R.drawable.ic_xcircle) { act.abre(OtmMaisScreen(act)) },
             Ui.item(c, "Limpar cache dos apps", "libera armazenamento (cada app refaz o seu cache)", R.drawable.ic_xcircle) {
                 act.abre(RunScreen(act, "Limpando o cache") { log -> Otm.limparCache(log) })
             },
             Ui.item(c, "Compilar todos os apps", "como o Android faz de madrugada: tudo abre mais rápido (demora)", R.drawable.ic_chip) {
                 Ui.dialogConfirma(act, "COMPILAR TODOS OS APPS", "Pode levar de 2 a 15 minutos. Deixe o NOCRY aberto e, se der, o celular na tomada.", "COMPILAR") {
                     act.abre(RunScreen(act, "Compilando os apps") { log -> Otm.compilarTudo(log) })
-                }
-            },
-            Ui.item(c, "Preparar o FF", "compila o Free Fire e tira da economia de energia", R.drawable.ic_gamepad) {
-                Ui.dialogEscolha(act, "PREPARAR O FF", listOf("FREE FIRE NORMAL", "FREE FIRE MAX")) { i ->
-                    val pkg = if (i == 0) Const.FF_NORMAL else Const.FF_MAX
-                    act.abre(RunScreen(act, "Preparando o FF") { log -> Otm.prepararFf(pkg, log) })
                 }
             }
         )), 22)
@@ -150,13 +143,8 @@ class OtmScreen(a: MainActivity) : Screen(a) {
                 }
             }
         )), 20)
+        add(Ui.dica(c, "O automático e a vigia do FULL rodam com o NOCRY em segundo plano (fica uma notificação). Trave o NOCRY nos recentes (cadeado) pra Xiaomi não fechar ele.", Ui.Dica.INFO), 10)
 
-        add(Ui.grupo(c, "opções", listOf(
-            Ui.itemChave(c, "Mensagens fecham", if (Prefs.otmNivel == "full") "no FULL elas sempre fecham (ficam sem avisar até você abrir o app)" else "WhatsApp, Telegram, Signal, Messenger e Discord saem da memória, mas ficam sem avisar até você abrir o app", Prefs.otmMsg == "fechar" || Prefs.otmNivel == "full", R.drawable.ic_xcircle) { v ->
-                Prefs.otmMsg = if (v) "fechar" else "proteger"
-            },
-            Ui.itemChave(c, "CPU/GPU em nível fixo", "estável, não mais forte (esquenta mais). Vale na próxima ativação", Prefs.otmPerf, R.drawable.ic_chip) { v -> Prefs.otmPerf = v }
-        )), 20)
     }
 }
 
@@ -190,7 +178,7 @@ private fun feito(c: Context, texto: String): View {
 // VER APPS (so olhando)
 // =====================================================================================
 class OtmVerScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "Ver apps (NGC)"
+    override val titulo = "Ver o que vai fechar"
     private var plano: Otm.Plano? = null
     private var carregando = false
     private var falhou = false

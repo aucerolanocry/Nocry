@@ -253,13 +253,13 @@ object Otm {
 
         val up = protegidos().toSet()
         val ua = liberadosMsg()
-        val uex = extras().toSet()
+        val uex = emptySet<String>()      // "fechar mais apps" saiu: no FULL já fecha todos os do sistema que podem
         val mg = MSG_APPS.split(' ').toSet()
         val ex = HashSet<String>(EXTRAS.split(' '))
         if (props["ro.miui.ui.version.name"].orEmpty().isNotEmpty() || props["ro.mi.os.version.name"].orEmpty().isNotEmpty()) ex.addAll(MIUI.split(' '))
         if (Prefs.otmNivel == "full") ex.addAll(FULL_EXTRAS.split(' '))
         val full = Prefs.otmNivel == "full"
-        val msgFecha = full || Prefs.otmMsg == "fechar"
+        val msgFecha = full      // NORMAL: mensagens continuam avisando · FULL: fecham também
 
         fun razao(pk: String): String {
             if (HARD.containsMatchIn(pk)) return "NOCRY/FF"
@@ -413,7 +413,7 @@ object Otm {
         if (hz < 90 || hz > 240) hz = 0
         val libs = plano.libs
         val games = libs.filter { it.startsWith("com.dts.freefire") }
-        val perf = if (Prefs.otmPerf) 1 else 0
+        val perf = 0
         val msgs = cand.filter { it in MSG_APPS.split(' ') }.joinToString(", ") { nome(it) }
 
         val frio = if (full) plano.frio else emptyList()
