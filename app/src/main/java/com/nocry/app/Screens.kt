@@ -576,7 +576,7 @@ class AjustesScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Ajustes do toque", "Valores em milissegundos (0 a 600). Valem no modo competitivo e na otimização FULL, na próxima vez que ligar.")
+        cabecalho("Ajustes do toque", "Valores em milissegundos (0 a 600). Valem no modo competitivo, na próxima vez que ligar.")
         add(Ui.chips(c,
             Ui.infoBox(c, R.drawable.ic_bolt, "rápido", "${Prefs.longOn} · ${Prefs.multiOn}", Ui.RED),
             Ui.infoBox(c, R.drawable.ic_sliders, "normal", Prefs.normal.toString())

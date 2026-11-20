@@ -364,7 +364,7 @@ object Otm {
             log("⚠ O celular não deixou ler as configurações: protegendo todos os teclados, acessibilidade e notificações")
         }
         val full = Prefs.otmNivel == "full"
-        // voltou pro NORMAL: o que só o FULL liga (vigia e toque rápido) volta ao que era
+        // voltou pro NORMAL: a vigia (só do FULL) para
         if (!full && (Prefs.otmVigia || Prefs.otmComp)) desfazFull(log)
         val cand = plano.c.map { it.pk }
         val kbDe = plano.c.associate { it.pk to it.kb }
@@ -460,11 +460,6 @@ object Otm {
         if (lines.any { it == "N|1" }) log("• WI-FI: BAIXA LATÊNCIA LIGADA")
         else if (full && plano.sdk >= 29) log("• WI-FI: o celular não deixa ligar a baixa latência pelo ADB (normal na maioria)")
         if (full) {
-            // toque rápido (valores de Ajustes do toque); se o modo competitivo já estava ligado, não mexe
-            if (!Comp.ligado()) {
-                if (Comp.ativar()) { Prefs.otmComp = true; log("• TOQUE: RÁPIDO (long ${Prefs.longOn} · multi ${Prefs.multiOn})") }
-                else log("⚠ TOQUE: o celular não aceitou o toque rápido")
-            } else log("• TOQUE: o modo competitivo já estava ligado")
             Prefs.otmVigia = true
             NocryService.sync(Sys.app)
             log("• VIGIA: com o FF aberto, fecha de novo o que tentar voltar")
@@ -477,7 +472,7 @@ object Otm {
     // ---------------- DESATIVAR ----------------
     fun desativar(log: (String) -> Unit): Boolean = synchronized(opLock) { desativarSeguro(log) }
 
-    /** o que o FULL ligou fora do script: a vigia e o toque rápido */
+    /** o que o FULL ligou fora do script: a vigia (o otmComp é só de rascunho antigo; o FULL não liga o modo competitivo) */
     private fun desfazFull(log: (String) -> Unit) {
         if (Prefs.otmVigia) {
             Prefs.otmVigia = false

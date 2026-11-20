@@ -109,7 +109,7 @@ class OtmScreen(a: MainActivity) : Screen(a) {
             redesenha()
         }, 8)
         add(Ui.dica(c, if (full)
-            "FULL: foco total no Free Fire. Fecha tudo (até apps do sistema e de mensagem), fecha de novo o que tentar voltar enquanto o FF está aberto, liga o toque rápido (Ajustes do toque) e o Wi-Fi em baixa latência, se o celular deixar. Despertador, agenda e pagamento ficam de fora."
+            "FULL: foco total no Free Fire. Fecha tudo (até apps do sistema e de mensagem), fecha de novo o que tentar voltar enquanto o FF está aberto, tira o que desenha por cima dos toques e liga o Wi-Fi em baixa latência, se o celular deixar. Despertador, agenda e pagamento ficam de fora."
             else "NORMAL: fecha e congela os apps que você instalou e os do Google/Xiaomi que são seguros de fechar.",
             if (full) Ui.Dica.AVISO else Ui.Dica.INFO), 8)
 
