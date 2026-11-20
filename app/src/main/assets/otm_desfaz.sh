@@ -27,6 +27,9 @@ for p in $WLIMPA; do $DI whitelist "-$p" </dev/null >/dev/null 2>&1; done
 st=0; sv=0
 [ "$FPERF" = 1 ] && cmd power set-fixed-performance-mode-enabled false </dev/null >/dev/null 2>&1
 [ "${REDELAT:-0}" = 1 ] && cmd wifi force-low-latency-mode disabled </dev/null >/dev/null 2>&1
+[ "${LOCAL:-0}" = 1 ] && cmd location set-location-enabled true </dev/null >/dev/null 2>&1
+[ "${DSAVER:-0}" = 1 ] && cmd netpolicy set restrict-background false </dev/null >/dev/null 2>&1
+for u in $DUIDS; do cmd netpolicy remove restrict-background-whitelist "$u" </dev/null >/dev/null 2>&1; done
 for g in $GAMES; do
   p=${g%%:*}; m=${g#*:}
   case "$m" in standard|performance|battery) ;; *) continue ;; esac
@@ -36,7 +39,7 @@ done
 for a in $ANIMS; do
   k=${a%%:*}; val=${a#*:}; ns=${k%%.*}; key=${k#*.}
   case "$k" in
-    global.window_animation_scale|global.transition_animation_scale|global.animator_duration_scale|system.peak_refresh_rate|system.min_refresh_rate|global.captive_portal_detection_enabled|global.sem_enhanced_cpu_responsiveness|global.adaptive_battery_management_enabled|global.low_power|global.ble_scan_always_enabled|global.wifi_scan_always_enabled|global.wifi_networks_available_notification_on|global.heads_up_notifications_enabled|global.location_background_throttle_interval_ms|system.haptic_feedback_enabled|system.show_touches|system.pointer_location|global.disable_window_blurs|global.automatic_power_save_mode|global.cached_apps_freezer|global.settings_enable_monitor_phantom_procs|dc.max_phantom_processes) ;;
+    global.window_animation_scale|global.transition_animation_scale|global.animator_duration_scale|system.peak_refresh_rate|system.min_refresh_rate|global.captive_portal_detection_enabled|global.sem_enhanced_cpu_responsiveness|global.adaptive_battery_management_enabled|global.low_power|global.ble_scan_always_enabled|global.wifi_scan_always_enabled|global.wifi_networks_available_notification_on|global.heads_up_notifications_enabled|global.location_background_throttle_interval_ms|system.haptic_feedback_enabled|system.show_touches|system.pointer_location|system.sound_effects_enabled|global.notification_bubbles|secure.spell_checker_enabled|global.network_recommendations_enabled|global.tcp_default_init_rwnd|dc.max_cached_processes|global.disable_window_blurs|global.automatic_power_save_mode|global.cached_apps_freezer|global.settings_enable_monitor_phantom_procs|dc.max_phantom_processes) ;;
     *) continue ;;
   esac
   if [ "$ns" = dc ]; then      # flag do sistema (Android 12): device_config, nao settings

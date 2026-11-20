@@ -66,9 +66,35 @@ if [ "$EXTRA" = 1 ]; then      # ajustes de sistema (so os seguros): nada de avi
     if [ "$(cmd device_config get activity_manager max_phantom_processes </dev/null 2>/dev/null)" = 2147483647 ]; then echo "PH|1"; else echo "PH|0"; fi
   fi
 fi
-if [ "${FULL:-0}" = 1 ]; then      # FULL: nada desenhando por cima dos toques e wi-fi em baixa latência (só se o celular aceitar)
+if [ "${FULL:-0}" = 1 ]; then      # FULL: tudo que é real e volta ao desativar (do bypass antigo, sem os que estragam o celular)
   setg system show_touches 0
   setg system pointer_location 0
+  setg system sound_effects_enabled 0                # som de toque na tela
+  setg global notification_bubbles 0                 # balões de conversa por cima do jogo
+  setg secure spell_checker_enabled 0
+  setg global network_recommendations_enabled 0
+  setg global tcp_default_init_rwnd 60               # conexões começam mais rápido (atualização/download do jogo)
+  if [ "$SDK" -ge 30 ]; then                         # menos apps parados guardados na memória
+    echo "A|dc.max_cached_processes|$(cmd device_config get activity_manager max_cached_processes </dev/null 2>/dev/null)"
+    cmd device_config put activity_manager max_cached_processes 8 </dev/null >/dev/null 2>&1
+    [ "$(cmd device_config get activity_manager max_cached_processes </dev/null 2>/dev/null)" = 8 ] && echo "MC|1"
+    if [ "$(cmd location is-location-enabled </dev/null 2>/dev/null)" = true ]; then      # localização (o FF não usa)
+      cmd location set-location-enabled false </dev/null >/dev/null 2>&1
+      [ "$(cmd location is-location-enabled </dev/null 2>/dev/null)" = false ] && echo "Q|1"
+    fi
+  fi
+  case "$(cmd netpolicy get restrict-background </dev/null 2>/dev/null)" in      # economia de dados: em 2º plano só o FF e o NOCRY
+    *disabled*)
+      wl=$(cmd netpolicy list restrict-background-whitelist </dev/null 2>/dev/null)
+      for p in $LIB; do
+        u=$(cmd package list packages -U "$p" </dev/null 2>/dev/null | grep -E "^package:$p " | grep -oE 'uid:[0-9]+' | head -1 | cut -d: -f2)
+        [ -n "$u" ] || continue
+        echo "$wl" | grep -qw "$u" && continue
+        cmd netpolicy add restrict-background-whitelist "$u" </dev/null >/dev/null 2>&1 && echo "D|$u"
+      done
+      cmd netpolicy set restrict-background true </dev/null >/dev/null 2>&1
+      case "$(cmd netpolicy get restrict-background </dev/null 2>/dev/null)" in *enabled*) echo "D|ON" ;; esac ;;
+  esac
   if [ "$SDK" -ge 29 ]; then
     r=$(cmd wifi force-low-latency-mode enabled </dev/null 2>&1)
     case "$r" in *nknown*|*xception*|*rror*|*nvalid*|*"Can't find"*|*ermission*|*ailure*|*"not allowed"*|*"does not have"*|*rivileg*|*"Failed transaction"*) ;; *) echo "N|1" ;; esac

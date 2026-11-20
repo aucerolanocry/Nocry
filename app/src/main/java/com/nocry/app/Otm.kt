@@ -17,11 +17,19 @@ object Otm {
 
     private const val MSG_APPS = "com.whatsapp com.whatsapp.w4b org.telegram.messenger org.thoughtcrime.securesms com.facebook.orca com.discord"
     private const val EXTRAS = "com.android.chrome com.google.android.youtube com.google.android.apps.youtube.music com.google.android.apps.photos com.google.android.gm com.google.android.apps.maps com.google.android.apps.docs com.google.android.videos com.google.android.apps.tachyon"
+    /** FULL: serviços do sistema que o bypass antigo fechava e que são seguros de fechar durante o jogo */
+    private const val FULL_EXTRAS = "com.miui.cloudservice com.miui.cloudbackup com.miui.backup com.miui.micloudsync com.xiaomi.ota com.android.updater " +
+        "com.miui.personalassistant com.miui.voiceassist com.xiaomi.aiasst.service com.xiaomi.aiasst.vision com.miui.yellowpage com.miui.readassistant " +
+        "com.milink.service com.milink.crossdeviceservice com.xiaomi.mi_connect_service com.microsoft.appmanager com.microsoftsdk.crossdeviceservicebroker " +
+        "com.xiaomi.barrage com.miui.screenrecorder com.miui.fm com.xiaomi.scanner com.miui.cleanmaster com.miui.android.fashiongallery com.miui.phrase " +
+        "com.google.android.projection.gearhead com.facebook.services com.facebook.appmanager com.facebook.system com.google.android.googlequicksearchbox " +
+        "com.google.android.tts com.google.android.apps.assistant com.miui.gallery com.miui.compass com.miui.calculator com.android.soundrecorder"
     private const val MIUI = "com.miui.analytics com.miui.msa.global com.miui.systemAdSolution com.miui.hybrid com.miui.videoplayer com.miui.player com.xiaomi.mipicks com.mi.globalbrowser com.miui.weather2 com.miui.notes com.miui.contentextension com.miui.vipaccount com.xiaomi.glgm com.miui.thirdappassistant"
 
     private val CRIT = Regex("^(android|com[.]android[.](settings|systemui|phone|dialer|contacts|mms|vending|stk|launcher|incallui|packageinstaller|permissioncontroller|documentsui|providers|server|bluetooth|nfc|shell|location|wifi|keychain|certinstaller|carrierconfig|storagemanager|webview|cellbroadcast|emergency|inputmethod)|com[.]google[.]android[.](gms|gsf|dialer|contacts|apps[.]messaging|packageinstaller|permissioncontroller|inputmethod|apps[.]nexuslauncher|setupwizard|webview|ext|networkstack|modulemetadata|captiveportallogin|safetycore)|com[.]miui[.](home|securitycenter|powerkeeper|system|core|phone|daemon|rom|face)|com[.]xiaomi[.](xmsf|account|finddevice|market)|com[.]samsung[.]android[.](incallui|dialer|messaging|app[.](contacts|telephony|spage|launcher)|knox|rubin|bixby|scs|fmm|security)|com[.]sec[.]android[.]|com[.](qualcomm|qti|mediatek)[.]|org[.]codeaurora[.])")
-    private val HARD = Regex("^(com[.]termux|com[.]dts[.]freefire(th|max)\$|moe[.]shizuku|com[.]draco[.]ladb|com[.]nocry[.]app)")
-    private val LIB = Regex("^(com[.]termux([.][a-z0-9_]+)?|com[.]dts[.]freefire(th|max)|com[.]nocry[.]app)\$")
+    private val EU = Regex.escape(Const.PKG)
+    private val HARD = Regex("^(com[.]termux|com[.]dts[.]freefire(th|max)\$|moe[.]shizuku|com[.]draco[.]ladb|com[.]nocry[.]app|$EU\$)")
+    private val LIB = Regex("^(com[.]termux([.][a-z0-9_]+)?|com[.]dts[.]freefire(th|max)|com[.]nocry[.]app|$EU)\$")
     private val PKG_OK = Regex("[A-Za-z0-9_]+([.][A-Za-z0-9_]+)+")
     /** nunca entram sozinhos no FULL: fechar à força cancela o alarme do despertador, lembretes, pagamento por aproximação, contagem de passos */
     private val NUNCA_NO_FULL = Regex("(clock|alarm|calendar|agenda|wallet|[.]pay|pay[.]|health|fitness|[.]fit\\b|tasks|reminder)", RegexOption.IGNORE_CASE)
@@ -42,7 +50,9 @@ object Otm {
         "global.ble_scan_always_enabled", "global.wifi_scan_always_enabled", "global.wifi_networks_available_notification_on",
         "global.heads_up_notifications_enabled", "global.location_background_throttle_interval_ms",
         "system.haptic_feedback_enabled", "system.show_touches", "system.pointer_location", "global.disable_window_blurs", "global.automatic_power_save_mode",
-        "global.cached_apps_freezer", "global.settings_enable_monitor_phantom_procs", "dc.max_phantom_processes"
+        "global.cached_apps_freezer", "global.settings_enable_monitor_phantom_procs", "dc.max_phantom_processes",
+        "system.sound_effects_enabled", "global.notification_bubbles", "secure.spell_checker_enabled",
+        "global.network_recommendations_enabled", "global.tcp_default_init_rwnd", "dc.max_cached_processes"
     )
 
     // ---------------- arquivos ----------------
@@ -236,6 +246,7 @@ object Otm {
         val mg = MSG_APPS.split(' ').toSet()
         val ex = HashSet<String>(EXTRAS.split(' '))
         if (props["ro.miui.ui.version.name"].orEmpty().isNotEmpty() || props["ro.mi.os.version.name"].orEmpty().isNotEmpty()) ex.addAll(MIUI.split(' '))
+        if (Prefs.otmNivel == "full") ex.addAll(FULL_EXTRAS.split(' '))
         val full = Prefs.otmNivel == "full"
         val msgFecha = full || Prefs.otmMsg == "fechar"
 
@@ -319,7 +330,7 @@ object Otm {
     private fun lerStatus(): Pair<Boolean, Int> {
         val e = estado()
         val n = e.count { it.startsWith("E|") }
-        val t = e.count { it.length > 1 && it[1] == '|' && it[0] in "EALWFGN" }
+        val t = e.count { it.length > 1 && it[1] == '|' && it[0] in "EALWFGNQD" }
         return Pair(t > 0, n)
     }
 
@@ -334,6 +345,8 @@ object Otm {
                 "W" -> if (p.size == 3 && NOME_OK.matches(p[1]) && (p[2] == "0" || p[2] == "1") && !tem("W|${p[1]}|")) e.add(l)
                 "F" -> if (l == "F|1" && !tem("F|")) e.add(l)
                 "N" -> if (l == "N|1" && !tem("N|")) e.add(l)
+                "Q" -> if (l == "Q|1" && !tem("Q|")) e.add(l)
+                "D" -> if ((p[1] == "ON" || p[1].all { it.isDigit() }) && !e.contains(l)) e.add(l)
                 "G" -> if (p.size == 3 && NOME_OK.matches(p[1]) && (p[2] == "standard" || p[2] == "performance" || p[2] == "battery") && !tem("G|${p[1]}|")) e.add(l)
                 "A" -> if (p.size >= 3 && p[1] in CHAVES_OK && !tem("A|${p[1]}|")) e.add(l)
             }
@@ -473,6 +486,11 @@ object Otm {
                 log("    Reinicie o celular e rode de novo para aplicar animacoes, tela e bateria.")
             } else log("⚠ AJUSTES DE SISTEMA: o celular recusou $nRec de $nTot (o resto foi aplicado e conferido)")
         }
+        if (cfgOk(out, "system.sound_effects_enabled")) log("• SOM DE TOQUE NA TELA: DESLIGADO")
+        if (cfgOk(out, "global.notification_bubbles")) log("• BALÕES DE CONVERSA: DESLIGADOS")
+        if (lines.any { it == "MC|1" }) log("• MEMÓRIA: NO MÁXIMO 8 APPS PARADOS GUARDADOS")
+        if (lines.any { it == "Q|1" }) log("• LOCALIZAÇÃO: DESLIGADA ATÉ DESATIVAR (o FF não usa)")
+        if (lines.any { it == "D|ON" }) log("• ECONOMIA DE DADOS: em 2º plano só o FF e o NOCRY usam os dados móveis")
         if (lines.any { it == "N|1" }) log("• WI-FI: BAIXA LATÊNCIA LIGADA")
         else if (full && plano.sdk >= 29) log("• WI-FI: o celular não deixa ligar a baixa latência pelo ADB (normal na maioria)")
         if (full) {
@@ -522,6 +540,9 @@ object Otm {
         val gms = ArrayList<String>()
         var fperf = 0
         var redeLat = 0
+        var local = 0
+        var dSaver = 0
+        val dUids = ArrayList<String>()
         for (l in e) {
             val p = l.split('|')
             when (p[0]) {
@@ -537,6 +558,8 @@ object Otm {
                 "G" -> if (p.size >= 3 && NOME_OK.matches(p[1]) && (p[2] == "standard" || p[2] == "performance" || p[2] == "battery")) gms.add("${p[1]}:${p[2]}")
                 "F" -> if (l == "F|1") fperf = 1
                 "N" -> if (l == "N|1") redeLat = 1
+                "Q" -> if (l == "Q|1") local = 1
+                "D" -> if (p.size >= 2) { if (p[1] == "ON") dSaver = 1 else if (p[1].all { it.isDigit() }) dUids.add(p[1]) }
             }
         }
         val script = "LISTA=\"" + tokens.joinToString(" ") + "\"\n" +
@@ -544,7 +567,7 @@ object Otm {
             "ANIMS=\"" + anims.joinToString(" ") + "\"\n" +
             "WLIMPA=\"" + wlimpa.joinToString(" ") + "\"\n" +
             "GAMES=\"" + gms.joinToString(" ") + "\"\n" +
-            "FPERF=$fperf\nREDELAT=$redeLat\n" +
+            "FPERF=$fperf\nREDELAT=$redeLat\nLOCAL=$local\nDSAVER=$dSaver\nDUIDS=\"" + dUids.joinToString(" ") + "\"\n" +
             asset("otm_cfg.sh") + "\n" + asset("otm_desfaz.sh")
         log("DESFAZENDO...")
         desfazFull(log)
