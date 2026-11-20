@@ -90,7 +90,9 @@ object Otm {
         val memTotal: Long, val memAvail: Long, val memFree: Long,
         val hz: Int, val setFail: Boolean, val svc: Set<String>,
         val libs: List<String>,
-        val c: List<Cand>, val x: List<Prot>, val s: List<Sis>, val n: List<Nat>
+        val c: List<Cand>, val x: List<Prot>, val s: List<Sis>, val n: List<Nat>,
+        /** FULL: apps instalados que NÃO estão rodando agora: congelam sem abrir (não ligam sozinhos em segundo plano) */
+        val frio: List<String> = emptyList()
     ) {
         fun p(k: String): String = props[k] ?: ""
         val sdk: Int get() = p("ro.build.version.sdk").toIntOrNull() ?: 0
@@ -274,7 +276,17 @@ object Otm {
         c.sortByDescending { it.kb }
         x.sortByDescending { it.kb }
         s.sortByDescending { it.kb }
-        return Plano(props, mt, ma, mf, hz, setfail, svc, libs, c, x, s, n)
+        // FULL: também os instalados que estão parados (antes só mexia no que estava rodando na hora)
+        val sdk = props["ro.build.version.sdk"]?.toIntOrNull() ?: 0
+        val frio = if (!full || sdk < 26) emptyList() else {
+            val rodando = prc.keys
+            val todosApps = third + launch.filter { it in pkgall && !CRIT.containsMatchIn(it) }
+            todosApps.filter { pk ->
+                pk !in rodando && NOME_OK.matches(pk) && pk.contains('.') && !HARD.containsMatchIn(pk) &&
+                    !NUNCA_NO_FULL.containsMatchIn(pk) && razao(pk).isEmpty()
+            }.distinct().sorted()
+        }
+        return Plano(props, mt, ma, mf, hz, setfail, svc, libs, c, x, s, n, frio)
     }
 
     // ---------------- textos ----------------
@@ -377,7 +389,9 @@ object Otm {
         val perf = if (Prefs.otmPerf) 1 else 0
         val msgs = cand.filter { it in MSG_APPS.split(' ') }.joinToString(", ") { nome(it) }
 
+        val frio = if (full) plano.frio else emptyList()
         val script = "PKGS=\"" + cand.joinToString(" ") + "\"\n" +
+            "FRIO=\"" + frio.joinToString(" ") + "\"\n" +
             "LIB=\"" + libs.joinToString(" ") + "\"\n" +
             "GAMES=\"" + games.joinToString(" ") + "\"\n" +
             "ANIM=1\nREDE=1\nEXTRA=1\nPERF=$perf\nHZ=$hz\nFULL=${if (full) 1 else 0}\n" +
@@ -387,6 +401,7 @@ object Otm {
         log("• CELULAR: " + plano.perfil())
         if (nC == 0) log("• APPS EM 2O PLANO: nenhum — ja estava limpo")
         else log("• FECHANDO $nC APPS (~${mb(tot)} MB):")
+        if (frio.isNotEmpty()) log("• CONGELANDO ${frio.size} APPS INSTALADOS QUE ESTÃO PARADOS (não ligam sozinhos)")
 
         var kn = 0
         val res = Adb.execLines(script, 240000) { l ->
@@ -420,6 +435,7 @@ object Otm {
         log("[✓] OTIMIZACAO ATIVA!")
         if (!nivel.contains("STANDBY")) log("• MODO: $nivel")
         if (nC > 0) log("• APPS FECHADOS: $nC  (~${mb(tot)} MB)")
+        if (frio.isNotEmpty()) log("• APPS PARADOS CONGELADOS: ${frio.size} (abrem normal quando você tocar neles)")
         if (msgs.isNotEmpty()) log("• MENSAGENS FECHADAS: $msgs")
         if (antes != null && depois != null) {
             val delta = (depois - antes) / 1024
@@ -441,7 +457,7 @@ object Otm {
         if (lines.any { it.startsWith("G|") }) log("• FREE FIRE: MODO JOGO = DESEMPENHO")
         if (lines.any { it == "F|1" }) log("• CPU/GPU: NIVEL FIXO (estavel, nao mais forte)")
         if (lines.any { it == "SEM|1" }) log("• SAMSUNG: RESPOSTA DA CPU NO MAXIMO")
-        if (nC > 0 && resV < resT && !nivel.startsWith("SO FECHA")) {
+        if ((nC > 0 || frio.isNotEmpty()) && resV < resT && !nivel.startsWith("SO FECHA")) {
             log("⚠ $resV de $resT: o celular so aceitou o bloqueio em $resV (os outros so foram fechados)")
             val pf = plano.perfil()
             if (pf.startsWith("XIAOMI") || pf.startsWith("REDMI") || pf.startsWith("POCO"))

@@ -222,7 +222,8 @@ class OtmVerScreen(a: MainActivity) : Screen(a) {
             Ui.infoBox(c, R.drawable.ic_bolt, "libera ~", "${Otm.mb(tot)} MB")
         ), Ui.lp(top = 16, c = c))
         add(hero, 0)
-        if (p.setFail) add(Ui.dica(c, "O celular não deixou ler as configurações: ativar não fecha nada até resolver — reinicie o celular.", Ui.Dica.AVISO), 12)
+        if (p.setFail) add(Ui.dica(c, "O celular não deixou ler as configurações: teclados, acessibilidade e notificações ficam todos protegidos.", Ui.Dica.AVISO), 12)
+        if (p.frio.isNotEmpty()) add(Ui.dica(c, "FULL: além desses, congela ${p.frio.size} apps instalados que estão parados agora (não ligam sozinhos até você abrir).", Ui.Dica.INFO), 12)
 
         add(grupoApps(c, "vai fechar e congelar (${p.c.size})",
             p.c.map { Ui.item(c, Otm.curto(it.pk), if (it.escolhido) "escolhido por você" else it.pk, 0, "${Otm.mb(it.kb)} MB") },

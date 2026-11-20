@@ -13,7 +13,7 @@ setg() {      # ns chave valor: guarda o de antes (A|), muda e CONFERE lendo de 
   cput "$1" "$2" "$3" || { echo "R|$1.$2"; return 1; }
 }
 echo "MEM_ANTES=$(mem)"
-work() {
+work() {      # $2 = 0: o app está parado, só congela (sem force-stop)
   p="$1"
   if [ "$SDK" -ge 26 ]; then
     b=$($AM get-standby-bucket "$p" </dev/null 2>/dev/null | tr -dc '0-9')
@@ -23,6 +23,7 @@ work() {
     $AO set "$p" RUN_ANY_IN_BACKGROUND ignore </dev/null >/dev/null 2>&1
     [ "$SDK" -ge 28 ] && $AM set-standby-bucket "$p" $BK </dev/null >/dev/null 2>&1
   fi
+  [ "${2:-1}" = 0 ] && return
   $AM force-stop "$p" </dev/null >/dev/null 2>&1
   echo "K|$p"      # fechou (o menu mostra ao vivo)
 }
@@ -99,13 +100,20 @@ for p in $PKGS; do
   n=$((n+1)); [ $((n % 8)) -eq 0 ] && wait
 done
 wait
+for p in $FRIO; do      # FULL: instalados que estão parados
+  work "$p" 0 &
+  n=$((n+1)); [ $((n % 8)) -eq 0 ] && wait
+done
+wait
 $AM kill-all </dev/null >/dev/null 2>&1      # mata o que sobrou em cache (so o que o sistema considera seguro)
 sleep 1
 psl=$(ps -A -o NAME </dev/null 2>/dev/null || ps -A </dev/null 2>/dev/null || ps </dev/null)
 v=0; t=0; vivos=0
-for p in $PKGS; do
+for p in $PKGS $FRIO; do
   t=$((t+1))
   [ "$SDK" -ge 26 ] && [ "$(op "$p" $OPV)" = ignore ] && v=$((v+1))
+done
+for p in $PKGS; do
   echo "$psl" | grep -qE "(^|[[:space:]])$p(:[A-Za-z0-9_.]+)?\$" && vivos=$((vivos+1))
 done
 echo "V|$v|$t|$vivos"
