@@ -51,7 +51,7 @@ object Otm {
         "global.heads_up_notifications_enabled", "global.location_background_throttle_interval_ms",
         "system.haptic_feedback_enabled", "system.show_touches", "system.pointer_location", "global.disable_window_blurs", "global.automatic_power_save_mode",
         "global.cached_apps_freezer", "global.settings_enable_monitor_phantom_procs", "dc.max_phantom_processes",
-        "system.sound_effects_enabled", "global.notification_bubbles", "secure.spell_checker_enabled",
+        "system.sound_effects_enabled", "system.user_refresh_rate", "global.notification_bubbles", "secure.spell_checker_enabled",
         "global.network_recommendations_enabled", "global.tcp_default_init_rwnd", "dc.max_cached_processes"
     )
 
@@ -330,7 +330,7 @@ object Otm {
     private fun lerStatus(): Pair<Boolean, Int> {
         val e = estado()
         val n = e.count { it.startsWith("E|") }
-        val t = e.count { it.length > 1 && it[1] == '|' && it[0] in "EALWFGNQD" }
+        val t = e.count { it.length > 1 && it[1] == '|' && it[0] in "EALWFGNQDHX" }
         return Pair(t > 0, n)
     }
 
@@ -346,6 +346,8 @@ object Otm {
                 "F" -> if (l == "F|1" && !tem("F|")) e.add(l)
                 "N" -> if (l == "N|1" && !tem("N|")) e.add(l)
                 "Q" -> if (l == "Q|1" && !tem("Q|")) e.add(l)
+                "H" -> if (l == "H|1" && !tem("H|")) e.add(l)
+                "X" -> if (PKG_OK.matches(p[1]) && !e.contains(l)) e.add(l)
                 "D" -> if ((p[1] == "ON" || p[1].all { it.isDigit() }) && !e.contains(l)) e.add(l)
                 "G" -> if (p.size == 3 && NOME_OK.matches(p[1]) && (p[2] == "standard" || p[2] == "performance" || p[2] == "battery") && !tem("G|${p[1]}|")) e.add(l)
                 "A" -> if (p.size >= 3 && p[1] in CHAVES_OK && !tem("A|${p[1]}|")) e.add(l)
@@ -492,11 +494,24 @@ object Otm {
         if (lines.any { it == "Q|1" }) log("• LOCALIZAÇÃO: DESLIGADA ATÉ DESATIVAR (o FF não usa)")
         if (lines.any { it == "D|ON" }) log("• ECONOMIA DE DADOS: em 2º plano só o FF e o NOCRY usam os dados móveis")
         if (lines.any { it == "N|1" }) log("• WI-FI: BAIXA LATÊNCIA LIGADA")
+        if (lines.any { it == "H|1" }) log("• WI-FI: ALTO DESEMPENHO LIGADO")
+        if (cfgOk(out, "system.user_refresh_rate")) log("• XIAOMI: TAXA DA TELA FIXA NO MÁXIMO")
+        val xs = lines.filter { it.startsWith("X|") }
+        if (xs.isNotEmpty()) log("• XIAOMI: PROPAGANDA E COLETA DE DADOS DESLIGADAS (${xs.size})")
         else if (full && plano.sdk >= 29) log("• WI-FI: o celular não deixa ligar a baixa latência pelo ADB (normal na maioria)")
         if (full) {
             Prefs.otmVigia = true
             NocryService.sync(Sys.app)
             log("• VIGIA: com o FF aberto, fecha de novo o que tentar voltar")
+            if (games.isNotEmpty()) {
+                log("• FREE FIRE: compilando em segundo plano (só se precisar)")
+                Bg.io {
+                    for (g in games) {
+                        val r = Adb.exec("cmd package compile -m speed $g </dev/null 2>&1", 240000)
+                        NLog.add("otimizacao", "compilar $g: " + (if (r.out.contains("Success")) "ok" else r.out.trim().take(80)))
+                    }
+                }
+            }
         }
         log("• Apps fechados nao avisam nada ate voce abrir · PROTEGER APP e OPCOES mudam isso")
         NLog.add("otimizacao", "ativada${if (full) " (FULL)" else ""}: $nC apps fechados")
@@ -541,6 +556,8 @@ object Otm {
         var fperf = 0
         var redeLat = 0
         var local = 0
+        var hiPerf = 0
+        val xLiga = ArrayList<String>()
         var dSaver = 0
         val dUids = ArrayList<String>()
         for (l in e) {
@@ -559,6 +576,8 @@ object Otm {
                 "F" -> if (l == "F|1") fperf = 1
                 "N" -> if (l == "N|1") redeLat = 1
                 "Q" -> if (l == "Q|1") local = 1
+                "H" -> if (l == "H|1") hiPerf = 1
+                "X" -> if (p.size >= 2 && PKG_OK.matches(p[1])) xLiga.add(p[1])
                 "D" -> if (p.size >= 2) { if (p[1] == "ON") dSaver = 1 else if (p[1].all { it.isDigit() }) dUids.add(p[1]) }
             }
         }
@@ -567,7 +586,8 @@ object Otm {
             "ANIMS=\"" + anims.joinToString(" ") + "\"\n" +
             "WLIMPA=\"" + wlimpa.joinToString(" ") + "\"\n" +
             "GAMES=\"" + gms.joinToString(" ") + "\"\n" +
-            "FPERF=$fperf\nREDELAT=$redeLat\nLOCAL=$local\nDSAVER=$dSaver\nDUIDS=\"" + dUids.joinToString(" ") + "\"\n" +
+            "FPERF=$fperf\nREDELAT=$redeLat\nLOCAL=$local\nHIPERF=$hiPerf\nXLIGA=\"" + xLiga.joinToString(" ") + "\"\n" +
+            "DSAVER=$dSaver\nDUIDS=\"" + dUids.joinToString(" ") + "\"\n" +
             asset("otm_cfg.sh") + "\n" + asset("otm_desfaz.sh")
         log("DESFAZENDO...")
         desfazFull(log)
@@ -653,6 +673,40 @@ object Otm {
             l.add(p)
             gravar("otm_extra", l)
             true
+        }
+    }
+
+    // ---------------- LIMPAR CACHE / COMPILAR TODOS ----------------
+    /** apaga o cache de todos os apps (miniaturas, temporários). Nada importante: cada app refaz o seu */
+    fun limparCache(log: (String) -> Unit): Boolean {
+        if (!Adb.ensure(Sys.app)) { log("[x] ADB NAO CONECTADO"); return false }
+        val livre = "df /data </dev/null 2>/dev/null | tail -1 | tr -s ' ' | cut -d' ' -f4"
+        log("LIMPANDO O CACHE DE TODOS OS APPS...")
+        val r = Adb.exec("a=\$($livre); pm trim-caches 999999999999 </dev/null 2>&1; sleep 1; b=\$($livre); echo \"L|\$a|\$b\"", 120000)
+        val l = r.out.lines().firstOrNull { it.startsWith("L|") }?.split('|')
+        val a = l?.getOrNull(1)?.toLongOrNull()
+        val b = l?.getOrNull(2)?.toLongOrNull()
+        if (a == null || b == null) { log("[x] O CELULAR NAO RESPONDEU"); return false }
+        log("[✓] CACHE LIMPO!")
+        log("• LIBEROU ~${maxOf(0L, (b - a) / 1024)} MB de armazenamento")
+        log("• Celular com armazenamento cheio fica lento: vale fazer de vez em quando")
+        return true
+    }
+
+    /** compila todos os apps como o Android faz de madrugada (abre e roda mais rápido). Demora */
+    fun compilarTudo(log: (String) -> Unit): Boolean {
+        if (!Adb.ensure(Sys.app)) { log("[x] ADB NAO CONECTADO"); return false }
+        log("COMPILANDO TODOS OS APPS...")
+        log("• Pode levar de 2 a 15 minutos. Deixe o celular parado e na tomada se der.")
+        val r = Adb.exec("cmd package bg-dexopt-job </dev/null 2>&1", 1_200_000)
+        return if (r.ok && !r.out.contains("Failure") && !r.out.contains("xception")) {
+            log("[✓] APPS COMPILADOS!")
+            log("• Os apps abrem e rodam mais rápido")
+            true
+        } else {
+            log("[x] O CELULAR NAO TERMINOU (${r.out.trim().take(80)})")
+            log("• Tente de novo com o celular na tomada")
+            false
         }
     }
 

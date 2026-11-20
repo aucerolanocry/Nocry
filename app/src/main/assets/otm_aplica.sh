@@ -83,6 +83,20 @@ if [ "${FULL:-0}" = 1 ]; then      # FULL: tudo que é real e volta ao desativar
       [ "$(cmd location is-location-enabled </dev/null 2>/dev/null)" = false ] && echo "Q|1"
     fi
   fi
+  if [ "${HZ:-0}" -ge 90 ] 2>/dev/null && [ -n "$(getprop ro.miui.ui.version.name)$(getprop ro.mi.os.version.name)" ]; then
+    setg system user_refresh_rate $HZ                # Xiaomi/HyperOS: a taxa que o sistema escolhe (senão ele baixa sozinho)
+  fi
+  r=$(cmd wifi force-hi-perf-mode enabled </dev/null 2>&1)      # Wi-Fi em alto desempenho (só se o celular aceitar)
+  case "$r" in *nknown*|*xception*|*rror*|*nvalid*|*"Can't find"*|*ermission*|*ailure*|*"not allowed"*|*"does not have"*|*rivileg*|*"Failed transaction"*) ;; *) echo "H|1" ;; esac
+  if [ -n "$(getprop ro.miui.ui.version.name)$(getprop ro.mi.os.version.name)" ]; then      # propaganda e coleta de dados da Xiaomi: desligadas até desativar
+    dis=$(pm list packages -d </dev/null 2>/dev/null)
+    for p in com.miui.msa.global com.miui.systemAdSolution com.miui.analytics; do
+      pm path "$p" </dev/null >/dev/null 2>&1 || continue
+      echo "$dis" | grep -q "^package:$p\$" && continue
+      pm disable-user --user 0 "$p" </dev/null >/dev/null 2>&1
+      pm list packages -d </dev/null 2>/dev/null | grep -q "^package:$p\$" && echo "X|$p"
+    done
+  fi
   case "$(cmd netpolicy get restrict-background </dev/null 2>/dev/null)" in      # economia de dados: em 2º plano só o FF e o NOCRY
     *disabled*)
       wl=$(cmd netpolicy list restrict-background-whitelist </dev/null 2>/dev/null)

@@ -124,6 +124,14 @@ class OtmScreen(a: MainActivity) : Screen(a) {
             Ui.item(c, "Ver apps (NGC)", "o que vai fechar, o que fica protegido e por quê", R.drawable.ic_eye) { act.abre(OtmVerScreen(act)) },
             Ui.item(c, "Proteger app", "escolha o que nunca fecha", R.drawable.ic_shield) { act.abre(OtmProtegerScreen(act)) },
             Ui.item(c, "Fechar mais apps", "apps do sistema com ícone que você quer fechar junto", R.drawable.ic_xcircle) { act.abre(OtmMaisScreen(act)) },
+            Ui.item(c, "Limpar cache dos apps", "libera armazenamento (cada app refaz o seu cache)", R.drawable.ic_xcircle) {
+                act.abre(RunScreen(act, "Limpando o cache") { log -> Otm.limparCache(log) })
+            },
+            Ui.item(c, "Compilar todos os apps", "como o Android faz de madrugada: tudo abre mais rápido (demora)", R.drawable.ic_chip) {
+                Ui.dialogConfirma(act, "COMPILAR TODOS OS APPS", "Pode levar de 2 a 15 minutos. Deixe o NOCRY aberto e, se der, o celular na tomada.", "COMPILAR") {
+                    act.abre(RunScreen(act, "Compilando os apps") { log -> Otm.compilarTudo(log) })
+                }
+            },
             Ui.item(c, "Preparar o FF", "compila o Free Fire e tira da economia de energia", R.drawable.ic_gamepad) {
                 Ui.dialogEscolha(act, "PREPARAR O FF", listOf("FREE FIRE NORMAL", "FREE FIRE MAX")) { i ->
                     val pkg = if (i == 0) Const.FF_NORMAL else Const.FF_MAX
