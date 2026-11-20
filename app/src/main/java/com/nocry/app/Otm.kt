@@ -23,7 +23,15 @@ object Otm {
         "com.milink.service com.milink.crossdeviceservice com.xiaomi.mi_connect_service com.microsoft.appmanager com.microsoftsdk.crossdeviceservicebroker " +
         "com.xiaomi.barrage com.miui.screenrecorder com.miui.fm com.xiaomi.scanner com.miui.cleanmaster com.miui.android.fashiongallery com.miui.phrase " +
         "com.google.android.projection.gearhead com.facebook.services com.facebook.appmanager com.facebook.system com.google.android.googlequicksearchbox " +
-        "com.google.android.tts com.google.android.apps.assistant com.miui.gallery com.miui.compass com.miui.calculator com.android.soundrecorder"
+        "com.google.android.tts com.google.android.apps.assistant com.miui.gallery com.miui.compass com.miui.calculator com.android.soundrecorder " +
+        // mais da tela "Acelerar velocidade" da Xiaomi e outros que ficam na memória sem precisar
+        "com.android.htmlviewer com.android.externalstorage com.mi.globalminusscreen com.miui.miservice com.miui.bugreport com.miui.huanji " +
+        "com.xiaomi.discover com.miui.cleaner com.miui.virtualsim com.mi.android.globalFileexplorer com.android.fileexplorer com.miui.mediaviewer " +
+        "com.xiaomi.mircs com.xiaomi.smarthome com.duokan.phone.remotecontroller com.miui.newmidrive com.xiaomi.midrop " +
+        "com.google.android.apps.wellbeing com.google.android.apps.turbo com.google.android.feedback com.google.android.partnersetup " +
+        "com.google.android.apps.restore com.google.android.apps.subscriptions.red com.google.android.apps.googleassistant com.google.android.apps.bard " +
+        "com.google.android.apps.youtube.kids com.google.android.apps.magazines com.google.android.apps.podcasts " +
+        "com.netflix.partner.activation com.amazon.appmanager com.facebook.katana com.instagram.android com.zhiliaoapp.musically com.ss.android.ugc.trill"
     private const val MIUI = "com.miui.analytics com.miui.msa.global com.miui.systemAdSolution com.miui.hybrid com.miui.videoplayer com.miui.player com.xiaomi.mipicks com.mi.globalbrowser com.miui.weather2 com.miui.notes com.miui.contentextension com.miui.vipaccount com.xiaomi.glgm com.miui.thirdappassistant"
 
     private val CRIT = Regex("^(android|com[.]android[.](settings|systemui|phone|dialer|contacts|mms|vending|stk|launcher|incallui|packageinstaller|permissioncontroller|documentsui|providers|server|bluetooth|nfc|shell|location|wifi|keychain|certinstaller|carrierconfig|storagemanager|webview|cellbroadcast|emergency|inputmethod)|com[.]google[.]android[.](gms|gsf|dialer|contacts|apps[.]messaging|packageinstaller|permissioncontroller|inputmethod|apps[.]nexuslauncher|setupwizard|webview|ext|networkstack|modulemetadata|captiveportallogin|safetycore)|com[.]miui[.](home|securitycenter|powerkeeper|system|core|phone|daemon|rom|face)|com[.]xiaomi[.](xmsf|account|finddevice|market)|com[.]samsung[.]android[.](incallui|dialer|messaging|app[.](contacts|telephony|spage|launcher)|knox|rubin|bixby|scs|fmm|security)|com[.]sec[.]android[.]|com[.](qualcomm|qti|mediatek)[.]|org[.]codeaurora[.])")
@@ -32,7 +40,7 @@ object Otm {
     private val LIB = Regex("^(com[.]termux([.][a-z0-9_]+)?|com[.]dts[.]freefire(th|max)|com[.]nocry[.]app|$EU)\$")
     private val PKG_OK = Regex("[A-Za-z0-9_]+([.][A-Za-z0-9_]+)+")
     /** nunca entram sozinhos no FULL: fechar à força cancela o alarme do despertador, lembretes, pagamento por aproximação, contagem de passos */
-    private val NUNCA_NO_FULL = Regex("(clock|alarm|calendar|agenda|wallet|[.]pay|pay[.]|health|fitness|[.]fit\\b|tasks|reminder)", RegexOption.IGNORE_CASE)
+    private val NUNCA_NO_FULL = Regex("(clock|alarm|calendar|agenda|wallet|[.]pay|pay[.]|health|fitness|[.]fit\\b|tasks|reminder|[.]keep\\b)", RegexOption.IGNORE_CASE)
     private val NOME_OK = Regex("[A-Za-z0-9_.]+")
 
     private val ROT = mapOf(
@@ -302,7 +310,8 @@ object Otm {
         val sdk = props["ro.build.version.sdk"]?.toIntOrNull() ?: 0
         val frio = if (!full || sdk < 26) emptyList() else {
             val rodando = prc.keys
-            val todosApps = third + launch.filter { it in pkgall && !CRIT.containsMatchIn(it) }
+            val todosApps = third + launch.filter { it in pkgall && !CRIT.containsMatchIn(it) } +
+                ex.filter { it in pkgall && !CRIT.containsMatchIn(it) }
             todosApps.filter { pk ->
                 pk !in rodando && NOME_OK.matches(pk) && pk.contains('.') && !HARD.containsMatchIn(pk) &&
                     !NUNCA_NO_FULL.containsMatchIn(pk) && razao(pk).isEmpty()

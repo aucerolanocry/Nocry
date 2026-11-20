@@ -73,6 +73,9 @@ if [ "${FULL:-0}" = 1 ]; then      # FULL: tudo que e real e volta ao desativar 
   setg global notification_bubbles 0                 # baloes de conversa por cima do jogo
   setg secure spell_checker_enabled 0
   setg global network_recommendations_enabled 0
+  h=$(cmd role get-role-holders android.app.role.HOME </dev/null 2>/dev/null | cut -d';' -f1)      # tela inicial e servicos do Google largam o que guardam na memoria
+  [ -n "$h" ] && am send-trim-memory "$h" MODERATE </dev/null >/dev/null 2>&1
+  am send-trim-memory com.google.android.gms.persistent RUNNING_LOW </dev/null >/dev/null 2>&1
   setg global tcp_default_init_rwnd 60               # conexoes comecam mais rapido (atualizacao/download do jogo)
   if [ "$SDK" -ge 30 ]; then                         # menos apps parados guardados na memoria
     echo "A|dc.max_cached_processes|$(cmd device_config get activity_manager max_cached_processes </dev/null 2>/dev/null)"
