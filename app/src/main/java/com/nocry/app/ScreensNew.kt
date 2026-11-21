@@ -187,6 +187,7 @@ class AtualizarGate(private val act: MainActivity, private val info: Update.Info
 
         col.addView(marca(c, null, R.drawable.ic_download, "Atualização obrigatória"))
         col.addView(Ui.text(c, "Saiu uma versão nova e essa aqui ficou pra trás. Baixa e instala pra voltar a usar o NOCRY.", 10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
+        col.addView(Ui.dica(c, Const.AVISO_ATUALIZACOES, Ui.Dica.INFO), Ui.lp(top = 12, c = c))
 
         val card = Ui.card(c, forte = true)
         card.addView(Ui.labelIcone(c, R.drawable.ic_sparkle, "versão nova"))

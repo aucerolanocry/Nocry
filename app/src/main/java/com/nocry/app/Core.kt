@@ -26,6 +26,8 @@ object Const {
     const val REPO = "aucerolanocry/Nocry"          // repositorio PUBLICO onde o APK fica em Releases
     const val FF_MAX = "com.dts.freefiremax"
     const val FF_NORMAL = "com.dts.freefireth"
+    /** aviso pra todo mundo na tela de atualização e na 1ª vez que abre depois de atualizar */
+    const val AVISO_ATUALIZACOES = "Essas atualizações seguidas são pra corrigir bugs. Logo logo elas vão parar."
 }
 
 /** Trabalho em segundo plano / volta pra tela. */
@@ -458,6 +460,10 @@ var bypassVolAtivo: Boolean
     var avisoAtividade: Boolean
         get() = gb("aviso_atividade")
         set(v) = pb("aviso_atividade", v)
+    /** última versão em que o app já abriu (pra avisar uma vez depois de cada atualização) */
+    var versaoVista: String
+        get() = gs("versao_vista") ?: ""
+        set(v) = ps("versao_vista", v)
     /** pastas esperando pra instalar ("normal:suja,max:limpa"); fica salva se o Android fechar o app no meio */
     var instalaFila: String?
         get() = gs("instala_fila")

@@ -216,6 +216,7 @@ class MainActivity : Activity() {
             abre(HomeScreen(this))
             if (BuildConfig.PREVIEW) { abrirPrevia(intent); return }
             avisoAtividade()
+            avisoAtualizou()
             if (intent?.getStringExtra("abrir") == "sniper" && License.isOwner()) abre(SniperScreen(this))
         } else mostraGate()
     }
@@ -238,6 +239,29 @@ class MainActivity : Activity() {
             avisoAberto = false
             Prefs.avisoAtividade = true
             Presenca.ping(applicationContext, forcar = true)
+        }
+    }
+
+    /**
+     * primeira vez que abre depois de atualizar: avisa (uma vez por versão) que as atualizações seguidas
+     * são pra corrigir bugs. Quem instalou agora (nunca atualizou) não vê.
+     */
+    private fun avisoAtualizou() {
+        if (BuildConfig.PREVIEW) return
+        if (avisoAberto || gate || intro != null || !License.valid()) return
+        val atual = Update.versaoInstalada(this)
+        val vista = Prefs.versaoVista
+        if (vista == atual) return
+        // antes desta versão nada era guardado: vale se o app já tinha sido atualizado alguma vez
+        val atualizou = vista.isNotEmpty() || try {
+            val pi = packageManager.getPackageInfo(packageName, 0)
+            pi.lastUpdateTime > pi.firstInstallTime + 1000
+        } catch (_: Throwable) { false }
+        Prefs.versaoVista = atual
+        if (!atualizou) return
+        avisoAberto = true
+        Ui.dialogAviso(this, "NOCRY atualizado", "Você está na v$atual.\n\n" + Const.AVISO_ATUALIZACOES, "Entendi") {
+            avisoAberto = false
         }
     }
 
