@@ -108,9 +108,14 @@ class Painel(
             }
             else -> null
         }
-        shVidro = if (estilo == "vidro") LinearGradient(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
-            Theme.alpha(Color.WHITE, a(0.10f * k)), Theme.alpha(Color.WHITE, a(0.03f * k)), Shader.TileMode.CLAMP) else null
-        shBorda = LinearGradient(x0, y0, x1, y1,
+        // vidro: luz branca vindo de cima (mais clara no alto, quase some embaixo), como um vidro fosco de verdade
+        shVidro = if (estilo == "vidro") LinearGradient(b.left.toFloat(), b.top.toFloat(), b.left + w * 0.35f, b.bottom.toFloat(),
+            Theme.alpha(Color.WHITE, a(0.14f * k)), Theme.alpha(Color.WHITE, a(0.035f * k)), Shader.TileMode.CLAMP) else null
+        shBorda = if (estilo == "vidro") {
+            // borda fina de vidro: clara em cima, apagada embaixo, com um toque da cor do tema
+            LinearGradient(b.left.toFloat(), b.top.toFloat(), b.left + w * 0.2f, b.bottom.toFloat(),
+                Theme.alpha(Theme.mix(Color.WHITE, Theme.luz1(), 0.25f), 0x5A), Theme.alpha(Color.WHITE, 0x18), Shader.TileMode.CLAMP)
+        } else LinearGradient(x0, y0, x1, y1,
             intArrayOf(Theme.alpha(c1, 0xB0), Theme.alpha(Color.WHITE, 0x1C), Theme.alpha(c2, 0x90)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
         shBordaOn = LinearGradient(x0, y0, x1, y1,
             intArrayOf(c1, Theme.alpha(c1, 0x66), c2), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
@@ -131,7 +136,8 @@ class Painel(
         pFill.shader = null
         if (estilo == "vidro") {
             val k = Prefs.vidro / 62f
-            pFill.color = Theme.alpha(0xFF0A0814.toInt(), ((0.60f * k).coerceIn(0f, 0.95f) * 255).toInt())
+            // base fria e um pouco transparente: o fundo desfocado aparece atras, mas o texto continua legivel
+            pFill.color = Theme.alpha(Theme.mix(Theme.base, 0xFF141826.toInt(), 0.7f), ((0.52f * k).coerceIn(0f, 0.95f) * 255).toInt())
             cv.drawPath(path, pFill)
             pFill.shader = shVidro
             cv.drawPath(path, pFill)
@@ -160,11 +166,12 @@ class Painel(
             while (y < b.bottom) { cv.drawRect(b.left.toFloat(), y, b.right.toFloat(), y + d, pFill); y += 4f * d }
             cv.restore()
         } else if (estilo == "vidro") {
+            // reflexo na beirada de cima (a "quina" do vidro pegando luz)
             pLine.shader = null
             pLine.strokeWidth = d
-            pLine.color = Theme.alpha(Color.WHITE, 0x26)
+            pLine.color = Theme.alpha(Color.WHITE, 0x38)
             val ins = inset + 1f * d
-            cv.drawLine(b.left + raio * 0.7f + ins, b.top + ins + d, b.right - raio * 0.7f - ins, b.top + ins + d, pLine)
+            cv.drawLine(b.left + raio * 0.8f + ins, b.top + ins + d, b.right - raio * 0.8f - ins, b.top + ins + d, pLine)
         }
 
         // 3) brilho interno
@@ -200,9 +207,11 @@ class Painel(
             pLine.alpha = 255
         } else {
             pLine.shader = if (on) shBordaOn else shBorda
-            pLine.alpha = 255
+            // no vidro a borda acesa fica mais suave: o destaque vem do brilho de dentro, nao de um contorno forte
+            pLine.alpha = if (on && estilo == "vidro") 0x90 else 255
             pLine.strokeWidth = Prefs.borda * d * (if (estilo == "contorno") 1.25f else 1f)
             cv.drawPath(path, pLine)
+            pLine.alpha = 255
         }
 
         // 5) detalhes dos cantos cortados
@@ -222,7 +231,7 @@ class Painel(
     override fun getOutline(o: Outline) {
         if (hud) {
             try { o.setConvexPath(path) } catch (_: Throwable) { o.setRect(bounds) }
-        } else o.setRoundRect(bounds, raio)
+        } else o.setRoundRect(bounds, minOf(raio, bounds.width() / 2f, bounds.height() / 2f))
     }
 
     override fun setAlpha(a: Int) {}
@@ -250,11 +259,20 @@ class Botao(
     private val pLine = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private var shFill: Shader? = null
     private var shLinha: Shader? = null
+    private val vidro = Theme.vidro
+    /** tema redondo: botao comprido (ate 64dp de altura) vira pilula; caixas grandes continuam so arredondadas */
+    private val pilula = Theme.redondo && raioDp >= 14 && (tipo == "grad" || tipo == "ghost" || tipo == "danger" || tipo == "campo")
+    private var raioReal = raio
 
     override fun onBoundsChange(b: android.graphics.Rect) {
         super.onBoundsChange(b)
         val ins = 0.5f * d
-        Caminho.monta(path, b.left + ins, b.top + ins, b.right - ins, b.bottom - ins, if (tipo == "trilho") b.height() / 2f else raio, hud && tipo != "trilho", corte)
+        raioReal = when {
+            tipo == "trilho" -> b.height() / 2f
+            pilula && b.height() <= 64f * d -> b.height() / 2f
+            else -> raio
+        }
+        Caminho.monta(path, b.left + ins, b.top + ins, b.right - ins, b.bottom - ins, raioReal, hud && tipo != "trilho", corte)
         val w = b.width().toFloat()
         val h = b.height().toFloat()
         if (w <= 0f || h <= 0f) return
@@ -266,6 +284,9 @@ class Botao(
             "grad" -> LinearGradient(x0, y0, x1, y1, c1, c2, Shader.TileMode.CLAMP)
             "icoOn" -> LinearGradient(x0, y0, x1, y1, Theme.alpha(c1, 0x60), Theme.alpha(c2, 0x38), Shader.TileMode.CLAMP)
             "trilho" -> LinearGradient(x0, y0, x1, y1, c1, c2, Shader.TileMode.CLAMP)
+            // caixa de icone de vidro: um brilho azulado (ou da cor do tema) no canto de cima
+            "ico" -> if (vidro) LinearGradient(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
+                Theme.alpha(Theme.luz1(), 0x52), Theme.alpha(Color.WHITE, 0x0C), Shader.TileMode.CLAMP) else null
             else -> null
         }
         shLinha = if (tipo == "icoOn") LinearGradient(x0, y0, x1, y1, Theme.alpha(c1, 0xA0), Theme.alpha(c2, 0x60), Shader.TileMode.CLAMP) else null
@@ -280,9 +301,16 @@ class Botao(
             cv.drawPath(path, pFill)
             return
         }
+        if (tipo == "ico" && vidro) {
+            // base escura por baixo do brilho: o icone claro continua aparecendo
+            pFill.shader = null
+            pFill.color = Theme.alpha(0xFF10131E.toInt(), 0x80)
+            cv.drawPath(path, pFill)
+        }
         pFill.shader = shFill
         pFill.color = when (tipo) {
-            "ghost" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.07f), 0xB8)
+            "ghost" -> if (vidro) Theme.alpha(Theme.mix(0xFF10131E.toInt(), Color.WHITE, 0.13f), 0xA8)
+                else Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.07f), 0xB8)
             "danger" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Ui.BAD, 0.22f), 0xC8)
             "campo" -> Theme.alpha(Color.BLACK, 0x88)
             "ico" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.08f), 0xB0)
@@ -303,10 +331,10 @@ class Botao(
             cv.restore()
         }
         val cor = when (tipo) {
-            "ghost" -> Theme.alpha(Color.WHITE, 0x30)
+            "ghost" -> Theme.alpha(Color.WHITE, if (vidro) 0x40 else 0x30)
             "danger" -> Theme.alpha(Ui.BAD, 0x88)
             "campo" -> Theme.alpha(Theme.accent, 0x99)
-            "ico" -> Theme.alpha(Color.WHITE, 0x1C)
+            "ico" -> Theme.alpha(Color.WHITE, if (vidro) 0x3A else 0x1C)
             else -> 0
         }
         if (tipo == "icoOn") {
@@ -325,7 +353,7 @@ class Botao(
     override fun getOutline(o: Outline) {
         if (hud && tipo != "trilho") {
             try { o.setConvexPath(path) } catch (_: Throwable) { o.setRect(bounds) }
-        } else o.setRoundRect(bounds, if (tipo == "trilho") bounds.height() / 2f else raio)
+        } else o.setRoundRect(bounds, raioReal)
     }
 
     override fun setAlpha(a: Int) {}

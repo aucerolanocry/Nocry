@@ -61,6 +61,18 @@ object VisualSalvo {
         return true
     }
 
+    /**
+     * 1.0.53: o visual principal do app virou o Vidro. Aplica uma vez so; quem tinha mudado o visual
+     * fica com ele guardado em ESTUDIO > Meus temas > "Visual de antes" (um toque e volta).
+     */
+    fun migraVidro() {
+        if (Prefs.visualVidro) return
+        Prefs.visualVidro = true
+        if (Prefs.tema == "vidro") return
+        if (Prefs.mexeuNoVisual()) Prefs.visualAntigo = atual()
+        Temas.aplica(Temas.get("vidro"))
+    }
+
     /** codigo curto pra copiar e mandar pra alguem */
     fun codigo(): String = PREFIXO + Base64.encodeToString(atual().toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
 

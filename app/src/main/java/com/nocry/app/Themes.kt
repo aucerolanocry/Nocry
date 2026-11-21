@@ -58,7 +58,9 @@ class Tema(
     val brilho: Int,
     val vidro: Int,
     val fundo: String,
-    val scanner: Boolean = false
+    val scanner: Boolean = false,
+    /** desfoque do fundo (-1 = deixa como a pessoa escolheu) */
+    val blur: Int = -1
 )
 
 object Temas {
@@ -77,9 +79,15 @@ object Temas {
     }
 
     val lista = listOf(
+        // o visual principal do NOCRY: vidro claro, cantos redondos, botoes em pilula e luzes azul/roxa no fundo
+        Tema("vidro", "Vidro", "O visual principal do NOCRY", 0xFFFFFFFF.toInt(), 0xFFDCE4FF.toInt(), 0xFF06070C.toInt(), "vidro", "bigs", 22, 1, 35, 55, "noite", blur = 8),
+        // o visual de antes do Vidro: reto, prata e com os cantos acesos
+        Tema("prata", "HUD prata", "Reto e prata, o visual de antes", 0xFFFFFFFF.toInt(), 0xFFB8B8C4.toInt(), 0xFF050507.toInt(), "contorno", "bigs", 2, 1, 60, 70, "chuva", blur = 0),
+        Tema("neon", "Neon", "Ciano e rosa, cara de PC gamer", 0xFF22E4FF.toInt(), 0xFFFF3CAC.toInt(), 0xFF05040F.toInt(), "contorno", "orbitron", 12, 1, 85, 70, "grade", true),
+        Tema("militar", "Militar", "Verde-oliva e areia", 0xFFD9C89A.toInt(), 0xFF7C8A4A.toInt(), 0xFF0A0B06.toInt(), "solido", "russo", 4, 1, 25, 85, "noite"),
         Tema("brasa", "Brasa", "Gamer agressivo", 0xFFFF2D55.toInt(), 0xFFFF8A1F.toInt(), 0xFF0A0506.toInt(), "hud", "bigs", 2, 2, 55, 78, "brasas"),
         Tema("cyber", "Cyber", "Neon HUD", 0xFF22E4FF.toInt(), 0xFFA66BFF.toInt(), 0xFF05060F.toInt(), "contorno", "tektur", 10, 1, 70, 70, "grade", true),
-        Tema("aurora", "Aurora", "Vidro premium", 0xFF3DDC84.toInt(), 0xFF4D7CFF.toInt(), 0xFF05080D.toInt(), "vidro", "outfit", 24, 1, 50, 55, "aurora"),
+        Tema("aurora", "Aurora", "Vidro verde e azul", 0xFF3DDC84.toInt(), 0xFF4D7CFF.toInt(), 0xFF05080D.toInt(), "vidro", "outfit", 24, 1, 50, 55, "aurora"),
         Tema("synth", "Synthwave", "Retrô anos 80", 0xFFFF3CAC.toInt(), 0xFFFFB020.toInt(), 0xFF0D0221.toInt(), "vidro", "bricolage", 20, 1, 65, 55, "sol"),
         Tema("ouro", "Ouro", "Luxo escuro", 0xFFF6D27A.toInt(), 0xFFC8872B.toInt(), 0xFF0B0805.toInt(), "solido", "gloock", 14, 1, 35, 92, "ouro"),
         Tema("matrix", "Matrix", "Terminal hacker", 0xFF3DFF7A.toInt(), 0xFF0FA64A.toInt(), 0xFF020A04.toInt(), "contorno", "pixelify", 2, 1, 60, 70, "chuva", true),
@@ -114,6 +122,7 @@ object Temas {
         Prefs.vidro = t.vidro
         Prefs.bgPreset = t.fundo
         Prefs.scanner = t.scanner
+        if (t.blur >= 0) Prefs.bgBlur = t.blur
         if (Prefs.bgTipo == "solido") Prefs.bgTipo = "animado"
     }
 

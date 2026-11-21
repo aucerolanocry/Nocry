@@ -386,6 +386,16 @@ var bypassVolAtivo: Boolean
     /** os 3 visuais guardados pelo usuario no ESTUDIO (texto com os valores; null = vazio) */
     fun temaSalvo(i: Int): String? = gs("tema_salvo_$i")
     fun salvaTema(i: Int, v: String?) = ps("tema_salvo_$i", v)
+    /** o visual Vidro ja foi aplicado uma vez (1.0.53) */
+    var visualVidro: Boolean
+        get() = sp.getBoolean("visual_vidro", false)
+        set(v) = pb("visual_vidro", v)
+    /** o visual que a pessoa usava antes do Vidro (null = nao tinha nada mudado, ou ja apagou) */
+    var visualAntigo: String?
+        get() = gs("visual_antigo")
+        set(v) = ps("visual_antigo", v)
+    /** a pessoa ja mexeu em alguma coisa do visual (cor, cartao, letra ou tema) */
+    fun mexeuNoVisual(): Boolean = listOf("tema", "cartao", "accent", "accent2", "fonte", "raio").any { sp.contains(it) }
     val neon: Boolean get() = brilho > 0
     var anim: Boolean
         get() = sp.getBoolean("anim", true)

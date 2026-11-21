@@ -439,6 +439,21 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     // ---------------- meus temas: 3 visuais guardados + codigo pra passar pros amigos ----------------
     private fun meusTemas(c: Context): View {
         val itens = ArrayList<View>()
+        // o visual que a pessoa usava antes do Vidro virar o padrao (1.0.53)
+        Prefs.visualAntigo?.let { antigo ->
+            val v = Ui.item(c, "Visual de antes", "o que você usava antes do Vidro · toque pra voltar · segure pra apagar",
+                R.drawable.ic_sparkle, "usar") {
+                if (VisualSalvo.aplica(antigo)) act.reaplica() else Ui.toast(act, "Esse visual guardado estragou")
+            }
+            v.setOnLongClickListener {
+                Ui.dialogConfirma(act, "APAGAR O VISUAL DE ANTES", "Ele some daqui (o visual de agora não muda).", "APAGAR") {
+                    Prefs.visualAntigo = null
+                    redesenha()
+                }
+                true
+            }
+            itens.add(v)
+        }
         for (i in 1..3) {
             val salvo = Prefs.temaSalvo(i)
             val v = Ui.item(c, "Meu tema $i",

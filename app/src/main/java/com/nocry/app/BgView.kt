@@ -370,9 +370,44 @@ class AnimBg(c: Context) : View(c) {
 }
 
 /** Camada de fundo: video da galeria, imagem, desenho animado ou cor lisa, com escurecimento e desfoque. */
+/** manchas de luz do estilo vidro (uma em cima a direita, outra na esquerda): o fundo ganha cor e profundidade */
+private class Luzes(c: Context) : View(c) {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var s1: Shader? = null
+    private var s2: Shader? = null
+
+    fun monta() {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        if (w <= 0f || h <= 0f) return
+        val l1 = Theme.luz1()
+        val l2 = Theme.luz2()
+        s1 = RadialGradient(w * 0.85f, h * 0.17f, w * 0.78f, intArrayOf(Theme.alpha(l1, 0x4C), Theme.alpha(l1, 0x18), Theme.alpha(l1, 0)),
+            floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        s2 = RadialGradient(w * 0.06f, h * 0.62f, w * 0.72f, intArrayOf(Theme.alpha(l2, 0x3C), Theme.alpha(l2, 0x12), Theme.alpha(l2, 0)),
+            floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        invalidate()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        super.onSizeChanged(w, h, ow, oh)
+        monta()
+    }
+
+    override fun onDraw(cv: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        p.shader = s1
+        cv.drawRect(0f, 0f, w, h, p)
+        p.shader = s2
+        cv.drawRect(0f, 0f, w, h, p)
+    }
+}
+
 class BgView(c: Context) : FrameLayout(c) {
     private val conteudo = FrameLayout(c)
     private val escuro = View(c)
+    private val luzes = Luzes(c)
     private var anim: AnimBg? = null
     private var tv: TextureView? = null
     private var mp: MediaPlayer? = null
@@ -387,6 +422,7 @@ class BgView(c: Context) : FrameLayout(c) {
         val mm = LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         addView(conteudo, mm)
         addView(escuro, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        addView(luzes, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         // sombra em cima (atrás da hora e do título): o título fica legível mesmo com céu claro no fundo
         val topo = View(c)
         topo.background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
@@ -421,6 +457,9 @@ class BgView(c: Context) : FrameLayout(c) {
         // segura a leitura do texto cinza por cima. O desenho animado do app ja e escuro, entao vale o que ele escolheu
         val nivel = if (Theme.temMidiaDeFundo()) maxOf(Prefs.bgEscuro, 30) else Prefs.bgEscuro
         escuro.setBackgroundColor(Theme.alpha(0xFF000000.toInt(), nivel * 255 / 100))
+        // estilo vidro: manchas de luz por cima do fundo escurecido
+        luzes.visibility = if (Theme.vidro) View.VISIBLE else View.GONE
+        if (Theme.vidro) luzes.monta()
         desfoque()
     }
 

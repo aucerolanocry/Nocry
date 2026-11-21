@@ -56,6 +56,23 @@ object Theme {
     /** fundo base do app */
     val base: Int get() = Prefs.baseCor
 
+    /** estilo vidro: cartoes claros e translucidos, fundo desfocado com manchas de luz */
+    val vidro: Boolean get() = Prefs.cartao == "vidro"
+
+    /** tema de cantos bem redondos: botoes, abas e etiquetas viram pilula */
+    val redondo: Boolean get() = Prefs.raio >= 16
+
+    /** cor quase cinza (branco, prata): nao serve pra colorir as manchas de luz */
+    private fun neutra(cor: Int): Boolean {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(cor, hsv)
+        return hsv[1] < 0.18f || hsv[2] < 0.15f
+    }
+
+    /** manchas de luz do estilo vidro: com tema branco/prata fica azul e roxo; com tema colorido, as cores do tema */
+    fun luz1(): Int = if (neutra(accent)) 0xFF78AAFF.toInt() else accent
+    fun luz2(): Int = if (neutra(accent) && neutra(accent2)) 0xFFAA78FF.toInt() else if (neutra(accent2)) girar(accent, 40f) else accent2
+
     /** cor do texto em cima de uma cor de destaque (preto se a cor for clara) */
     fun sobre(cor: Int): Int {
         val lum = 0.299 * Color.red(cor) + 0.587 * Color.green(cor) + 0.114 * Color.blue(cor)

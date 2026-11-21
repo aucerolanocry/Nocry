@@ -79,6 +79,17 @@ object Ui {
         return g
     }
 
+    /**
+     * fundo das pecas pequenas (chips, abas, caixinhas de informacao): escuro nos estilos normais;
+     * no estilo vidro fica um vidro claro com borda branca fina, combinando com os cartoes
+     */
+    fun peca(c: Context, raio: Int, alfa: Int = 0x9C, borda: Int = 0x1F): GradientDrawable =
+        if (Theme.vidro) shape(c, Theme.alpha(Theme.mix(0xFF10131E.toInt(), Color.WHITE, 0.11f), alfa * 9 / 10), raio, Theme.alpha(Color.WHITE, borda + 0x12), 1)
+        else shape(c, Theme.alpha(0xFF0B0A12.toInt(), alfa), raio, Theme.alpha(Color.WHITE, borda), 1)
+
+    /** canto de etiqueta/pilula: redonda de vez no tema redondo, quase reta no tema reto */
+    fun raioPilula(): Int = if (Theme.redondo) 99 else raioPeq(8)
+
     /** cartao do estilo escolhido (vidro, contorno, solido ou HUD) */
     fun glass(c: Context, raio: Int = Prefs.raio, forte: Boolean = false, ligado: Boolean = false): Drawable =
         Painel(c, Prefs.cartao, forte, ligado, raio)
@@ -245,7 +256,7 @@ object Ui {
         val f = FrameLayout(c)
         f.background = Botao(c, if (ativo) "icoOn" else "ico")
         val tam = (tamDp * 0.5f).toInt()
-        val ic = icone(c, res, if (ativo) Color.WHITE else 0xFFB9B9C8.toInt(), tam)
+        val ic = icone(c, res, if (ativo || Theme.vidro) (if (ativo) Color.WHITE else 0xFFE6EAF7.toInt()) else 0xFFB9B9C8.toInt(), tam)
         f.addView(ic, FrameLayout.LayoutParams(dp(c, tam), dp(c, tam), Gravity.CENTER))
         f.layoutParams = LinearLayout.LayoutParams(dp(c, tamDp), dp(c, tamDp))
         return f
@@ -255,9 +266,75 @@ object Ui {
     fun selo(c: Context, s: String, cor: Int = RED, cheio: Boolean = true): TextView {
         val t = text(c, s.uppercase(), 10f, if (cheio) cor else MUTED, true, mono = true)
         t.letterSpacing = 0.12f
-        t.background = shape(c, Theme.alpha(cor, if (cheio) 0x22 else 0x14), raioPeq(8), Theme.alpha(cor, if (cheio) 0x99 else 0x55), 1)
-        t.setPadding(dp(c, 10), dp(c, 6), dp(c, 10), dp(c, 6))
+        t.background = shape(c, Theme.alpha(cor, if (cheio) 0x22 else 0x14), raioPilula(), Theme.alpha(cor, if (cheio) 0x99 else 0x55), 1)
+        t.setPadding(dp(c, if (Theme.redondo) 12 else 10), dp(c, 6), dp(c, if (Theme.redondo) 12 else 10), dp(c, 6))
         return t
+    }
+
+    /** pilula de estado deitada: "● ADB  LIGADO" (bolinha colorida, nome apagado, valor na cor do estado) */
+    fun pilulaStatus(c: Context, nome: String, valor: String, ok: Boolean?): View {
+        val r = hbox(c)
+        r.gravity = Gravity.CENTER
+        r.background = peca(c, raioPilula(), 0x8C)
+        val cor = when (ok) { true -> OK; false -> BAD; null -> WARN }
+        val dot = View(c)
+        dot.background = shape(c, cor, 4)
+        val dp2 = LinearLayout.LayoutParams(dp(c, 7), dp(c, 7))
+        dp2.rightMargin = dp(c, 7)
+        r.addView(dot, dp2)
+        // maiusculo feito aqui mesmo: o "tudo maiusculo" do TextView apagava as cores do texto em Android antigo
+        val n = up(nome)
+        val s = android.text.SpannableString(n + "  " + up(valor))
+        s.setSpan(android.text.style.ForegroundColorSpan(MUTED), 0, n.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        s.setSpan(android.text.style.ForegroundColorSpan(if (ok == true) TEXT else cor), n.length + 2, s.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val t = text(c, "", 9.5f, TEXT, true, mono = true)
+        t.setAllCaps(false)
+        t.letterSpacing = if (Prefs.maiusc) 0.06f else 0.02f
+        t.text = s
+        // largura do proprio texto (fica centralizado com a bolinha); se nao couber, corta com "..."
+        t.maxLines = 1
+        t.ellipsize = android.text.TextUtils.TruncateAt.END
+        r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        r.setPadding(dp(c, 9), dp(c, 9), dp(c, 9), dp(c, 9))
+        r.contentDescription = "$nome $valor"
+        return r
+    }
+
+    /** faixa de aviso de uma linha so: icone, o aviso e a acao na direita ("VER EM LOGS ›") */
+    fun faixaAviso(c: Context, texto: String, acao: String, cor: Int = WARN, onClick: () -> Unit): View {
+        val r = hbox(c)
+        r.background = ripple(c, android.graphics.drawable.LayerDrawable(arrayOf(
+            shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xB8), raioPeq(16)),
+            shape(c, Theme.alpha(cor, 0x1C), raioPeq(16), Theme.alpha(cor, 0x48), 1))),
+            shape(c, Color.WHITE, raioPeq(16)))
+        r.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12))
+        r.addView(icone(c, R.drawable.ic_warn, cor, 18), LinearLayout.LayoutParams(dp(c, 18), dp(c, 18)).also { it.rightMargin = dp(c, 10) })
+        val t = text(c, texto, 12.5f, Theme.mix(TEXT, cor, 0.35f), true, mono = true)
+        t.letterSpacing = if (Prefs.maiusc) 0.05f else 0.01f
+        umaLinha(t, 9)
+        r.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val a = text(c, "$acao ›", 11.5f, Theme.alpha(cor, 0xD0), true, mono = true)
+        a.maxLines = 1
+        r.addView(a, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = dp(c, 8) })
+        clique(r, onClick)
+        return r
+    }
+
+    /** etiqueta de estado em pilula (dentro dos cartoes do inicio): bolinha + texto; verde quando ligado */
+    fun pilulaEstado(c: Context, s: String, ligado: Boolean?): View {
+        val r = hbox(c)
+        val on = ligado == true
+        r.background = if (on) shape(c, Theme.alpha(OK, 0x1E), raioPilula(), Theme.alpha(OK, 0x66), 1) else peca(c, raioPilula(), 0x70)
+        val dot = View(c)
+        dot.background = shape(c, if (on) OK else Theme.alpha(Color.WHITE, 0x66), 4)
+        r.addView(dot, LinearLayout.LayoutParams(dp(c, 6), dp(c, 6)).also { it.rightMargin = dp(c, 6) })
+        val t = text(c, s, 10.5f, if (on) OK else MUTED, true, mono = true)
+        t.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
+        t.maxLines = 1
+        t.ellipsize = android.text.TextUtils.TruncateAt.END
+        r.addView(t)
+        r.setPadding(dp(c, 9), dp(c, 4), dp(c, 10), dp(c, 4))
+        return r
     }
 
     /** bolinha (com um halo suave) + texto de estado: "ADB · CONECTADO" */
@@ -287,7 +364,7 @@ object Ui {
     fun chip(c: Context, nome: String, valor: String, ok: Boolean?): View {
         val col = vbox(c)
         col.gravity = Gravity.CENTER_HORIZONTAL
-        col.background = shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0x9C), raioPeq(14), Theme.alpha(Color.WHITE, 0x1F), 1)
+        col.background = peca(c, raioPeq(14))
         val cor = when (ok) { true -> OK; false -> BAD; null -> WARN }
         val dot = View(c)
         dot.background = shape(c, cor, 4)
@@ -323,7 +400,7 @@ object Ui {
     /** caixinha de informacao: icone + rotulo pequeno em cima, valor embaixo (usada em grade 2x2) */
     fun infoBox(c: Context, ico: Int, rotulo: String, valor: String, cor: Int = TEXT): View {
         val col = vbox(c)
-        col.background = shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0x9C), raioPeq(14), Theme.alpha(Color.WHITE, 0x1F), 1)
+        col.background = peca(c, raioPeq(14))
         col.setPadding(dp(c, 12), dp(c, 11), dp(c, 12), dp(c, 12))
         val topo = hbox(c)
         topo.addView(icone(c, ico, MUTED, 13))
@@ -462,7 +539,7 @@ object Ui {
             val sel = i == escolhido
             val b = hbox(c)
             b.gravity = Gravity.CENTER
-            b.background = if (sel) Botao(c, "grad", raioPeq(14)) else shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xB8), raioPeq(14), Theme.alpha(Color.WHITE, 0x26), 1)
+            b.background = if (sel) Botao(c, "grad", raioPeq(14)) else peca(c, if (Theme.redondo) 99 else raioPeq(14), 0xB8, 0x26)
             b.setPadding(dp(c, 14), dp(c, 9), dp(c, 15), dp(c, 9))
             val cor = if (sel) Theme.sobreGrad() else MUTED
             b.addView(icone(c, o.first, cor, 15))
@@ -548,7 +625,9 @@ object Ui {
         if (tipo == Dica.INFO) {
             // informação comum fica discreta (barrinha no degrade do tema + texto): quase toda tela começa
             // com uma, e uma caixa azul em cada tela competia com o conteúdo e poluía o app
-            r.background = shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xA8), raioPeq(12))
+            r.background = if (Theme.vidro) peca(c, raioPeq(16), 0xA8, 0x0E) else shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xA8), raioPeq(12))
+            // a barrinha da esquerda acompanha o canto arredondado em vez de sair pra fora dele
+            r.clipToOutline = true
             r.setPadding(0, dp(c, 10), dp(c, 13), dp(c, 10))
             val barra = View(c)
             barra.background = Botao(c, "grad", 1)
@@ -670,6 +749,8 @@ object Ui {
         t.letterSpacing = if (Prefs.maiusc) (if (label.length > 17) 0.05f else 0.09f) else 0.02f
         t.maxLines = 2
         t.gravity = Gravity.CENTER
+        // letra escura em cima do botao claro nao leva sombra (a sombra preta deixava a letra borrada)
+        if (kind == Kind.PRIMARY && corTxt != Color.WHITE) t.setShadowLayer(0f, 0f, 0f, 0)
         val tp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         if (ico != 0) tp.leftMargin = dp(c, 8)
         l.addView(t, tp)
@@ -854,55 +935,64 @@ object Ui {
         return col
     }
 
-    /** quadrado da tela inicial: icone, nome, descricao e um selo de estado no rodape */
+    /** quadrado da grade do inicio: icone, nome, descricao e o estado numa pilula no rodape */
     fun tile(c: Context, ico: Int, titulo: String, desc: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
         val on = ligado == true
         val col = vbox(c)
         col.background = ripple(c, glass(c, ligado = on), Painel(c, mascara = true))
         val p = dp(c, 14)
-        col.setPadding(p, p, p, dp(c, 13))
-        col.minimumHeight = dp(c, 132)
-        // topo: icone na esquerda e, so com o modo ligado, a luz verde na direita (apagada ela nao dizia nada:
-        // o estado ja esta escrito no rodape)
-        val topo = hbox(c)
-        topo.gravity = Gravity.TOP
-        topo.addView(caixaIcone(c, ico, on))
-        topo.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
-        if (on) {
-            val led = FrameLayout(c)
-            val halo = View(c)
-            halo.background = shape(c, Theme.alpha(OK, 0x38), 8)
-            led.addView(halo, FrameLayout.LayoutParams(dp(c, 16), dp(c, 16), Gravity.CENTER))
-            val dot = View(c)
-            dot.background = shape(c, OK, 4)
-            led.addView(dot, FrameLayout.LayoutParams(dp(c, 7), dp(c, 7), Gravity.CENTER))
-            topo.addView(led, LinearLayout.LayoutParams(dp(c, 16), dp(c, 16)))
-        }
-        col.addView(topo)
-        col.addView(text(c, titulo, 13f, TEXT, true).also { it.maxLines = 2; it.ellipsize = android.text.TextUtils.TruncateAt.END }, lp(top = 11, c = c))
+        col.setPadding(p, p, p, p)
+        col.minimumHeight = dp(c, 140)
+        col.addView(caixaIcone(c, ico, on, 38))
+        col.addView(text(c, titulo, 15f, TEXT, true).also { it.maxLines = 2; it.ellipsize = android.text.TextUtils.TruncateAt.END }, lp(top = 12, c = c))
         if (desc.isNotEmpty()) {
-            val d = text(c, desc, 11f, MUTED)
-            d.setLineSpacing(0f, 1.15f)
+            val d = text(c, desc, 10.5f, MUTED)
+            d.setLineSpacing(0f, 1.12f)
             d.ellipsize = android.text.TextUtils.TruncateAt.END
             d.maxLines = 2
-            col.addView(d, lp(top = 3, c = c))
+            col.addView(d, lp(top = 2, c = c))
         }
-        // espaco flexivel empurra o rodape pra baixo - assim ele nunca fica em cima do icone ou do titulo
+        // espaco flexivel empurra o estado pro rodape: os dois quadrados da linha ficam alinhados embaixo
         col.addView(View(c), LinearLayout.LayoutParams(1, 0, 1f))
-        // rodape: estado em texto e um trilho fino embaixo, que acende no degrade quando o modo esta ligado
-        val est = text(c, estado, 10.5f, if (on) OK else MUTED, true, mono = true)
-        est.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
-        est.maxLines = 1
-        est.ellipsize = android.text.TextUtils.TruncateAt.END
-        col.addView(est, lp(top = 10, c = c))
-        val trilho = FrameLayout(c)
-        trilho.background = shape(c, Theme.alpha(Color.WHITE, 0x16), 1)
-        val cheio = View(c)
-        cheio.background = if (on) Botao(c, "grad", 1) else shape(c, Theme.alpha(Color.WHITE, 0x38), 1)
-        trilho.addView(cheio, FrameLayout.LayoutParams(if (on) ViewGroup.LayoutParams.MATCH_PARENT else dp(c, 14), ViewGroup.LayoutParams.MATCH_PARENT))
-        col.addView(trilho, lp(h = dp(c, 2), top = 7, c = c))
+        col.addView(pilulaEstado(c, estado, ligado), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(c, 10) })
+        col.contentDescription = "$titulo, $estado"
         clique(col, onClick)
         return col
+    }
+
+    /**
+     * cartao grande do primeiro modo do inicio: icone, nome, descricao, estado e um botao rapido na direita
+     * (ex.: LIGAR). Tocar no cartao abre a tela do modo; tocar no botao faz a acao sem sair do inicio.
+     */
+    fun destaque(c: Context, ico: Int, titulo: String, desc: String, estado: String, ligado: Boolean?,
+                 botao: String?, primario: Boolean, onBotao: (() -> Unit)?, onClick: () -> Unit): View {
+        val on = ligado == true
+        val r = hbox(c)
+        r.background = ripple(c, glass(c, forte = true, ligado = on), Painel(c, mascara = true))
+        r.setPadding(dp(c, 16), dp(c, 16), dp(c, 14), dp(c, 16))
+        r.addView(caixaIcone(c, ico, on, 48), LinearLayout.LayoutParams(dp(c, 48), dp(c, 48)).also { it.rightMargin = dp(c, 14) })
+        val col = vbox(c)
+        col.addView(text(c, titulo, 17f, TEXT, true).also { umaLinha(it, 11) })
+        if (desc.isNotEmpty()) col.addView(text(c, desc, 10.5f, MUTED).also { it.maxLines = 2; it.ellipsize = android.text.TextUtils.TruncateAt.END }, lp(top = 2, c = c))
+        col.addView(pilulaEstado(c, estado, ligado), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(c, 8) })
+        r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (botao != null && onBotao != null) {
+            val tipo = if (primario) "grad" else "ghost"
+            val b = text(c, botao.uppercase(), 12.5f, if (primario) Theme.sobreGrad() else TEXT, true, mono = true)
+            b.gravity = Gravity.CENTER
+            b.maxLines = 1
+            b.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
+            if (primario && Theme.sobreGrad() != Color.WHITE) b.setShadowLayer(0f, 0f, 0f, 0)
+            b.background = ripple(c, Botao(c, tipo), Botao(c, tipo, mascara = true))
+            b.setPadding(dp(c, 16), dp(c, 10), dp(c, 16), dp(c, 10))
+            b.minimumHeight = dp(c, 42)
+            b.minimumWidth = dp(c, 76)
+            clique(b, onBotao)
+            r.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = dp(c, 10) })
+        }
+        r.contentDescription = "$titulo, $estado"
+        clique(r, onClick)
+        return r
     }
 
     /** maiusculo o texto quando o modo "tudo maiusculo" esta ligado; usado onde o texto nao passa pelo text() */

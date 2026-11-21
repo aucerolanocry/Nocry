@@ -64,7 +64,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     NocryService.rodando,
     Sys.acessibilidadeLigada(),
     License.isOwner(),
-    Erros.novos()
+    Erros.novos(),
+    Comp.ligado(), ocupadoComp
 ).joinToString("|")
     private fun ultimaLinha(): String = NLog.ultima()
 
@@ -90,51 +91,84 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         if (NLog.versao != versaoLog) { versaoLog = NLog.versao; ultimaTxt?.text = textoUltima() }
     }
 
-    private fun estComp(): String = if (Comp.ligado()) "ATIVO" else "desativado"
+    private fun estComp(): String = if (Comp.ligado()) "ativo" else "desligado"
     private fun estOtm(): String {
         val st = Otm.status()
         val nv = if (Prefs.otmNivel == "full") " · FULL" else ""
-        return if (st.first) "ATIVA$nv · ${st.second} apps" + (if (Prefs.otmAuto) " · AUTO" else "") else if (Prefs.otmAuto) "AUTO LIGADO$nv" else "desativada"
+        return if (st.first) "ATIVA$nv · ${st.second} apps" + (if (Prefs.otmAuto) " · AUTO" else "") else if (Prefs.otmAuto) "AUTO LIGADO$nv" else "desligada"
     }
 
-    private fun tile(c: android.content.Context, it: Atalhos.It): View = when (it.id) {
-    "comp" -> Ui.tile(c, it.ico, it.nome, it.desc, estComp(), Comp.ligado()) { act.abre(CompScreen(act)) }
-    "otm" -> Ui.tile(c, it.ico, it.nome, it.desc, estOtm(), Otm.status().first || Prefs.otmAuto) { act.abre(OtmScreen(act)) }
-    "recursos" -> {
-        val (a, b) = Downloader.pastasInstaladas("normal")
-        Ui.tile(c, it.ico, it.nome, it.desc,
-            if (a && b) "INSTALADO" else if (a || b) "PARCIAL" else "FALTANDO",
-            a && b) { act.abre(RecursosScreen(act)) }
+    /** o modo competitivo esta ligando/desligando pelo botao do inicio */
+    private var ocupadoComp = false
+
+    /** liga/desliga o modo competitivo direto do inicio (o mesmo que o botao da tela dele faz) */
+    private fun alternaComp() {
+        if (ocupadoComp) return
+        if (!Toque.podeMexer()) {
+            Ui.toast(act, "Faça a Conexão primeiro")
+            act.irAba(1)
+            return
+        }
+        val ligar = !Comp.ligado()
+        ocupadoComp = true
+        redesenha()
+        Bg.run({ if (ligar) Comp.ativar() else Comp.desativar(true) }) { r ->
+            ocupadoComp = false
+            Ui.toast(act, if (!r) "O aparelho não aceitou a mudança" else if (ligar) "MODO COMPETITIVO ATIVO" else "DESATIVADO — tudo voltou ao normal")
+            redesenha()
+        }
     }
-    "bypass" -> Ui.tile(c, it.ico, it.nome, it.desc,
-        if (Prefs.bypassAtivo) "ATIVO · ${Prefs.bypassGatilho}"
-        else if (Prefs.bypassVolAtivo) "ATIVO · VOLUME"
-        else "DESATIVADO",
-        Prefs.bypassAtivo || Prefs.bypassVolAtivo) { act.abre(BypassScreen(act)) }
-    else -> Ui.tile(c, it.ico, it.nome, it.desc, "long ${Prefs.longOn} · multi ${Prefs.multiOn}", null) { act.abre(AjustesScreen(act)) }
+
+    /** estado, se esta ligado e o que acontece ao tocar, de cada modo */
+    private class Info(val estado: String, val ligado: Boolean?, val abrir: () -> Unit)
+
+    private fun info(it: Atalhos.It): Info = when (it.id) {
+        "comp" -> Info(estComp(), Comp.ligado()) { act.abre(CompScreen(act)) }
+        "otm" -> Info(estOtm(), Otm.status().first || Prefs.otmAuto) { act.abre(OtmScreen(act)) }
+        "recursos" -> {
+            val (a, b) = Downloader.pastasInstaladas("normal")
+            Info(if (a && b) "instalado" else if (a || b) "parcial" else "faltando", a && b) { act.abre(RecursosScreen(act)) }
+        }
+        "bypass" -> Info(
+            if (Prefs.bypassAtivo) "ATIVO · ${Prefs.bypassGatilho}" else if (Prefs.bypassVolAtivo) "ATIVO · VOLUME" else "desligado",
+            Prefs.bypassAtivo || Prefs.bypassVolAtivo) { act.abre(BypassScreen(act)) }
+        else -> Info("long ${Prefs.longOn} · multi ${Prefs.multiOn}", null) { act.abre(AjustesScreen(act)) }
     }
-    
+
+    private fun tile(c: android.content.Context, it: Atalhos.It): View {
+        val i = info(it)
+        return Ui.tile(c, it.ico, it.nome, it.desc, i.estado, i.ligado, i.abrir)
+    }
+
+    /** o primeiro modo da lista ganha o cartao grande; o competitivo ainda tem o botao de ligar ali mesmo */
+    private fun destaque(c: android.content.Context, it: Atalhos.It): View {
+        val i = info(it)
+        return if (it.id == "comp") {
+            val on = i.ligado == true
+            Ui.destaque(c, it.ico, it.nome, it.desc, i.estado, i.ligado,
+                if (ocupadoComp) "..." else if (on) "desligar" else "ligar", !on, { alternaComp() }, i.abrir)
+        } else Ui.destaque(c, it.ico, it.nome, it.desc, i.estado, i.ligado, "abrir", false, i.abrir, i.abrir)
+    }
+
     override fun render() {
         limpa()
         val c = act
 
-        // ---------------- cabecalho: logo, nome e cargo ----------------
+        // ---------------- cabecalho: losango, NOCRY e cargo ----------------
         val cab = Ui.hbox(c)
-        val logo = FrameLayout(c)
-        logo.background = Botao(c, "grad", Ui.raioPeq(12))
-        val n = Ui.text(c, "N", 24f, Theme.sobreGrad(), true, mono = true)
-        n.gravity = Gravity.CENTER
-        logo.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        val lg = LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46))
-        lg.rightMargin = Ui.dp(c, 12)
-        cab.addView(logo, lg)
+        val mk = View(c)
+        mk.background = Botao(c, "grad", 1)
+        mk.rotation = 45f
+        cab.addView(mk, LinearLayout.LayoutParams(Ui.dp(c, 9), Ui.dp(c, 9)).also { it.leftMargin = Ui.dp(c, 3); it.rightMargin = Ui.dp(c, 12) })
         val col = Ui.vbox(c)
-        col.addView(Ui.gradTexto(c, "NOCRY", 24f))
-        col.addView(Ui.text(c, "App desenvolvido por Aucerola", 10.5f, Ui.MUTED, true, mono = true))
+        val marca = Ui.gradTexto(c, "NOCRY", 17f)
+        marca.letterSpacing = 0.24f
+        col.addView(marca)
+        col.addView(Ui.text(c, "por Aucerola", 9f, Ui.MUTED, true, mono = true).also { it.letterSpacing = 0.16f })
         cab.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val papel = License.roleNome()
-        if (papel.isNotEmpty()) cab.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.MUTED, License.isAdmin()))
-        add(cab, 0)
+        if (papel.isNotEmpty()) cab.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.TEXT, License.isAdmin()))
+        add(cab, 2)
 
         // ---------------- saudacao ----------------
         // o nome que a pessoa escolheu no ESTUDIO; sem escolha, o nome da key
@@ -146,12 +180,12 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             hora < 18 -> "Boa tarde"
             else -> "Boa noite"
         }
-        val saudTxt = Ui.text(c, "$saud,", 11f, Ui.MUTED, true, mono = true)
-        saudTxt.letterSpacing = 0.16f
-        add(saudTxt, 24)
-        add(Ui.gradTexto(c, if (nome.isNotEmpty()) nome else "bem-vindo", 32f), 2)
+        val saudTxt = Ui.text(c, "$saud,", 10.5f, Ui.MUTED, true, mono = true)
+        saudTxt.letterSpacing = 0.2f
+        add(saudTxt, 22)
+        add(Ui.gradTexto(c, if (nome.isNotEmpty()) nome else "bem-vindo", 36f).also { Ui.umaLinha(it, 20) }, 0)
 
-        // ---------------- estado geral: anel + 3 passos ----------------
+        // ---------------- estado geral: anel + 3 pilulas + conexao ----------------
         val adb = Adb.connected
         val perm = Sys.hasWriteSecure()
         val acc = Sys.acessibilidadeLigada()
@@ -161,17 +195,18 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val topo = Ui.hbox(c)
         val ring = RingView(c)
         val rw = FrameLayout(c)
-        rw.addView(ring, FrameLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 96)))
-        val num = Ui.text(c, "$ok/3", 22f, Ui.TEXT, true, mono = true)
+        val tamAnel = Ui.dp(c, 84)
+        rw.addView(ring, FrameLayout.LayoutParams(tamAnel, tamAnel))
+        val num = Ui.text(c, "$ok/3", 20f, Ui.TEXT, true, mono = true)
         num.gravity = Gravity.CENTER
-        rw.addView(num, FrameLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 96)))
-        topo.addView(rw, LinearLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 96)))
+        rw.addView(num, FrameLayout.LayoutParams(tamAnel, tamAnel))
+        topo.addView(rw, LinearLayout.LayoutParams(tamAnel, tamAnel))
         ring.define(ok / 3f)
 
         val info = Ui.vbox(c)
         info.addView(Ui.label(c, "status do sistema"))
         val titulo2 = when (ok) { 3 -> "Pronto"; 0 -> "Conecte"; else -> "Quase lá" }
-        info.addView((if (ok == 3) Ui.gradTexto(c, titulo2, 26f) else Ui.text(c, titulo2, 26f, Ui.TEXT, true)).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 2, c = c))
+        info.addView((if (ok == 3) Ui.gradTexto(c, titulo2, 27f) else Ui.text(c, titulo2, 27f, Ui.TEXT, true)).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 2, c = c))
         val precisa = Prefs.precisaServico()
         info.addView(Ui.text(c, if (NocryService.rodando) "monitores rodando" else if (precisa) "monitores iniciando" else "nenhum monitor ligado", 10.5f, Ui.MUTED, mono = true), Ui.lp(top = 2, c = c))
         val ip = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -180,13 +215,13 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         hero.addView(topo)
 
         hero.addView(Ui.chips(c,
-            Ui.chip(c, "ADB", if (adb) "LIGADO" else "OFF", adb),
-            Ui.chip(c, "PERMISSÃO", if (perm) "OK" else "FALTA", perm),
-            Ui.chip(c, "VOLUME", if (acc) "ATIVO" else "OFF", if (acc) true else null)
+            Ui.pilulaStatus(c, "ADB", if (adb) "ligado" else "off", adb),
+            Ui.pilulaStatus(c, "Perm.", if (perm) "ok" else "falta", perm),
+            Ui.pilulaStatus(c, "Volume", if (acc) "on" else "off", if (acc) true else null)
         ), Ui.lp(top = 16, c = c))
         val falta = !adb || !perm
-        hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
-        add(hero, 18)
+        hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "abrir conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
+        add(hero, 16)
 
         // ---------------- a tela ficou alterada pelo modo carregador (que saiu do app) ----------------
         if (Prefs.densOrig != null) {
@@ -208,9 +243,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         // ---------------- o app teve erro desde a última vez ----------------
         val novos = Erros.novos()
         if (novos > 0) {
-            val aviso = Ui.dica(c, "O app registrou $novos erro(s) desde a última vez. Toque pra ver em Logs › Relatório de erros.", Ui.Dica.AVISO)
-            Ui.clique(aviso) { act.irAba(3) }
-            add(aviso, 12)
+            add(Ui.faixaAviso(c, if (novos == 1) "1 erro registrado" else "$novos erros registrados", "ver em logs") { act.irAba(3) }, 12)
         }
 
         // ---------------- SNIPER (só a key de dono vê) ----------------
@@ -221,7 +254,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             add(linhaBot, 12)
         }
 
-        // ---------------- modos em quadrados ----------------
+        // ---------------- modos: o primeiro grande, o resto em grade de 2 ----------------
         val editar = Ui.text(c, "Editar ›", 10.5f, Ui.MUTED, true, mono = true)
         editar.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), 0, Ui.dp(c, 6))
         Ui.clique(editar) { act.abre(OrganizarScreen(act)) }
@@ -230,8 +263,10 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val lista = Atalhos.visiveis()
         if (lista.isEmpty()) {
             add(Ui.dica(c, "Todos os modos estão escondidos. Toque em EDITAR para mostrar de novo.", Ui.Dica.AVISO), 8)
+        } else {
+            add(destaque(c, lista[0]), 10)
         }
-        var i = 0
+        var i = 1
         while (i < lista.size) {
             val linha = Ui.hbox(c)
             linha.gravity = Gravity.TOP
@@ -251,20 +286,18 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         faixa.background = Ui.ripple(c, Ui.glass(c))
         val pp = Ui.dp(c, 14)
         faixa.setPadding(pp, Ui.dp(c, 12), pp, Ui.dp(c, 12))
-        val ic = Ui.icone(c, R.drawable.ic_log, Ui.RED, 18)
-        val icp = LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18))
-        icp.rightMargin = Ui.dp(c, 12)
-        faixa.addView(ic, icp)
+        faixa.addView(Ui.caixaIcone(c, R.drawable.ic_log, false, 38), LinearLayout.LayoutParams(Ui.dp(c, 38), Ui.dp(c, 38)).also { it.rightMargin = Ui.dp(c, 12) })
         val tc = Ui.vbox(c)
-        tc.addView(Ui.label(c, "última ação"))
-        val tl = Ui.text(c, textoUltima(), 11.5f, Ui.TEXT, code = true)
+        tc.addView(Ui.text(c, "Última ação", 14f, Ui.TEXT, true))
+        val tl = Ui.text(c, textoUltima(), 11f, Ui.MUTED, code = true)
         ultimaTxt = tl
         tl.maxLines = 2
         tl.ellipsize = android.text.TextUtils.TruncateAt.END
-        tc.addView(tl, Ui.lp(top = 3, c = c))
+        tc.addView(tl, Ui.lp(top = 2, c = c))
         faixa.addView(tc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        faixa.addView(Ui.icone(c, R.drawable.ic_chevron, Ui.MUTED, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.leftMargin = Ui.dp(c, 8) })
         Ui.clique(faixa) { act.irAba(3) }
-        add(faixa, 16)
+        add(faixa, 10)
     }
 }
 

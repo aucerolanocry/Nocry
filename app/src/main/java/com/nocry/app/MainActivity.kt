@@ -324,7 +324,7 @@ class MainActivity : Activity() {
         r.orientation = LinearLayout.HORIZONTAL
         r.gravity = Gravity.CENTER_VERTICAL
         // o canto da barra acompanha o tema: tema reto ganha uma doca reta, tema redondo continua pílula
-        r.background = Painel(this, "vidro", true, false, minOf(28, Prefs.raio + 12))
+        r.background = Painel(this, "vidro", true, false, if (Theme.redondo) 40 else minOf(28, Prefs.raio + 12))
         r.elevation = Ui.dp(this, 10).toFloat()
         r.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7))
         // com "nome em todos" ligado (ESTUDIO > efeitos), cada botao mostra o icone e o nome embaixo

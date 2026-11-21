@@ -14,6 +14,8 @@ class App : Application() {
             StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder().detectLeakedClosableObjects().detectActivityLeaks().penaltyLog().build())
         }
         Prefs.init(this)
+        // visual novo (Vidro) aplicado uma vez; o de antes fica guardado em Meus temas
+        try { VisualSalvo.migraVidro() } catch (_: Throwable) {}
         Sys.init(this)
         NLog.init(this)
         Notif.init(this)
