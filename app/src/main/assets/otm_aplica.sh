@@ -76,6 +76,11 @@ if [ "${FULL:-0}" = 1 ]; then      # FULL: tudo que e real e volta ao desativar 
   h=$(cmd role get-role-holders android.app.role.HOME </dev/null 2>/dev/null | cut -d';' -f1)      # tela inicial e servicos do Google largam o que guardam na memoria
   [ -n "$h" ] && am send-trim-memory "$h" MODERATE </dev/null >/dev/null 2>&1
   am send-trim-memory com.google.android.gms.persistent RUNNING_LOW </dev/null >/dev/null 2>&1
+  if [ -n "$(getprop ro.gfx.driver.0)" ] && [ -n "$GAMES" ]; then      # driver de video atualizado (so em celular que tem): o FF usa na proxima vez que abrir
+    cget global updatable_driver_production_opt_in_apps; v="$CV"; [ "$v" = null ] && v=""
+    n="$v"; for g in $GAMES; do case ",$n," in *",$g,"*) ;; *) n="${n:+$n,}$g" ;; esac; done
+    [ "$n" != "$v" ] && setg global updatable_driver_production_opt_in_apps "$n"
+  fi
   setg global tcp_default_init_rwnd 60               # conexoes comecam mais rapido (atualizacao/download do jogo)
   if [ "$SDK" -ge 30 ]; then                         # menos apps parados guardados na memoria
     echo "A|dc.max_cached_processes|$(cmd device_config get activity_manager max_cached_processes </dev/null 2>/dev/null)"

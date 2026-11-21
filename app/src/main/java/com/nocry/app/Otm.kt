@@ -59,7 +59,7 @@ object Otm {
         "global.heads_up_notifications_enabled", "global.location_background_throttle_interval_ms",
         "system.haptic_feedback_enabled", "system.show_touches", "system.pointer_location", "global.disable_window_blurs", "global.automatic_power_save_mode",
         "global.cached_apps_freezer", "global.settings_enable_monitor_phantom_procs", "dc.max_phantom_processes",
-        "system.sound_effects_enabled", "system.user_refresh_rate", "global.notification_bubbles", "secure.spell_checker_enabled",
+        "system.sound_effects_enabled", "system.user_refresh_rate", "global.updatable_driver_production_opt_in_apps", "global.notification_bubbles", "secure.spell_checker_enabled",
         "global.network_recommendations_enabled", "global.tcp_default_init_rwnd", "dc.max_cached_processes"
     )
 
@@ -511,6 +511,7 @@ object Otm {
         }
         if (cfgOk(out, "system.sound_effects_enabled")) log("• SOM DE TOQUE NA TELA: DESLIGADO")
         if (cfgOk(out, "global.notification_bubbles")) log("• BALÕES DE CONVERSA: DESLIGADOS")
+        if (cfgOk(out, "global.updatable_driver_production_opt_in_apps")) log("• DRIVER DE VÍDEO ATUALIZADO NO FF: vale quando abrir o FF de novo")
         if (lines.any { it == "MC|1" }) log("• MEMÓRIA: NO MÁXIMO 8 APPS PARADOS GUARDADOS")
         if (lines.any { it == "Q|1" }) log("• LOCALIZAÇÃO: DESLIGADA ATÉ DESATIVAR (o FF não usa)")
         if (lines.any { it == "D|ON" }) log("• ECONOMIA DE DADOS: em 2º plano só o FF e o NOCRY usam os dados móveis")
@@ -588,7 +589,7 @@ object Otm {
                     (if (p[0] == "E") tokens else libera).add("${p[1]}:${p[2]}:${p[3]}:${p[4]}")
                 }
                 "W" -> if (p.size >= 3 && NOME_OK.matches(p[1]) && p[2] == "0") wlimpa.add(p[1])
-                "A" -> if (p.size >= 3 && Regex("[A-Za-z0-9.]*").matches(p[2])) {
+                "A" -> if (p.size >= 3 && Regex("[A-Za-z0-9._,]*").matches(p[2])) {
                     var k = p[1]
                     if (Regex("[a-z_]+").matches(k)) k = "global.$k"
                     if (k in CHAVES_OK) anims.add("$k:${p[2]}")

@@ -123,6 +123,19 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         add(Ui.grupo(c, "ferramentas", listOf(
             Ui.item(c, "Ver o que vai fechar", "o que fecha, o que fica protegido e por quê", R.drawable.ic_eye) { act.abre(OtmVerScreen(act)) },
             Ui.item(c, "Proteger app", "escolha o que nunca fecha", R.drawable.ic_shield) { act.abre(OtmProtegerScreen(act)) },
+            *(if (ehXiaomi()) arrayOf<View>(Ui.item(c, "Toque do Game Turbo (Xiaomi)", "o que mais melhora o toque no Xiaomi: só liga por lá", R.drawable.ic_gamepad) {
+                Ui.dialogConfirma(act, "TOQUE NO GAME TURBO",
+                    "A taxa de resposta ao toque do Xiaomi só liga pelo Game Turbo (o ADB não alcança). No Segurança:\n\n" +
+                        "1. Game Turbo → Free Fire → configurações\n" +
+                        "2. Aumentar a taxa de resposta ao toque: LIGADO\n" +
+                        "3. Controles de toque aprimorados / resposta rápida ao toque: LIGADO\n" +
+                        "4. Modo de desempenho: DESEMPENHO\n" +
+                        "5. Otimização de Wi-Fi: LIGADO\n\n" +
+                        "Os nomes mudam um pouco em cada versão.", "ABRIR") {
+                    val i = act.packageManager.getLaunchIntentForPackage("com.miui.securitycenter")
+                    if (i != null) act.startActivity(i) else Ui.toast(act, "NÃO ACHEI O APP SEGURANÇA")
+                }
+            }) else emptyArray<View>()),
             Ui.item(c, "Limpar cache dos apps", "libera armazenamento (cada app refaz o seu cache)", R.drawable.ic_xcircle) {
                 act.abre(RunScreen(act, "Limpando o cache") { log -> Otm.limparCache(log) })
             },
@@ -147,6 +160,8 @@ class OtmScreen(a: MainActivity) : Screen(a) {
 
     }
 }
+
+private fun ehXiaomi(): Boolean = android.os.Build.MANUFACTURER.lowercase().let { "xiaomi" in it || "redmi" in it || "poco" in it }
 
 /** tela "lendo o celular...": cartao com barra andando */
 private fun carregandoCelular(c: Context): View {
