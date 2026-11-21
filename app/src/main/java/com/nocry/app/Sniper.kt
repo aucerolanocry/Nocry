@@ -2508,14 +2508,18 @@ object Sniper {
     private val RX_MISTO = Regex("""(^|[^A-Z])(MISTO|MISTA|MIXT|MIX([^A-Z]|$))""")
     // "proibido emulador", "sem emulador", "não pode emulador": é regra de fila Mobile, não fila de emulador
     private val RX_SEM_EMU = Regex("""(^|\s)(PROIBID[OA]S?|SEM|NAO|NADA DE|PROIBE|VEDAD[OA])\s+(\w+\s+){0,3}?(EMU\w*|PC)""")
+    // "emulador não é permitido", "emuladores serão banidos": a mesma regra, escrita ao contrário
+    private val RX_EMU_NAO = Regex("""(^|\s)(EMU\w*|PC)\s+(\w+\s+){0,2}?(PROIBID[OA]S?|NAO|VEDAD[OA]S?|BANID[OA]S?)""")
 
-    /** "MOB", "EMU", "MISTO" ou null quando o texto não diz */
-    fun plataformaDe(texto: String): String? {
-        val n = RX_SEM_EMU.replace(semAcento(texto).uppercase().replace(Regex("[^A-Z0-9]+"), " "), " ")
+    /** "MOB", "EMU", "MISTO" ou null quando o texto não diz; [ambos] = o que vale quando fala de Mobile e Emulador juntos */
+    fun plataformaDe(texto: String, ambos: String? = "MISTO"): String? {
+        var n = semAcento(texto).uppercase().replace(Regex("[^A-Z0-9]+"), " ")
+        n = RX_EMU_NAO.replace(RX_SEM_EMU.replace(n, " "), " ")
         val emu = RX_EMU.containsMatchIn(n)
         val mob = RX_MOB.containsMatchIn(n)
         return when {
-            RX_MISTO.containsMatchIn(n) || (emu && mob) -> "MISTO"
+            RX_MISTO.containsMatchIn(n) -> "MISTO"
+            emu && mob -> ambos
             emu -> "EMU"
             mob -> "MOB"
             else -> null
@@ -2526,10 +2530,12 @@ object Sniper {
     private fun plataformaDaFila(m: DMsg, cid: String?): String? {
         val titulo = (listOf(m.conteudo) + m.embeds.map { it.titulo }).joinToString(" ")
         plataformaDe(titulo)?.let { return it }
-        plataformaDe(textoCard(m))?.let { return it }
+        // no resto do card (regras, descrição) falar de Mobile e Emulador juntos não decide nada
+        plataformaDe(textoCard(m), ambos = null)?.let { return it }
         val c = cid?.let { canais[it] } ?: return null
         plataformaDe(c.nome)?.let { return it }
-        return c.parentId?.let { canais[it]?.nome }?.let { plataformaDe(it) }
+        // categoria "FILAS MOBILE | EMULADOR" junta as duas: não diz de qual é essa fila
+        return c.parentId?.let { canais[it]?.nome }?.let { plataformaDe(it, ambos = null) }
     }
 
     private fun nomePlataforma(p: String) = if (p == "EMU") "Emulador" else "Misto"
