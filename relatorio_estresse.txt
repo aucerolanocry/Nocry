@@ -1,0 +1,424 @@
+TESTE DE ESTRESSE · 362s
+
+== CRASHES (o app fechou) ==
+
+== TRAVADAS (ANR) ==
+
+== RELATÓRIO DE ERROS DO APP (tag NocryErro) · durante os prints ==
+I/WindowManager(  524): ANR in Window{dbff1d4 u0 com.whatsapp.web/com.nocry.app.MainActivity}. Reason:Input dispatching timed out (dbff1d4 com.whatsapp.web/com.nocry.app.MainActivity (server) is not responding. Waited 5003ms for FocusEvent(hasFocus=true))
+E/NocryErro( 3706): A tela travou por 8,5 s
+E/NocryErro( 3706): o que a tela estava fazendo quando travou:
+E/NocryErro( 3706):     at android.graphics.HardwareRenderer.nSetStopped(Native Method)
+E/NocryErro( 3706):     at android.graphics.HardwareRenderer.setStopped(HardwareRenderer.java:525)
+E/NocryErro( 3706):     at android.view.ViewRootImpl.performDraw(ViewRootImpl.java:4676)
+E/NocryErro( 3706):     at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:3822)
+E/NocryErro( 3706):     at android.view.ViewRootImpl.doTraversal(ViewRootImpl.java:2465)
+E/NocryErro( 3706):     at android.view.ViewRootImpl$TraversalRunnable.run(ViewRootImpl.java:9305)
+E/NocryErro( 3706):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1339)
+E/NocryErro( 3706):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1348)
+E/NocryErro( 3706):     at android.view.Choreographer.doCallbacks(Choreographer.java:952)
+E/NocryErro( 3706):     at android.view.Choreographer.doFrame(Choreographer.java:882)
+E/NocryErro( 3706):     at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1322)
+E/NocryErro( 3706):     at android.os.Handler.handleCallback(Handler.java:958)
+E/NocryErro( 3706):     at android.os.Handler.dispatchMessage(Handler.java:99)
+E/NocryErro( 3706):     at android.os.Looper.loopOnce(Looper.java:205)
+E/NocryErro( 3706):     at android.os.Looper.loop(Looper.java:294)
+E/NocryErro( 3706):     at android.app.ActivityThread.main(ActivityThread.java:8177)
+E/NocryErro( 3706):     at java.lang.reflect.Method.invoke(Native Method)
+E/NocryErro( 3706):     at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+E/NocryErro( 3706):     at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:971)
+E/ActivityManager(  524): ANR in com.whatsapp.web (com.whatsapp.web/com.nocry.app.MainActivity)
+E/NocryErro( 4616): O Android fechou o app porque ele travou (ANR)
+E/NocryErro( 4616): motivo do Android: 6 · user request after error: Input dispatching timed out (dbff1d4 com.whatsapp.web/com.nocry.app.MainActivity (server) is not responding. Waited 5003ms for FocusEvent(hasFocus=true))
+E/NocryErro( 4616): importância: 100 · memória usada: 37 MB (pss) / 138 MB (rss)
+E/NocryErro( 4616): processo: com.whatsapp.web · status 0
+E/NocryErro( 4616): 
+E/NocryErro( 4616): Subject: Input dispatching timed out (dbff1d4 com.whatsapp.web/com.nocry.app.MainActivity (server) is not responding. Waited 5003ms for FocusEvent(hasFocus=true))
+E/NocryErro( 4616): RssHwmKb: 133916
+E/NocryErro( 4616): RssKb: 133724
+E/NocryErro( 4616): RssAnonKb: 48256
+E/NocryErro( 4616): RssShmemKb: 792
+E/NocryErro( 4616): VmSwapKb: 21824
+E/NocryErro( 4616): 
+E/NocryErro( 4616): 
+E/NocryErro( 4616): --- CriticalEventLog ---
+E/NocryErro( 4616): capacity: 20
+E/NocryErro( 4616): timestamp_ms: 1795281966062
+E/NocryErro( 4616): window_ms: 300000
+E/NocryErro( 4616): 
+E/NocryErro( 4616): ----- dumping pid: 3706 at 63394
+E/NocryErro( 4616): 
+E/NocryErro( 4616): ----- pid 3706 at 2026-11-21 17:26:05.933271231+0000 -----
+E/NocryErro( 4616): Cmd line: com.whatsapp.web
+E/NocryErro( 4616): Build fingerprint: 'google/sdk_gphone64_x86_64/emu64xa:14/UE1A.230829.050/12077443:userdebug/dev-keys'
+E/NocryErro( 4616): ABI: 'x86_64'
+E/NocryErro( 4616): Build type: optimized
+E/NocryErro( 4616): suspend all histogram:	Sum: 1.813ms 99% C.I. 0.180us-1743.360us Avg: 201.444us Max: 1807us
+E/NocryErro( 4616): DALVIK THREADS (27):
+E/NocryErro( 4616): "main" prio=5 tid=1 Native
+E/NocryErro( 4616):   | group="main" sCount=1 ucsCount=0 flags=1 obj=0x729ccdc8 self=0x7561860e86f0
+E/NocryErro( 4616):   | sysTid=3706 nice=-10 cgrp=top-app sched=0/0 handle=0x7563045bc4f8
+E/NocryErro( 4616):   | state=S schedstat=( 100685250 472832147 292 ) utm=5 stm=4 core=0 HZ=100
+E/NocryErro( 4616):   | stack=0x7ffd594da000-0x7ffd594dc000 stackSize=8188KB
+E/NocryErro( 4616):   | held mutexes=
+E/NocryErro( 4616):   native: #00 pc 0005db96  /apex/com.android.runtime/lib64/bionic/libc.so (syscall+22) (BuildId: fa337969c798946280caa45e2d71a2e7)
+E/NocryErro( 4616):   native: #01 pc 000624a0  /apex/com.android.runtime/lib64/bionic/libc.so (__futex_wait_ex+144) (BuildId: fa337969c798946280caa45e2d71a2e7)
+E/NocryErro( 4616):   native: #02 pc 000cc3a2  /apex/com.android.runtime/lib64/bionic/libc.so (pthread_cond_wait+50) (BuildId: fa337969c798946280caa45e2d71a2e7)
+E/NocryErro( 4616):   native: #03 pc 00052f7e  /system/lib64/libc++.so (std::__1::condition_variable::wait+14) (BuildId: 3324cfa90a3aa967ca9e5c4269b1b7f2)
+E/NocryErro( 4616):   native: #04 pc 00052f4a  /system/lib64/libc++.so (std::__1::__assoc_sub_state::__sub_wait+90) (BuildId: 3324cfa90a3aa967ca9e5c4269b1b7f2)
+E/NocryErro( 4616):   native: #05 pc 00052df0  /system/lib64/libc++.so (std::__1::__assoc_sub_state::copy+64) (BuildId: 3324cfa90a3aa967ca9e5c4269b1b7f2)
+E/NocryErro( 4616):   native: #06 pc 00052d85  /system/lib64/libc++.so (std::__1::future<void>::get+21) (BuildId: 3324cfa90a3aa967ca9e5c4269b1b7f2)
+E/NocryErro( 4616):   native: #07 pc 007041da  /system/lib64/libhwui.so (android::uirenderer::renderthread::RenderProxy::setStopped+330) (BuildId: 428825c8c10bbbc19334086c16db5553)
+E/NocryErro( 4616):   at android.graphics.HardwareRenderer.nSetStopped(Native method)
+E/NocryErro( 4616):   at android.graphics.HardwareRenderer.setStopped(HardwareRenderer.java:525)
+E/NocryErro( 4616):   at android.view.ViewRootImpl.performDraw(ViewRootImpl.java:4676)
+E/NocryErro( 4616):   at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:3822)
+E/NocryErro( 4616):   at android.view.ViewRootImpl.doTraversal(ViewRootImpl.java:2465)
+E/NocryErro( 4616):   at android.view.ViewRootImpl$TraversalRunnable.run(ViewRootImpl.java:9305)
+E/NocryErro( 4616):   at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1339)
+E/NocryErro( 4616):   at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1348)
+E/NocryErro( 4616):   at android.view.Choreographer.doCallbacks(Choreographer.java:952)
+E/NocryErro( 4616):   at android.view.Choreographer.doFrame(Choreographer.java:882)
+E/NocryErro( 4616):   at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1322)
+E/NocryErro( 4616):   at android.os.Handler.handleCallback(Handler.java:958)
+E/NocryErro( 4616):   at android.os.Handler.dispatchMessage(Handler.java:99)
+E/NocryErro( 4616):   at android.os.Looper.loopOnce(Looper.java:205)
+E/NocryErro( 4616):   at android.os.Looper.loop(Looper.java:294)
+E/NocryErro( 4616):   at android.app.ActivityThread.main(ActivityThread.java:8177)
+E/NocryErro( 4616):   at java.lang.reflect.Method.invoke(Native method)
+E/NocryErro( 4616):   at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+E/NocryErro( 4616):   at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:971)
+E/NocryErro( 4616): 
+E/NocryErro( 4616): A tela travou por 5,5 s
+E/NocryErro( 4616): o que a tela estava fazendo quando travou:
+E/NocryErro( 4616):     at android.graphics.HardwareRenderer.nSetStopped(Native Method)
+E/NocryErro( 4616):     at android.graphics.HardwareRenderer.setStopped(HardwareRenderer.java:525)
+E/NocryErro( 4616):     at android.view.ViewRootImpl.performDraw(ViewRootImpl.java:4676)
+E/NocryErro( 4616):     at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:3822)
+E/NocryErro( 4616):     at android.view.ViewRootImpl.doTraversal(ViewRootImpl.java:2465)
+E/NocryErro( 4616):     at android.view.ViewRootImpl$TraversalRunnable.run(ViewRootImpl.java:9305)
+E/NocryErro( 4616):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1339)
+E/NocryErro( 4616):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1348)
+E/NocryErro( 4616):     at android.view.Choreographer.doCallbacks(Choreographer.java:952)
+E/NocryErro( 4616):     at android.view.Choreographer.doFrame(Choreographer.java:882)
+E/NocryErro( 4616):     at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1322)
+E/NocryErro( 4616):     at android.os.Handler.handleCallback(Handler.java:958)
+E/NocryErro( 4616):     at android.os.Handler.dispatchMessage(Handler.java:99)
+E/NocryErro( 4616):     at android.os.Looper.loopOnce(Looper.java:205)
+E/NocryErro( 4616):     at android.os.Looper.loop(Looper.java:294)
+E/NocryErro( 4616):     at android.app.ActivityThread.main(ActivityThread.java:8177)
+E/NocryErro( 4616):     at java.lang.reflect.Method.invoke(Native Method)
+E/NocryErro( 4616):     at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+E/NocryErro( 4616):     at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:971)
+E/NocryErro( 8002): A tela travou por 3,5 s
+E/NocryErro( 8002): o que a tela estava fazendo quando travou:
+E/NocryErro( 8002):     at android.graphics.HardwareRenderer.nSetStopped(Native Method)
+E/NocryErro( 8002):     at android.graphics.HardwareRenderer.setStopped(HardwareRenderer.java:525)
+E/NocryErro( 8002):     at android.view.ViewRootImpl.performDraw(ViewRootImpl.java:4676)
+E/NocryErro( 8002):     at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:3822)
+E/NocryErro( 8002):     at android.view.ViewRootImpl.doTraversal(ViewRootImpl.java:2465)
+E/NocryErro( 8002):     at android.view.ViewRootImpl$TraversalRunnable.run(ViewRootImpl.java:9305)
+E/NocryErro( 8002):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1339)
+E/NocryErro( 8002):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1348)
+E/NocryErro( 8002):     at android.view.Choreographer.doCallbacks(Choreographer.java:952)
+E/NocryErro( 8002):     at android.view.Choreographer.doFrame(Choreographer.java:882)
+E/NocryErro( 8002):     at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1322)
+E/NocryErro( 8002):     at android.os.Handler.handleCallback(Handler.java:958)
+E/NocryErro( 8002):     at android.os.Handler.dispatchMessage(Handler.java:99)
+E/NocryErro( 8002):     at android.os.Looper.loopOnce(Looper.java:205)
+E/NocryErro( 8002):     at android.os.Looper.loop(Looper.java:294)
+E/NocryErro( 8002):     at android.app.ActivityThread.main(ActivityThread.java:8177)
+E/NocryErro( 8002):     at java.lang.reflect.Method.invoke(Native Method)
+E/NocryErro( 8002):     at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+E/NocryErro( 8002):     at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:971)
+E/NocryErro( 8135): A tela travou por 3,8 s
+E/NocryErro( 8135): o que a tela estava fazendo quando travou:
+E/NocryErro( 8135):     at android.graphics.HardwareRenderer.nSetStopped(Native Method)
+E/NocryErro( 8135):     at android.graphics.HardwareRenderer.setStopped(HardwareRenderer.java:525)
+E/NocryErro( 8135):     at android.view.ViewRootImpl.performDraw(ViewRootImpl.java:4676)
+E/NocryErro( 8135):     at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:3822)
+E/NocryErro( 8135):     at android.view.ViewRootImpl.doTraversal(ViewRootImpl.java:2465)
+E/NocryErro( 8135):     at android.view.ViewRootImpl$TraversalRunnable.run(ViewRootImpl.java:9305)
+E/NocryErro( 8135):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1339)
+E/NocryErro( 8135):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1348)
+E/NocryErro( 8135):     at android.view.Choreographer.doCallbacks(Choreographer.java:952)
+E/NocryErro( 8135):     at android.view.Choreographer.doFrame(Choreographer.java:882)
+E/NocryErro( 8135):     at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1322)
+E/NocryErro( 8135):     at android.os.Handler.handleCallback(Handler.java:958)
+E/NocryErro( 8135):     at android.os.Handler.dispatchMessage(Handler.java:99)
+E/NocryErro( 8135):     at android.os.Looper.loopOnce(Looper.java:205)
+E/NocryErro( 8135):     at android.os.Looper.loop(Looper.java:294)
+E/NocryErro( 8135):     at android.app.ActivityThread.main(ActivityThread.java:8177)
+E/NocryErro( 8135):     at java.lang.reflect.Method.invoke(Native Method)
+E/NocryErro( 8135):     at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+E/NocryErro( 8135):     at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:971)
+E/NocryErro( 8392): A tela travou por 4,3 s
+E/NocryErro( 8392): o que a tela estava fazendo quando travou:
+E/NocryErro( 8392):     at android.graphics.HardwareRenderer.nSetStopped(Native Method)
+E/NocryErro( 8392):     at android.graphics.HardwareRenderer.setStopped(HardwareRenderer.java:525)
+E/NocryErro( 8392):     at android.view.ViewRootImpl.performDraw(ViewRootImpl.java:4676)
+E/NocryErro( 8392):     at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:3822)
+E/NocryErro( 8392):     at android.view.ViewRootImpl.doTraversal(ViewRootImpl.java:2465)
+E/NocryErro( 8392):     at android.view.ViewRootImpl$TraversalRunnable.run(ViewRootImpl.java:9305)
+E/NocryErro( 8392):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1339)
+E/NocryErro( 8392):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1348)
+E/NocryErro( 8392):     at android.view.Choreographer.doCallbacks(Choreographer.java:952)
+E/NocryErro( 8392):     at android.view.Choreographer.doFrame(Choreographer.java:882)
+E/NocryErro( 8392):     at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1322)
+E/NocryErro( 8392):     at android.os.Handler.handleCallback(Handler.java:958)
+E/NocryErro( 8392):     at android.os.Handler.dispatchMessage(Handler.java:99)
+E/NocryErro( 8392):     at android.os.Looper.loopOnce(Looper.java:205)
+E/NocryErro( 8392):     at android.os.Looper.loop(Looper.java:294)
+E/NocryErro( 8392):     at android.app.ActivityThread.main(ActivityThread.java:8177)
+E/NocryErro( 8392):     at java.lang.reflect.Method.invoke(Native Method)
+E/NocryErro( 8392):     at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+E/NocryErro( 8392):     at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:971)
+E/NocryErro( 8721): A tela travou por 3,3 s
+E/NocryErro( 8721): o que a tela estava fazendo quando travou:
+E/NocryErro( 8721):     at android.graphics.HardwareRenderer.nSetStopped(Native Method)
+E/NocryErro( 8721):     at android.graphics.HardwareRenderer.setStopped(HardwareRenderer.java:525)
+E/NocryErro( 8721):     at android.view.ViewRootImpl.performDraw(ViewRootImpl.java:4676)
+E/NocryErro( 8721):     at android.view.ViewRootImpl.performTraversals(ViewRootImpl.java:3822)
+E/NocryErro( 8721):     at android.view.ViewRootImpl.doTraversal(ViewRootImpl.java:2465)
+E/NocryErro( 8721):     at android.view.ViewRootImpl$TraversalRunnable.run(ViewRootImpl.java:9305)
+E/NocryErro( 8721):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1339)
+E/NocryErro( 8721):     at android.view.Choreographer$CallbackRecord.run(Choreographer.java:1348)
+E/NocryErro( 8721):     at android.view.Choreographer.doCallbacks(Choreographer.java:952)
+E/NocryErro( 8721):     at android.view.Choreographer.doFrame(Choreographer.java:882)
+E/NocryErro( 8721):     at android.view.Choreographer$FrameDisplayEventReceiver.run(Choreographer.java:1322)
+E/NocryErro( 8721):     at android.os.Handler.handleCallback(Handler.java:958)
+E/NocryErro( 8721):     at android.os.Handler.dispatchMessage(Handler.java:99)
+E/NocryErro( 8721):     at android.os.Looper.loopOnce(Looper.java:205)
+E/NocryErro( 8721):     at android.os.Looper.loop(Looper.java:294)
+E/NocryErro( 8721):     at android.app.ActivityThread.main(ActivityThread.java:8177)
+E/NocryErro( 8721):     at java.lang.reflect.Method.invoke(Native Method)
+E/NocryErro( 8721):     at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:552)
+E/NocryErro( 8721):     at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:971)
+
+== RELATÓRIO DE ERROS DO APP (tag NocryErro) · durante o estresse ==
+
+== STRICTMODE: trabalho pesado na thread principal, agrupado pelo ponto do app ==
+25 avisos, 5 lugares diferentes
+
+[9x] android.os.strictmode.DiskReadViolation
+    (sem linha do app)
+
+[4x] android.os.strictmode.DiskReadViolation
+    at com.nocry.app.Otm.f(Otm.kt:67)
+      at com.nocry.app.Otm.f(Otm.kt:67)
+      at com.nocry.app.Otm.lerLinhas(Otm.kt:73)
+      at com.nocry.app.Otm.estado(Otm.kt:341)
+      at com.nocry.app.Otm.lerStatus(Otm.kt:354)
+      at com.nocry.app.Otm.status(Otm.kt:350)
+      at com.nocry.app.HomeScreen.estOtm(Screens.kt:96)
+      at com.nocry.app.HomeScreen.info(Screens.kt:127)
+      at com.nocry.app.HomeScreen.tile(Screens.kt:139)
+      at com.nocry.app.HomeScreen.render(Screens.kt:276)
+      at com.nocry.app.Screen.redesenha(MainActivity.kt:79)
+      at com.nocry.app.Screen.aoMostrar(MainActivity.kt:82)
+
+[4x] android.os.strictmode.DiskReadViolation
+    at com.nocry.app.Otm.lerLinhas(Otm.kt:74)
+      at com.nocry.app.Otm.lerLinhas(Otm.kt:74)
+      at com.nocry.app.Otm.estado(Otm.kt:341)
+      at com.nocry.app.Otm.lerStatus(Otm.kt:354)
+      at com.nocry.app.Otm.status(Otm.kt:350)
+      at com.nocry.app.HomeScreen.estOtm(Screens.kt:96)
+      at com.nocry.app.HomeScreen.info(Screens.kt:127)
+      at com.nocry.app.HomeScreen.tile(Screens.kt:139)
+      at com.nocry.app.HomeScreen.render(Screens.kt:276)
+      at com.nocry.app.Screen.redesenha(MainActivity.kt:79)
+      at com.nocry.app.Screen.aoMostrar(MainActivity.kt:82)
+      at com.nocry.app.MainActivity.fecha(MainActivity.kt:458)
+      at com.nocry.app.MainActivity.onBackPressed(MainActivity.kt:510)
+      at com.nocry.app.MainActivity.criaTopo$lambda$7(MainActivity.kt:293)
+      at com.nocry.app.MainActivity.$r8$lambda$LlGL8f_JLfYPY_a-1t2eQC1KQHQ(Unknown Source:0)
+      at com.nocry.app.MainActivity$$ExternalSyntheticLambda3.invoke(D8$$SyntheticClass:0)
+      at com.nocry.app.Ui.clique$lambda$0(Ui.kt:111)
+      at com.nocry.app.Ui.$r8$lambda$RUqpwiAfoDt2uadtFj5afIw9gic(Unknown Source:0)
+      at com.nocry.app.Ui$$ExternalSyntheticLambda4.onClick(D8$$SyntheticClass:0)
+
+[4x] android.os.strictmode.DiskReadViolation
+    at com.nocry.app.Otm.lerLinhas(Otm.kt:75)
+      at com.nocry.app.Otm.lerLinhas(Otm.kt:75)
+      at com.nocry.app.Otm.estado(Otm.kt:341)
+      at com.nocry.app.Otm.lerStatus(Otm.kt:354)
+      at com.nocry.app.Otm.status(Otm.kt:350)
+      at com.nocry.app.HomeScreen.estOtm(Screens.kt:96)
+      at com.nocry.app.HomeScreen.info(Screens.kt:127)
+      at com.nocry.app.HomeScreen.tile(Screens.kt:139)
+      at com.nocry.app.HomeScreen.render(Screens.kt:276)
+      at com.nocry.app.Screen.redesenha(MainActivity.kt:79)
+      at com.nocry.app.Screen.aoMostrar(MainActivity.kt:82)
+      at com.nocry.app.MainActivity.fecha(MainActivity.kt:458)
+      at com.nocry.app.MainActivity.onBackPressed(MainActivity.kt:510)
+      at com.nocry.app.MainActivity.criaTopo$lambda$7(MainActivity.kt:293)
+      at com.nocry.app.MainActivity.$r8$lambda$LlGL8f_JLfYPY_a-1t2eQC1KQHQ(Unknown Source:0)
+      at com.nocry.app.MainActivity$$ExternalSyntheticLambda3.invoke(D8$$SyntheticClass:0)
+
+[4x] android.os.strictmode.DiskReadViolation
+    at com.nocry.app.Otm.lerLinhas(Otm.kt:79)
+      at com.nocry.app.Otm.lerLinhas(Otm.kt:79)
+      at com.nocry.app.Otm.estado(Otm.kt:341)
+      at com.nocry.app.Otm.lerStatus(Otm.kt:354)
+      at com.nocry.app.Otm.status(Otm.kt:350)
+      at com.nocry.app.HomeScreen.estOtm(Screens.kt:96)
+      at com.nocry.app.HomeScreen.info(Screens.kt:127)
+      at com.nocry.app.HomeScreen.tile(Screens.kt:139)
+      at com.nocry.app.HomeScreen.render(Screens.kt:276)
+      at com.nocry.app.Screen.redesenha(MainActivity.kt:79)
+      at com.nocry.app.Screen.aoMostrar(MainActivity.kt:82)
+      at com.nocry.app.MainActivity.fecha(MainActivity.kt:458)
+      at com.nocry.app.MainActivity.onBackPressed(MainActivity.kt:510)
+
+
+== POR QUE O ANDROID FECHOU O APP (exit-info) ==
+          timestamp=2026-11-21 17:39:11.931 pid=9310 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 9429 state=empty trace=null
+          timestamp=2026-11-21 17:38:34.813 pid=9183 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 9289 state=empty trace=null
+          timestamp=2026-11-21 17:37:59.702 pid=9056 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 9161 state=empty trace=null
+          timestamp=2026-11-21 17:37:23.665 pid=8849 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=39MB rss=136MB description=stop com.whatsapp.web due to from pid 9032 state=empty trace=null
+          timestamp=2026-11-21 17:36:43.879 pid=8721 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 8829 state=empty trace=null
+          timestamp=2026-11-21 17:36:07.004 pid=8546 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=37MB rss=136MB description=stop com.whatsapp.web due to from pid 8701 state=empty trace=null
+          timestamp=2026-11-21 17:35:28.819 pid=8392 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 8527 state=empty trace=null
+          timestamp=2026-11-21 17:34:55.739 pid=8264 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 8372 state=empty trace=null
+          timestamp=2026-11-21 17:34:21.212 pid=8135 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 8245 state=empty trace=null
+          timestamp=2026-11-21 17:33:44.684 pid=8002 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 8114 state=empty trace=null
+          timestamp=2026-11-21 17:33:08.463 pid=7868 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 7983 state=empty trace=null
+          timestamp=2026-11-21 17:32:30.050 pid=7581 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 7849 state=empty trace=null
+          timestamp=2026-11-21 17:31:56.610 pid=7417 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 7562 state=empty trace=null
+          timestamp=2026-11-21 17:31:23.745 pid=7239 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 7397 state=empty trace=null
+          timestamp=2026-11-21 17:30:50.149 pid=7096 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 7221 state=empty trace=null
+          timestamp=2026-11-21 17:30:14.490 pid=6933 realUid=10192 packageUid=10192 definingUid=10192 user=0
+          process=com.whatsapp.web reason=10 (USER REQUESTED) subreason=21 (FORCE STOP) status=0
+          importance=100 pss=0.00 rss=0.00 description=stop com.whatsapp.web due to from pid 7079 state=empty trace=null
+
+== MEMÓRIA ==
+Applications Memory Usage (in Kilobytes):
+Uptime: 1252547 Realtime: 1252547
+
+** MEMINFO in pid 9448 [com.whatsapp.web] **
+                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap     1166      808      324    19556     2396    48792    17569    27322
+  Dalvik Heap      205      128       48     2465      964     4657     3493     1164
+ Dalvik Other      998      732        0       73     1536                           
+        Stack      252      172       80      696      260                           
+       Ashmem       17        0        0        0      572                           
+    Other dev        9        4        4        0      248                           
+     .so mmap     2880      296        8       19    38964                           
+    .jar mmap     2279        0      196        0    33480                           
+    .apk mmap      168        0        4        0     1888                           
+    .ttf mmap      709        0      624        0      980                           
+    .dex mmap     5725        4     5708        0     6432                           
+    .oat mmap      821        0        4        0    14684                           
+    .art mmap      801       56      112     1173    18580                           
+   Other mmap      105        8       64        0     1308                           
+      Unknown      477      460       12       32      836                           
+        TOTAL    40626     2668     7188    24014   123128    53449    21062    28486
+ 
+ App Summary
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:      296                          19544
+         Native Heap:      808                           2396
+                Code:     6844                          96964
+               Stack:      172                            260
+            Graphics:        0                              0
+       Private Other:     1736
+              System:    30770
+             Unknown:                                    3964
+ 
+           TOTAL PSS:    40626            TOTAL RSS:   123128       TOTAL SWAP PSS:    24014
+ 
+ Objects
+               Views:      139         ViewRootImpl:        1
+         AppContexts:        6           Activities:        1
+              Assets:       18        AssetManagers:        0
+       Local Binders:       29        Proxy Binders:       42
+       Parcel memory:       10         Parcel count:       43
+    Death Recipients:        0             WebViews:        0
+
+== QUADROS (bot rolando o chat) ==
+Total frames rendered: 363
+Janky frames: 361 (99.45%)
+Janky frames (legacy): 363 (100.00%)
+50th percentile: 350ms
+90th percentile: 500ms
+99th percentile: 850ms
+50th gpu percentile: 4950ms
+90th gpu percentile: 4950ms
+99th gpu percentile: 4950ms
+
+== QUADROS (toques aleatórios) ==
+Total frames rendered: 348
+Janky frames: 346 (99.43%)
+Janky frames (legacy): 344 (98.85%)
+50th percentile: 250ms
+90th percentile: 550ms
+99th percentile: 1650ms
+50th gpu percentile: 4950ms
+90th gpu percentile: 4950ms
+99th gpu percentile: 4950ms
+
+== MONKEY (fim) ==
+:Sending Trackball (ACTION_MOVE): 0:(-1.0,2.0)
+:Sending Touch (ACTION_DOWN): 0:(407.0,664.0)
+:Sending Touch (ACTION_UP): 0:(420.90527,665.56934)
+:Sending Trackball (ACTION_MOVE): 0:(3.0,0.0)
+:Sending Trackball (ACTION_UP): 0:(0.0,0.0)
+:Sending Touch (ACTION_DOWN): 0:(65.0,722.0)
+:Sending Touch (ACTION_UP): 0:(81.32129,707.61914)
+:Sending Touch (ACTION_DOWN): 0:(677.0,555.0)
+:Sending Touch (ACTION_UP): 0:(696.7871,564.08887)
+    //[calendar_time:2026-11-21 17:45:43.609  system_uptime:1241239]
+    // Sending event #2400
+:Sending Touch (ACTION_DOWN): 0:(540.0,2015.0)
+:Sending Touch (ACTION_UP): 0:(546.6572,2019.7568)
+:Sending Touch (ACTION_DOWN): 0:(447.0,853.0)
+:Sending Touch (ACTION_UP): 0:(445.167,851.0674)
+:Sending Trackball (ACTION_MOVE): 0:(-3.0,-1.0)
+:Sending Trackball (ACTION_MOVE): 0:(-3.0,3.0)
+:Sending Touch (ACTION_DOWN): 0:(362.0,1981.0)
+:Sending Touch (ACTION_UP): 0:(374.6582,1983.6084)
+:Sending Trackball (ACTION_MOVE): 0:(-3.0,-1.0)
+:Sending Trackball (ACTION_MOVE): 0:(-1.0,3.0)
+:Sending Trackball (ACTION_MOVE): 0:(3.0,2.0)
+:Sending Touch (ACTION_DOWN): 0:(1065.0,2163.0)
+:Sending Touch (ACTION_UP): 0:(1063.5137,2169.7666)
+:Sending Trackball (ACTION_MOVE): 0:(3.0,-5.0)
+Events injected: 2500
+:Sending rotation degree=0, persist=false
+:Dropped: keys=0 pointers=0 trackballs=0 flips=2 rotations=0
+## Network stats: elapsed time=138549ms (0ms mobile, 0ms wifi, 138549ms not connected)
+// Monkey finished
