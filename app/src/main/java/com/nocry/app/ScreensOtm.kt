@@ -221,8 +221,9 @@ class OtmVerScreen(a: MainActivity) : Screen(a) {
         val p = plano
         if (carregando) { add(carregandoCelular(c), 0); return }
         if (p == null) {
-            add(Ui.dica(c, "Não consegui ler o celular. Confira a Conexão e tente de novo.", Ui.Dica.AVISO), 0)
-            add(Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() }, 14)
+            add(Ui.erro(c, "Sem leitura do celular", "Não consegui ler o celular. Confira a Conexão e tente de novo.", listOf(
+                Ui.button(c, "abrir conexão") { act.irAba(1) },
+                Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() })), 0)
             return
         }
         val tot = p.c.sumOf { it.kb }
@@ -299,8 +300,9 @@ class OtmProtegerScreen(a: MainActivity) : Screen(a) {
         if (carregando) { add(carregandoCelular(c), 0); return }
         val p = plano
         if (p == null) {
-            add(Ui.dica(c, "Não consegui ler o celular. Confira a Conexão.", Ui.Dica.AVISO), 0)
-            add(Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() }, 14)
+            add(Ui.erro(c, "Sem leitura do celular", "Não consegui ler o celular. Confira a Conexão.", listOf(
+                Ui.button(c, "abrir conexão") { act.irAba(1) },
+                Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() })), 0)
             return
         }
         add(Ui.dica(c, "Toque num app para alternar. Sem escudo = fecha na otimização · com escudo = nunca fecha. Só dá para mudar o que você protegeu e as mensagens.", Ui.Dica.INFO), 0)
@@ -361,8 +363,9 @@ class OtmMaisScreen(a: MainActivity) : Screen(a) {
         if (carregando) { add(carregandoCelular(c), 0); return }
         val p = plano
         if (p == null) {
-            add(Ui.dica(c, "Não consegui ler o celular. Confira a Conexão.", Ui.Dica.AVISO), 0)
-            add(Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() }, 14)
+            add(Ui.erro(c, "Sem leitura do celular", "Não consegui ler o celular. Confira a Conexão.", listOf(
+                Ui.button(c, "abrir conexão") { act.irAba(1) },
+                Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() })), 0)
             return
         }
         add(Ui.dica(c, "Toque num app do sistema para fechar junto na otimização. Toque de novo para tirar. Só aparece o que não é essencial (Telefone, Configurações, Play Services, teclado... ficam de fora).", Ui.Dica.INFO), 0)
@@ -414,6 +417,24 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
         }
     }
 
+    /**
+     * a mesma mensagem seguida varias vezes (ex.: "leitura incompleta, tentando de novo") vira uma linha so
+     * com "(12x)" no fim: a lista repetida parecia app quebrado e escondia o resto. Fica a hora da mais nova.
+     */
+    private fun agrupaRepetidos(l: List<Item>): List<Item> {
+        val out = ArrayList<Item>()
+        var i = 0
+        while (i < l.size) {
+            val it0 = l[i]
+            var j = i + 1
+            while (j < l.size && l[j].msg == it0.msg && l[j].tipo == it0.tipo && l[j].dia == it0.dia) j++
+            val n = j - i
+            out.add(if (n > 1) Item(it0.dia, it0.hora, it0.tipo, "${it0.msg}  (${n}x)") else it0)
+            i = j
+        }
+        return out
+    }
+
     private fun le(): List<Item> {
         val bruto = NLog.text(tag)
         if (bruto.startsWith("(sem registros")) return emptyList()
@@ -450,7 +471,7 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
             if (f != null && f !in tipos) filtro = null
             add(filtros(c, tipos), 16)
         }
-        val lista = (if (filtro == null) todos else todos.filter { it.tipo == filtro }).take(MAX_ITENS)
+        val lista = agrupaRepetidos((if (filtro == null) todos else todos.filter { it.tipo == filtro }).take(MAX_ITENS))
 
         // ---------------- registros, agrupados por dia ----------------
         val card = Ui.card(c)

@@ -296,13 +296,15 @@ class MainActivity : Activity() {
         vp.rightMargin = Ui.dp(this, 12)
         t.addView(v, vp)
 
-        // barrinha em degrade antes do titulo (aparece nas abas, onde nao tem botao de voltar)
+        // losango em degrade antes do titulo (aparece nas abas, onde nao tem botao de voltar). Era uma barrinha
+        // em pe, que no tema claro/prata parecia a letra "I" grudada no titulo ("I CONEXÃO")
         val marca = View(this)
-        marca.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Theme.accent, Theme.accent2)).also { it.cornerRadius = Ui.dp(this, 2).toFloat() }
+        marca.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Theme.accent, Theme.accent2)).also { it.cornerRadius = Ui.dp(this, 2).toFloat() }
+        marca.rotation = 45f
         marcaTopo = marca
-        val mp = LinearLayout.LayoutParams(Ui.dp(this, 4), Ui.dp(this, 22))
-        mp.rightMargin = Ui.dp(this, 10)
-        mp.leftMargin = Ui.dp(this, 4)
+        val mp = LinearLayout.LayoutParams(Ui.dp(this, 9), Ui.dp(this, 9))
+        mp.rightMargin = Ui.dp(this, 13)
+        mp.leftMargin = Ui.dp(this, 7)
         t.addView(marca, mp)
 
         barra = Ui.text(this, "NOCRY", 22f, Ui.TEXT, true)

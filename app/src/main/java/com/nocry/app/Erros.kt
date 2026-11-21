@@ -118,7 +118,8 @@ object Erros {
                     if (agora - ultimo < 20_000) continue          // não enche de arquivo se travar várias vezes seguidas
                     ultimo = agora
                     val txt = pilha.joinToString("\n") { "    at $it" }
-                    salvar("travada", "A tela travou por ${parado / 1000.0} s${if (!ok.get()) " (ainda travada)" else ""}",
+                    val seg = String.format(java.util.Locale.forLanguageTag("pt-BR"), "%.1f", parado / 1000.0)
+                    salvar("travada", "A tela travou por $seg s${if (!ok.get()) " (ainda travada)" else ""}",
                         "o que a tela estava fazendo quando travou:\n$txt", agora - parado)
                 } catch (_: InterruptedException) {
                     return@Thread

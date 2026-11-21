@@ -166,7 +166,7 @@ object Ui {
     fun raioPeq(max: Int): Int = minOf(max, Prefs.raio + 3)
 
     fun label(c: Context, s: String): TextView {
-        val t = text(c, s, 10.5f, RED, true, mono = true)
+        val t = text(c, s, 11f, RED, true, mono = true)
         t.letterSpacing = if (Prefs.maiusc) 0.14f else 0.06f
         t.maxLines = 1
         t.ellipsize = android.text.TextUtils.TruncateAt.END
@@ -287,7 +287,7 @@ object Ui {
         dp2.gravity = Gravity.CENTER_HORIZONTAL
         dp2.bottomMargin = dp(c, 7)
         col.addView(dot, dp2)
-        val n = text(c, nome, 9f, MUTED, mono = true)
+        val n = text(c, nome, 10f, MUTED, mono = true)
         n.gravity = Gravity.CENTER
         n.letterSpacing = 0.06f
         n.maxLines = 1
@@ -319,7 +319,7 @@ object Ui {
         col.setPadding(dp(c, 12), dp(c, 11), dp(c, 12), dp(c, 12))
         val topo = hbox(c)
         topo.addView(icone(c, ico, MUTED, 13))
-        val r = text(c, rotulo, 8.5f, MUTED, true, mono = true)
+        val r = text(c, rotulo, 9.5f, MUTED, true, mono = true)
         r.maxLines = 1
         r.ellipsize = android.text.TextUtils.TruncateAt.END
         val rp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -446,6 +446,9 @@ object Ui {
         val hs = android.widget.HorizontalScrollView(c)
         hs.isHorizontalScrollBarEnabled = false
         hs.overScrollMode = View.OVER_SCROLL_NEVER
+        // a aba cortada na ponta some esmaecendo: dá pra ver que tem mais pro lado
+        hs.isHorizontalFadingEdgeEnabled = true
+        hs.setFadingEdgeLength(dp(c, 28))
         val l = hbox(c)
         for ((i, o) in opcoes.withIndex()) {
             val sel = i == escolhido
@@ -501,10 +504,29 @@ object Ui {
             val np = LinearLayout.LayoutParams(dp(c, 17), dp(c, 17))
             np.rightMargin = dp(c, 10)
             r.addView(n, np)
-            r.addView(text(c, s, 10.5f, TEXT), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            r.addView(text(c, s, 11.5f, TEXT), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             col.addView(r, lp(top = if (i == 0) 0 else 8, c = c))
         }
         return col
+    }
+
+    /**
+     * tela de erro de verdade: icone grande, titulo, uma linha explicando e as saidas (botoes). Antes era so
+     * uma faixinha de aviso e o resto da tela vazio, com cara de app quebrado.
+     */
+    fun erro(c: Context, titulo: String, msg: String, acoes: List<View>): View {
+        val caixa = card(c, forte = true)
+        caixa.gravity = Gravity.CENTER_HORIZONTAL
+        caixa.setPadding(dp(c, 20), dp(c, 26), dp(c, 20), dp(c, 20))
+        caixa.addView(caixaIcone(c, R.drawable.ic_warn, false, 56))
+        val t = text(c, titulo, 18f, TEXT, true)
+        t.gravity = Gravity.CENTER
+        caixa.addView(t, lp(top = 14, c = c))
+        val m = text(c, msg, 12f, MUTED)
+        m.gravity = Gravity.CENTER
+        caixa.addView(m, lp(top = 6, c = c))
+        for ((i, a) in acoes.withIndex()) caixa.addView(a, lp(top = if (i == 0) 18 else 10, c = c))
+        return caixa
     }
 
     enum class Dica { INFO, AVISO, OK }
@@ -515,6 +537,19 @@ object Ui {
         val ico = when (tipo) { Dica.INFO -> R.drawable.ic_info; Dica.AVISO -> R.drawable.ic_warn; Dica.OK -> R.drawable.ic_check }
         val r = hbox(c)
         r.gravity = Gravity.TOP
+        if (tipo == Dica.INFO) {
+            // informação comum fica discreta (barrinha no degrade do tema + texto): quase toda tela começa
+            // com uma, e uma caixa azul em cada tela competia com o conteúdo e poluía o app
+            r.background = shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xA8), raioPeq(12))
+            r.setPadding(0, dp(c, 10), dp(c, 13), dp(c, 10))
+            val barra = View(c)
+            barra.background = Botao(c, "grad", 1)
+            val bp = LinearLayout.LayoutParams(dp(c, 3), ViewGroup.LayoutParams.MATCH_PARENT)
+            bp.rightMargin = dp(c, 11)
+            r.addView(barra, bp)
+            r.addView(text(c, s, 11.5f, Theme.mix(TEXT, MUTED, 0.3f)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            return r
+        }
         // base escura por baixo da cor: o balão fica legível mesmo em cima de fundo claro
         r.background = android.graphics.drawable.LayerDrawable(arrayOf(
             shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xC8), raioPeq(14)),
@@ -584,7 +619,7 @@ object Ui {
         t.maxLines = 1
         t.ellipsize = android.text.TextUtils.TruncateAt.END
         cab.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val selo = text(c, when (estado) { 0 -> "feito"; 1 -> "agora"; else -> "depois" }, 8.5f, corEstado, true, mono = true)
+        val selo = text(c, when (estado) { 0 -> "feito"; 1 -> "agora"; else -> "depois" }, 9.5f, corEstado, true, mono = true)
         selo.background = shape(c, Theme.alpha(corEstado, 0x1E), 7)
         selo.setPadding(dp(c, 7), dp(c, 3), dp(c, 7), dp(c, 3))
         val slp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -819,26 +854,26 @@ object Ui {
         val p = dp(c, 14)
         col.setPadding(p, p, p, dp(c, 13))
         col.minimumHeight = dp(c, 132)
-        // topo: icone na esquerda e a "luz" de estado na direita (acesa = modo ligado)
+        // topo: icone na esquerda e, so com o modo ligado, a luz verde na direita (apagada ela nao dizia nada:
+        // o estado ja esta escrito no rodape)
         val topo = hbox(c)
         topo.gravity = Gravity.TOP
         topo.addView(caixaIcone(c, ico, on))
         topo.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
-        val corLuz = if (on) OK else Theme.alpha(Color.WHITE, 0x40)
-        val led = FrameLayout(c)
         if (on) {
+            val led = FrameLayout(c)
             val halo = View(c)
             halo.background = shape(c, Theme.alpha(OK, 0x38), 8)
             led.addView(halo, FrameLayout.LayoutParams(dp(c, 16), dp(c, 16), Gravity.CENTER))
+            val dot = View(c)
+            dot.background = shape(c, OK, 4)
+            led.addView(dot, FrameLayout.LayoutParams(dp(c, 7), dp(c, 7), Gravity.CENTER))
+            topo.addView(led, LinearLayout.LayoutParams(dp(c, 16), dp(c, 16)))
         }
-        val dot = View(c)
-        dot.background = shape(c, corLuz, 4)
-        led.addView(dot, FrameLayout.LayoutParams(dp(c, 7), dp(c, 7), Gravity.CENTER))
-        topo.addView(led, LinearLayout.LayoutParams(dp(c, 16), dp(c, 16)))
         col.addView(topo)
         col.addView(text(c, titulo, 13f, TEXT, true).also { it.maxLines = 2; it.ellipsize = android.text.TextUtils.TruncateAt.END }, lp(top = 11, c = c))
         if (desc.isNotEmpty()) {
-            val d = text(c, desc, 10.5f, MUTED)
+            val d = text(c, desc, 11f, MUTED)
             d.setLineSpacing(0f, 1.15f)
             d.ellipsize = android.text.TextUtils.TruncateAt.END
             d.maxLines = 2
@@ -847,7 +882,7 @@ object Ui {
         // espaco flexivel empurra o rodape pra baixo - assim ele nunca fica em cima do icone ou do titulo
         col.addView(View(c), LinearLayout.LayoutParams(1, 0, 1f))
         // rodape: estado em texto e um trilho fino embaixo, que acende no degrade quando o modo esta ligado
-        val est = text(c, estado, 9.5f, if (on) OK else MUTED, true, mono = true)
+        val est = text(c, estado, 10.5f, if (on) OK else MUTED, true, mono = true)
         est.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
         est.maxLines = 1
         est.ellipsize = android.text.TextUtils.TruncateAt.END

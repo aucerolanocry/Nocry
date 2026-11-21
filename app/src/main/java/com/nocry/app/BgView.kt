@@ -417,7 +417,10 @@ class BgView(c: Context) : FrameLayout(c) {
 
     /** so escurecimento e desfoque (pode ser chamado enquanto o usuario arrasta a barra, sem reiniciar o video) */
     fun ajustaEfeitos() {
-        escuro.setBackgroundColor(Theme.alpha(0xFF000000.toInt(), Prefs.bgEscuro * 255 / 100))
+        // foto ou video do usuario costuma ter partes bem claras (ceu, lua); um minimo de escurecimento
+        // segura a leitura do texto cinza por cima. O desenho animado do app ja e escuro, entao vale o que ele escolheu
+        val nivel = if (Theme.temMidiaDeFundo()) maxOf(Prefs.bgEscuro, 30) else Prefs.bgEscuro
+        escuro.setBackgroundColor(Theme.alpha(0xFF000000.toInt(), nivel * 255 / 100))
         desfoque()
     }
 
