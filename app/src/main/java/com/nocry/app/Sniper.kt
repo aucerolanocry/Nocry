@@ -1954,6 +1954,15 @@ object Sniper {
         return null
     }
 
+    /** IDs achados de novo pela procura valem como estão: tira a correção antiga deles */
+    @Synchronized
+    private fun tirarCorrecoes(ids: Collection<String>) {
+        val cor = try { JSONObject(sp.getString("corrigidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
+        var trocou = false
+        for (id in ids) if (cor.has(id)) { cor.remove(id); trocou = true }
+        if (trocou) sp.edit().putString("corrigidos", cor.toString()).apply()
+    }
+
     /** a mensagem da fila mostra outro valor: guarda o valor certo desse ID (vale nas próximas rodadas) */
     @Synchronized
     private fun corrigirValor(fid: String, valor: String) {
@@ -2731,11 +2740,7 @@ object Sniper {
             } catch (t: Throwable) {
                 log("erro", "procurar filas: ${t.message ?: t.javaClass.simpleName}")
             } finally {
-                if (descorrigir.isNotEmpty()) {
-                    val cor = try { JSONObject(sp.getString("corrigidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
-                    for (id in descorrigir) cor.remove(id)
-                    sp.edit().putString("corrigidos", cor.toString()).apply()
-                }
+                if (descorrigir.isNotEmpty()) tirarCorrecoes(descorrigir)
                 sp.edit().putString("aprendidos", apr.toString()).apply()
                 salvarCache()
                 marcarBackup()
