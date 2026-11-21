@@ -70,8 +70,9 @@ object Theme {
     }
 
     /** manchas de luz do estilo vidro: com tema branco/prata fica azul e roxo; com tema colorido, as cores do tema */
-    fun luz1(): Int = if (neutra(accent)) 0xFF78AAFF.toInt() else accent
-    fun luz2(): Int = if (neutra(accent) && neutra(accent2)) 0xFFAA78FF.toInt() else if (neutra(accent2)) girar(accent, 40f) else accent2
+    fun luz1(a1: Int = accent): Int = if (neutra(a1)) 0xFF78AAFF.toInt() else a1
+    fun luz2(a1: Int = accent, a2: Int = accent2): Int =
+        if (neutra(a1) && neutra(a2)) 0xFFAA78FF.toInt() else if (neutra(a2)) girar(a1, 40f) else a2
 
     /** cor do texto em cima de uma cor de destaque (preto se a cor for clara) */
     fun sobre(cor: Int): Int {

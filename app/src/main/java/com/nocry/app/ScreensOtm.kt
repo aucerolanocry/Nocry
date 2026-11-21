@@ -582,7 +582,7 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
         for ((i, o) in opcoes.withIndex()) {
             val sel = o == filtro
             val t = Ui.text(c, o ?: "tudo", 10f, if (sel) Theme.sobreGrad() else Ui.MUTED, true, mono = true)
-            t.background = if (sel) Botao(c, "grad", Ui.raioPeq(12)) else Ui.shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xC8), Ui.raioPeq(12), Theme.alpha(Color.WHITE, 0x26), 1)
+            t.background = if (sel) Botao(c, "grad", Ui.raioPeq(12)) else Ui.peca(c, Ui.raioPeq(12), 0xC8, 0x26)
             t.setPadding(Ui.dp(c, 13), Ui.dp(c, 8), Ui.dp(c, 13), Ui.dp(c, 8))
             Ui.clique(t) { filtro = o; redesenha() }
             val p = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -960,6 +960,6 @@ class SobreScreen(a: MainActivity) : Screen(a) {
 
         // ---------------- creditos ----------------
         add(Ui.text(c, "App desenvolvido por Aucerola · ADB embutido: libadb-android (Muntashir Al-Islam), licença Apache-2.0.", 9.5f, Ui.MUTED), 22)
-        add(Ui.text(c, "Fontes: Big Shoulders, Tektur, Outfit, Bricolage Grotesque, Gloock, Work Sans, Instrument Sans, Italiana, Pixelify Sans, Red Hat Mono, Space Grotesk, JetBrains Mono (licença SIL OFL) e Poppins (licença OFL).", 9.5f, Ui.MUTED), 6)
+        add(Ui.text(c, "Fontes: Big Shoulders, Rajdhani, Russo One, Exo 2, Orbitron, Oxanium, Tektur, Outfit, Bricolage Grotesque, Gloock, Work Sans, Instrument Sans, Italiana, Pixelify Sans, Red Hat Mono, Space Grotesk, JetBrains Mono (licença SIL OFL) e Poppins (licença OFL).", 9.5f, Ui.MUTED), 6)
     }
 }

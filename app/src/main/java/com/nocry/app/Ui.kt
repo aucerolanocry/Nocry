@@ -287,7 +287,7 @@ object Ui {
         val s = android.text.SpannableString(n + "  " + up(valor))
         s.setSpan(android.text.style.ForegroundColorSpan(MUTED), 0, n.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         s.setSpan(android.text.style.ForegroundColorSpan(if (ok == true) TEXT else cor), n.length + 2, s.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        val t = text(c, "", 9.5f, TEXT, true, mono = true)
+        val t = text(c, "", 10.5f, TEXT, true, mono = true)
         t.setAllCaps(false)
         t.letterSpacing = if (Prefs.maiusc) 0.06f else 0.02f
         t.text = s
@@ -699,8 +699,9 @@ object Ui {
         val cab = hbox(c)
         cab.minimumHeight = dp(c, 40)
         // faixa escura atras do titulo: o passo vira uma linha de verdade em vez de texto solto no fundo
-        cab.background = shape(c, Theme.alpha(0xFF0B0A12.toInt(), if (estado == 1) 0xD8 else 0xA8), raioPeq(10),
-            if (estado == 1) Theme.alpha(Theme.accent, 0x70) else Theme.alpha(Color.WHITE, 0x1A), 1)
+        cab.background = if (Theme.vidro && estado != 1) peca(c, raioPeq(14), 0xA8, 0x0E)
+            else shape(c, Theme.alpha(0xFF0B0A12.toInt(), if (estado == 1) 0xD8 else 0xA8), raioPeq(if (Theme.vidro) 14 else 10),
+                if (estado == 1) Theme.alpha(Theme.accent, 0x70) else Theme.alpha(Color.WHITE, 0x1A), 1)
         cab.setPadding(dp(c, 12), dp(c, 6), dp(c, 10), dp(c, 6))
         val t = text(c, titulo, 13f, if (estado == 2) MUTED else TEXT, true)
         t.maxLines = 1
@@ -944,9 +945,10 @@ object Ui {
         col.setPadding(p, p, p, p)
         col.minimumHeight = dp(c, 140)
         col.addView(caixaIcone(c, ico, on, 38))
-        col.addView(text(c, titulo, 15f, TEXT, true).also { it.maxLines = 2; it.ellipsize = android.text.TextUtils.TruncateAt.END }, lp(top = 12, c = c))
+        // nome numa linha so (encolhe um pouco se precisar): quebrado em 2 linhas o quadrado ficava torto
+        col.addView(text(c, titulo, 13f, TEXT, true).also { umaLinha(it, 10) }, lp(top = 12, c = c))
         if (desc.isNotEmpty()) {
-            val d = text(c, desc, 10.5f, MUTED)
+            val d = text(c, desc, 9.5f, MUTED)
             d.setLineSpacing(0f, 1.12f)
             d.ellipsize = android.text.TextUtils.TruncateAt.END
             d.maxLines = 2

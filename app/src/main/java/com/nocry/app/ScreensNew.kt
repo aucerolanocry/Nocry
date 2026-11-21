@@ -493,8 +493,8 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         val sel = Prefs.tema == t.id
         val box = Ui.vbox(c)
         // base escura com borda fina: o nome do tema fica legivel em cima de qualquer fundo
-        box.background = Ui.shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xD8), Ui.raioPeq(16),
-            if (sel) Theme.alpha(Theme.accent, 0x99) else Theme.alpha(android.graphics.Color.WHITE, 0x1F), 1)
+        box.background = if (sel) Ui.shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xD8), Ui.raioPeq(16), Theme.alpha(Theme.accent, 0x99), 1)
+            else Ui.peca(c, Ui.raioPeq(16), 0xD8)
         val pd = Ui.dp(c, 6)
         box.setPadding(pd, pd, pd, Ui.dp(c, 10))
         box.addView(Miniatura.tema(c, t, sel), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 112)))

@@ -279,6 +279,16 @@ class Miniatura private constructor(c: Context, private val tema: Tema?, private
         cv.drawRect(0f, 0f, w, h, p)
         val tipo = tema?.fundo ?: fundo ?: "noite"
         pinta(cv, tipo, w, h, ac, ac2, base)
+        if (tema?.cartao == "vidro") {
+            // tema de vidro: as duas manchas de luz do fundo, como no app
+            val l1 = Theme.luz1(ac)
+            val l2 = Theme.luz2(ac, ac2)
+            p.shader = RadialGradient(w * 0.9f, h * 0.1f, w * 0.75f, Theme.alpha(l1, 0x80), Theme.alpha(l1, 0), Shader.TileMode.CLAMP)
+            cv.drawRect(0f, 0f, w, h, p)
+            p.shader = RadialGradient(0f, h * 0.75f, w * 0.7f, Theme.alpha(l2, 0x70), Theme.alpha(l2, 0), Shader.TileMode.CLAMP)
+            cv.drawRect(0f, 0f, w, h, p)
+            p.shader = null
+        }
         if (tema != null) {
             p.shader = LinearGradient(0f, 0f, w, h, ac, ac2, Shader.TileMode.CLAMP)
             cv.drawCircle(w * 0.3f, h * 0.30f, w * 0.17f, p)
