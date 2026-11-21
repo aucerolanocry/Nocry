@@ -1,8 +1,10 @@
 Fontes incluídas no Nocry (todas sob a SIL Open Font License 1.1, que permite uso e redistribuição):
 
 Big Shoulders, Bricolage Grotesque, Gloock, Instrument Sans, Italiana, Outfit, Pixelify Sans,
-Red Hat Mono, Tektur, Work Sans, Space Grotesk, JetBrains Mono: o texto da licença de cada uma
-está nos arquivos OFL-*.txt desta pasta.
+Red Hat Mono, Tektur, Work Sans, Space Grotesk, JetBrains Mono, Rajdhani, Russo One, Exo 2,
+Orbitron, Oxanium: o texto da licença de cada uma está nos arquivos OFL-*.txt desta pasta.
+Rajdhani, Exo 2 e Oxanium foram reduzidas só às letras latinas (o app não usa as outras); Russo One e
+Orbitron têm nome reservado na licença, então vão do jeito original, sem nenhuma mudança.
 
 Poppins: Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins),
 licenciada sob a SIL Open Font License 1.1 (https://openfontlicense.org).

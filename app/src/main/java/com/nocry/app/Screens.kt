@@ -137,7 +137,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         add(cab, 0)
 
         // ---------------- saudacao ----------------
-        val nome = License.label()
+        // o nome que a pessoa escolheu no ESTUDIO; sem escolha, o nome da key
+        val nome = Prefs.apelido.ifEmpty { License.label() }
         val hora = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
         val saud = when {
             hora < 5 -> "Boa madrugada"

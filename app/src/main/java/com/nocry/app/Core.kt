@@ -363,10 +363,29 @@ var bypassVolAtivo: Boolean
     var escala: Int
         get() = gi("escala", 100, 85, 130)
         set(v) = pi("escala", v.coerceIn(85, 130))
+    /** pacote de onde vem a fonte do TEXTO corrido ("" = a do mesmo pacote dos titulos) */
+    var fonteTexto: String
+        get() = gs("fonte_texto").let { if (it != null && Packs.existe(it)) it else "" }
+        set(v) = ps("fonte_texto", v)
     /** todo o texto em maiusculo */
     var maiusc: Boolean
         get() = sp.getBoolean("maiusc", true)
         set(v) = pb("maiusc", v)
+    /** nome da saudacao no inicio ("" = o nome da key) */
+    var apelido: String
+        get() = gs("apelido") ?: ""
+        set(v) = ps("apelido", v.trim().take(24))
+    /** barra de baixo com o nome de todos os botoes (desligado = so o da aba aberta) */
+    var navNomes: Boolean
+        get() = sp.getBoolean("nav_nomes", false)
+        set(v) = pb("nav_nomes", v)
+    /** som de clique nos botoes */
+    var somClique: Boolean
+        get() = sp.getBoolean("som_clique", false)
+        set(v) = pb("som_clique", v)
+    /** os 3 visuais guardados pelo usuario no ESTUDIO (texto com os valores; null = vazio) */
+    fun temaSalvo(i: Int): String? = gs("tema_salvo_$i")
+    fun salvaTema(i: Int, v: String?) = ps("tema_salvo_$i", v)
     val neon: Boolean get() = brilho > 0
     var anim: Boolean
         get() = sp.getBoolean("anim", true)

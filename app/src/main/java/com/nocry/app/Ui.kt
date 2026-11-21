@@ -89,6 +89,10 @@ object Ui {
     /** vibracao curta ao tocar (se o usuario ligou no ESTUDIO) */
     fun toca(v: View) {
         if (Prefs.vibrar) try { v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) } catch (_: Throwable) {}
+        if (Prefs.somClique) try {
+            (v.context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager)
+                .playSoundEffect(android.media.AudioManager.FX_KEY_CLICK, 0.6f)
+        } catch (_: Throwable) {}
     }
 
     fun clique(v: View, acao: () -> Unit) {
@@ -104,9 +108,10 @@ object Ui {
     fun text(c: Context, s: String, sp: Float = 14f, color: Int = TEXT, bold: Boolean = false, mono: Boolean = false, code: Boolean = false): TextView {
         val t = TextView(c)
         t.text = s
-        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp * Theme.escalaTexto() * fator(c) * (if (code) 0.95f else 1f))
-        t.setTextColor(color)
         val display = bold || mono
+        val esc = if (display || code) Theme.escalaTexto() else Theme.escalaCorpo()
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp * esc * fator(c) * (if (code) 0.95f else 1f))
+        t.setTextColor(color)
         // texto corrido (explicacoes) ganha mais entrelinha: em paragrafo, linha colada cansa a leitura
         t.setLineSpacing(0f, if (display || code) 1.12f else 1.3f)
         t.typeface = if (code) Theme.codigo(c) else Theme.fonte(c, display, bold)

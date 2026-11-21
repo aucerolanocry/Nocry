@@ -347,7 +347,8 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         Prefs.bgTipo, Prefs.bgPreset, Prefs.bgArquivo, Prefs.bgEscuro, Prefs.bgBlur, Prefs.accent, Prefs.accent2, Prefs.baseCor,
         Prefs.angulo, Prefs.tema, Prefs.cartao, Prefs.vidro, Prefs.raio, Prefs.brilho, Prefs.borda, Prefs.fonte, Prefs.escala,
         Prefs.maiusc, Prefs.anim, Prefs.particulas, Prefs.scanner, Prefs.pulso, Prefs.vibrar, Prefs.vibrarAvisos, ocupado, msg,
-        Prefs.introModo, Prefs.introSom, Prefs.introMusica, Prefs.introInicio, ocupadoMus, msgMus
+        Prefs.introModo, Prefs.introSom, Prefs.introMusica, Prefs.introInicio, ocupadoMus, msgMus,
+        Prefs.fonteTexto, Prefs.apelido, Prefs.navNomes, Prefs.somClique, Prefs.temaSalvo(1), Prefs.temaSalvo(2), Prefs.temaSalvo(3)
     ).joinToString("|")
 
     private fun arquivo(): File? = Prefs.bgArquivo?.let { File(act.filesDir, it) }?.takeIf { it.isFile }
@@ -424,6 +425,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             i += 2
         }
         if (Prefs.tema == "custom") add(Ui.dica(c, "Você está com um visual personalizado. Tocar num tema troca tudo de uma vez.", Ui.Dica.INFO), 16)
+        add(meusTemas(c), 22)
         add(Ui.grupo(c, "outros", listOf(
             Ui.item(c, "Organizar o início", "ordem e visibilidade dos modos", R.drawable.ic_sliders) { act.abre(OrganizarScreen(act)) },
             Ui.item(c, "Voltar ao tema Brasa", "cores, fonte, cartões, fundo e efeitos padrão", R.drawable.ic_sparkle) {
@@ -432,6 +434,44 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
                 }
             }
         )), 22)
+    }
+
+    // ---------------- meus temas: 3 visuais guardados + codigo pra passar pros amigos ----------------
+    private fun meusTemas(c: Context): View {
+        val itens = ArrayList<View>()
+        for (i in 1..3) {
+            val salvo = Prefs.temaSalvo(i)
+            val v = Ui.item(c, "Meu tema $i",
+                if (salvo == null) "vazio · toque pra guardar o visual de agora" else "toque pra usar · segure pra guardar o de agora",
+                R.drawable.ic_sparkle, if (salvo == null) "guardar" else "usar") {
+                if (salvo == null) {
+                    Prefs.salvaTema(i, VisualSalvo.atual())
+                    Ui.toast(act, "Guardado no meu tema $i")
+                    redesenha()
+                } else if (VisualSalvo.aplica(salvo)) act.reaplica() else Ui.toast(act, "Esse tema guardado estragou. Guarde de novo.")
+            }
+            v.setOnLongClickListener {
+                Ui.dialogConfirma(act, "GUARDAR NO MEU TEMA $i", "O visual de agora fica guardado aqui (o que estava antes some).", "GUARDAR") {
+                    Prefs.salvaTema(i, VisualSalvo.atual())
+                    Ui.toast(act, "Guardado no meu tema $i")
+                    redesenha()
+                }
+                true
+            }
+            itens.add(v)
+        }
+        itens.add(Ui.item(c, "Copiar o código do visual", "mande pros amigos: eles colam e ficam com o mesmo visual", R.drawable.ic_log) {
+            val cm = act.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("NOCRY visual", VisualSalvo.codigo()))
+            Ui.toast(act, "Código copiado")
+        })
+        itens.add(Ui.item(c, "Usar um código", "cole o código que um amigo te mandou", R.drawable.ic_brush) {
+            Ui.dialogTexto(act, "USAR UM CÓDIGO", "cole aqui o código NOCRY1:...") { s ->
+                val txt = VisualSalvo.deCodigo(s)
+                if (txt != null && VisualSalvo.aplica(txt)) act.reaplica() else Ui.toast(act, "Esse código não é de um visual do NOCRY")
+            }
+        })
+        return Ui.grupo(c, "meus temas", itens)
     }
 
     private fun cartaTema(c: Context, t: Tema): View {
@@ -497,11 +537,18 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
 
     // ---------------- texto ----------------
     private fun abaTexto(c: Context) {
-        val t = secao(c, "fonte", forte = true, icone = R.drawable.ic_sliders)
+        val t = secao(c, "letra dos títulos", forte = true, icone = R.drawable.ic_sliders)
         t.addView(fontes(c), Ui.lp(top = 12, c = c))
         add(t, 14)
+        val tc = secao(c, "letra do texto", icone = R.drawable.ic_sliders)
+        tc.addView(Ui.text(c, "A letra das explicações. \"Igual ao título\" usa a que vem junto com a letra dos títulos.", 11f, Ui.MUTED), Ui.lp(top = 8, c = c))
+        tc.addView(fontesTexto(c), Ui.lp(top = 12, c = c))
+        add(tc, 12)
         add(Ui.grupo(c, "texto", listOf(
-            Ui.itemChave(c, "Tudo em maiúsculo", "todos os textos do app em caixa alta (desligado: só as primeiras letras)", Prefs.maiusc, R.drawable.ic_brush) { x -> Prefs.maiusc = x; muda() }
+            Ui.itemChave(c, "Tudo em maiúsculo", "todos os textos do app em caixa alta (desligado: só as primeiras letras)", Prefs.maiusc, R.drawable.ic_brush) { x -> Prefs.maiusc = x; muda() },
+            Ui.item(c, "Seu nome no início", "aparece na saudação (vazio = o nome da key)", R.drawable.ic_brush, Prefs.apelido.ifEmpty { "da key" }) {
+                Ui.dialogTexto(act, "SEU NOME", "como você quer ser chamado") { v -> Prefs.apelido = v; redesenha() }
+            }
         )), 18)
         val s = Ui.card(c)
         s.addView(Ui.slider(c, "Tamanho do texto", Prefs.escala, 85, 130, "%") { x -> Prefs.escala = x; muda() })
@@ -516,7 +563,11 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             Ui.itemChave(c, "Linhas de scanner", "listras e uma faixa de luz que varre a tela", Prefs.scanner, R.drawable.ic_sliders) { x -> Prefs.scanner = x; muda() },
             Ui.itemChave(c, "Brilho pulsando", "o anel do início respira", Prefs.pulso, R.drawable.ic_stat) { x -> Prefs.pulso = x; muda() }
         )), 14)
+        add(Ui.grupo(c, "barra de baixo", listOf(
+            Ui.itemChave(c, "Nome em todos os botões", "mostra o nome embaixo de cada ícone (desligado: só o da aba aberta)", Prefs.navNomes, R.drawable.ic_home) { x -> Prefs.navNomes = x; act.reaplica() }
+        )), 18)
         add(Ui.grupo(c, "toque", listOf(
+            Ui.itemChave(c, "Som de clique", "um clique curto ao tocar nos botões", Prefs.somClique, R.drawable.ic_volume) { x -> Prefs.somClique = x; redesenha() },
             Ui.itemChave(c, "Vibrar ao tocar", "vibração curta nos botões", Prefs.vibrar, R.drawable.ic_bolt) { x -> Prefs.vibrar = x; muda() },
             Ui.itemChave(c, "Vibrar nos avisos", "bypass e toque: 1 = aplicou · 2 = restaurou · 3 = falhou", Prefs.vibrarAvisos, R.drawable.ic_warn) { x -> Prefs.vibrarAvisos = x; muda() }
         )), 18)
@@ -695,6 +746,47 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             i += 2
         }
         return col
+    }
+
+    /** grade da "letra do texto": a primeira opcao e "igual ao titulo" (id vazio) */
+    private fun fontesTexto(c: Context): View {
+        val col = Ui.vbox(c)
+        val ids = listOf("") + Packs.lista.map { it.id }
+        var i = 0
+        while (i < ids.size) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.TOP
+            for (k in i until i + 2) {
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                if (k % 2 == 1) lp.leftMargin = Ui.dp(c, 10)
+                if (k < ids.size) linha.addView(celulaTexto(c, ids[k]), lp) else linha.addView(View(c), lp)
+            }
+            col.addView(linha, Ui.lp(top = if (i == 0) 0 else 10, c = c))
+            i += 2
+        }
+        return col
+    }
+
+    private fun celulaTexto(c: Context, id: String): View {
+        val sel = Prefs.fonteTexto == id
+        val p = if (id.isEmpty()) Theme.pack() else Packs.get(id)
+        val b = Ui.vbox(c)
+        b.background = Ui.ripple(c, Ui.glass(c, 14, forte = false, ligado = sel), Painel(c, raioDp = 14, mascara = true))
+        val pd = Ui.dp(c, 12)
+        b.setPadding(pd, Ui.dp(c, 10), pd, Ui.dp(c, 10))
+        val amostra = android.widget.TextView(c)
+        amostra.text = "TEXTO 123"
+        amostra.setTextColor(if (sel) Ui.RED else Ui.TEXT)
+        amostra.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f * p.escala)
+        amostra.typeface = Theme.fonteDe(c, p, false, false)
+        amostra.includeFontPadding = false
+        amostra.maxLines = 1
+        b.addView(amostra)
+        val nome = Ui.text(c, if (id.isEmpty()) "igual ao título" else p.nome, 11f, if (sel) Ui.RED else Ui.MUTED, true, mono = true)
+        nome.maxLines = 1
+        b.addView(nome, Ui.lp(top = 6, c = c))
+        Ui.clique(b) { Prefs.fonteTexto = id; muda() }
+        return b
     }
 
     private fun celulaFonte(c: Context, p: Pack): View {

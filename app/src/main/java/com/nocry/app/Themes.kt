@@ -19,7 +19,11 @@ class Pack(
 
 object Packs {
     val lista = listOf(
-        Pack("bigs", "Big Shoulders", "BigShoulders-Regular.ttf", "BigShoulders-Bold.ttf", "BigShoulders-Regular.ttf", "BigShoulders-Bold.ttf", 1.28f, 0.06f),
+        // titulos na Big Shoulders; texto corrido na Rajdhani: a Big Shoulders e estreita demais pra paragrafo
+        // em caixa alta (cansava e parecia tudo espremido), a Rajdhani e mais larga e continua com cara de jogo
+        Pack("bigs", "Big Shoulders", "BigShoulders-Regular.ttf", "BigShoulders-Bold.ttf", "Rajdhani-SemiBold.ttf", "Rajdhani-Bold.ttf", 1.28f, 0.06f),
+        Pack("russo", "Russo + Exo", "RussoOne-Regular.ttf", "RussoOne-Regular.ttf", "Exo2.ttf", "Exo2.ttf", 0.96f, 0.04f, variavel = true),
+        Pack("orbitron", "Orbitron", "Orbitron.ttf", "Orbitron.ttf", "Oxanium.ttf", "Oxanium.ttf", 0.92f, 0.06f, variavel = true),
         Pack("tektur", "Tektur", "Tektur-Regular.ttf", "Tektur-Medium.ttf", "Tektur-Regular.ttf", "Tektur-Medium.ttf", 1.0f, 0.08f),
         Pack("outfit", "Outfit", "Outfit-Regular.ttf", "Outfit-Bold.ttf", "Outfit-Regular.ttf", "Outfit-Bold.ttf", 1.04f, 0.05f),
         Pack("bricolage", "Bricolage", "Bricolage-Regular.ttf", "Bricolage-Bold.ttf", "Bricolage-Regular.ttf", "Bricolage-Bold.ttf", 1.0f, 0.04f),
@@ -84,7 +88,12 @@ object Temas {
         Tema("grafite", "Grafite", "Corporativo, clean", 0xFF9FB4C7.toInt(), 0xFF3E6FA8.toInt(), 0xFF0A0C10.toInt(), "contorno", "instrument", 16, 1, 35, 45, "noite"),
         Tema("platina", "Platina", "Executivo, elegante", 0xFFE4E4EC.toInt(), 0xFF7B6CFF.toInt(), 0xFF08090D.toInt(), "vidro", "outfit", 20, 1, 30, 45, "grade"),
         Tema("nebulosa", "Nebulosa", "Roxo profundo, misterioso", 0xFFB388FF.toInt(), 0xFF5B2A9E.toInt(), 0xFF08050F.toInt(), "vidro", "bricolage", 26, 1, 60, 50, "noite"),
-        Tema("esmeralda", "Esmeralda", "Verde elegante, sofisticado", 0xFF4FD1A5.toInt(), 0xFF1B6E52.toInt(), 0xFF04100A.toInt(), "vidro", "instrument", 22, 1, 45, 55, "grade")
+        Tema("esmeralda", "Esmeralda", "Verde elegante, sofisticado", 0xFF4FD1A5.toInt(), 0xFF1B6E52.toInt(), 0xFF04100A.toInt(), "vidro", "instrument", 22, 1, 45, 55, "grade"),
+        // temas de rank: do bronze ao topo, cada um com cor, brilho e letra proprios
+        Tema("bronze", "Bronze", "Rank: começo da temporada", 0xFFE0A070.toInt(), 0xFF8C4A2F.toInt(), 0xFF0D0805.toInt(), "solido", "bigs", 6, 1, 45, 80, "brasas"),
+        Tema("diamante", "Diamante", "Rank: brilho de cristal", 0xFF8FE3FF.toInt(), 0xFFB388FF.toInt(), 0xFF050814.toInt(), "vidro", "russo", 16, 1, 65, 55, "neve"),
+        Tema("mestre", "Mestre", "Rank: roxo e vermelho", 0xFFFF4D6D.toInt(), 0xFFB14DFF.toInt(), 0xFF0B0512.toInt(), "hud", "russo", 2, 2, 70, 75, "noite"),
+        Tema("graomestre", "Grão-Mestre", "Rank: o topo, fogo e ouro", 0xFFFFD36B.toInt(), 0xFFFF5A1F.toInt(), 0xFF0A0604.toInt(), "hud", "orbitron", 2, 2, 80, 78, "brasas", true)
     )
 
     fun get(id: String): Tema = lista.firstOrNull { it.id == id } ?: lista[0]
@@ -98,6 +107,7 @@ object Temas {
         Prefs.angulo = 135
         Prefs.cartao = t.cartao
         Prefs.fonte = t.fonte
+        Prefs.fonteTexto = ""          // o tema decide as duas letras (titulo e texto)
         Prefs.raio = t.raio
         Prefs.borda = t.borda
         Prefs.brilho = t.brilho

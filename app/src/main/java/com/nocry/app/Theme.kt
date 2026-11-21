@@ -87,11 +87,18 @@ object Theme {
 
     fun pack(): Pack = Packs.get(Prefs.fonte)
 
+    /** pacote do texto corrido: o escolhido em "letra do texto" ou, sem escolha, o mesmo dos titulos */
+    fun packTexto(): Pack = Prefs.fonteTexto.let { if (it.isEmpty()) pack() else Packs.get(it) }
+
     /** multiplicador de tamanho do texto: escolha do usuario x correcao da fonte */
     fun escalaTexto(): Float = Prefs.escala / 100f * pack().escala
 
+    /** o mesmo pro texto corrido (cada fonte tem a sua correcao de tamanho) */
+    fun escalaCorpo(): Float = Prefs.escala / 100f * packTexto().escala
+
     /** display = titulos, rotulos e botoes; false = texto corrido */
-    fun fonte(c: Context, display: Boolean, negrito: Boolean): Typeface = fonteDe(c, pack(), display, negrito)
+    fun fonte(c: Context, display: Boolean, negrito: Boolean): Typeface =
+        if (display) fonteDe(c, pack(), true, negrito) else fonteDe(c, packTexto(), false, negrito)
 
     /** a mesma coisa, mas de um pacote qualquer (usado pra mostrar cada fonte no ESTUDIO) */
     fun fonteDe(c: Context, p: Pack, display: Boolean, negrito: Boolean): Typeface {

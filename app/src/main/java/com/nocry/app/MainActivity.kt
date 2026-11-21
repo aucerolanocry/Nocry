@@ -327,14 +327,27 @@ class MainActivity : Activity() {
         r.background = Painel(this, "vidro", true, false, minOf(28, Prefs.raio + 12))
         r.elevation = Ui.dp(this, 10).toFloat()
         r.setPadding(Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7), Ui.dp(this, 7))
+        // com "nome em todos" ligado (ESTUDIO > efeitos), cada botao mostra o icone e o nome embaixo
+        val todosNomes = Prefs.navNomes
         for ((i, a) in abas.withIndex()) {
             val on = i == ativa
             val item = LinearLayout(this)
-            item.orientation = LinearLayout.HORIZONTAL
+            item.orientation = if (todosNomes) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             item.gravity = Gravity.CENTER
             item.contentDescription = a.nome
             if (on) item.background = Botao(this, "grad", minOf(22, Prefs.raio + 8))
             val cor = if (on) Theme.sobreGrad() else Ui.MUTED
+            if (todosNomes) {
+                item.addView(Ui.icone(this, a.icone, cor, 19))
+                val tx = Ui.text(this, a.nome, 9f, cor, true, mono = true)
+                tx.maxLines = 1
+                tx.ellipsize = android.text.TextUtils.TruncateAt.END
+                tx.gravity = Gravity.CENTER
+                item.addView(tx, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(this, 2) })
+                Ui.clique(item) { irAba(i) }
+                r.addView(item, LinearLayout.LayoutParams(0, Ui.dp(this, 50), 1f).also { if (i > 0) it.leftMargin = Ui.dp(this, 3) })
+                continue
+            }
             item.addView(Ui.icone(this, a.icone, cor, 21))
             if (on) {
                 val tx = Ui.text(this, a.nome, 11.5f, cor, true, mono = true)
