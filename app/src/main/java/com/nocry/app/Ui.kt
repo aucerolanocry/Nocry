@@ -194,10 +194,13 @@ object Ui {
     /** titulo de secao: marquinha no degrade do tema, o nome e uma linha fina que some pra direita */
     fun secao(c: Context, s: String, direita: View? = null): View {
         val r = hbox(c)
+        // losango no degrade (igual ao do titulo da tela): a barrinha em pe parecia a letra "I" ("I MODOS")
         val m = View(c)
         m.background = Botao(c, "grad", 1)
-        val mp = LinearLayout.LayoutParams(dp(c, 3), dp(c, 11))
-        mp.rightMargin = dp(c, 8)
+        m.rotation = 45f
+        val mp = LinearLayout.LayoutParams(dp(c, 6), dp(c, 6))
+        mp.leftMargin = dp(c, 2)
+        mp.rightMargin = dp(c, 10)
         r.addView(m, mp)
         r.addView(label(c, s))
         val linha = View(c)

@@ -119,7 +119,7 @@ object Erros {
                     ultimo = agora
                     val txt = pilha.joinToString("\n") { "    at $it" }
                     val seg = String.format(java.util.Locale.forLanguageTag("pt-BR"), "%.1f", parado / 1000.0)
-                    salvar("travada", "A tela travou por $seg s${if (!ok.get()) " (ainda travada)" else ""}",
+                    salvar("travada", "A tela travou por $seg\u00A0s${if (!ok.get()) " (ainda travada)" else ""}",
                         "o que a tela estava fazendo quando travou:\n$txt", agora - parado)
                 } catch (_: InterruptedException) {
                     return@Thread

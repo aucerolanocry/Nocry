@@ -542,8 +542,8 @@ class CompScreen(a: MainActivity) : Screen(a) {
         val hero = Ui.hero(c, R.drawable.ic_gamepad, "modo competitivo", if (on) "Ativo" else "Desativado", on,
             if (on) "O toque rápido está ligado no aparelho." else "O aparelho está com o toque normal.")
         hero.addView(Ui.chips(c,
-            Ui.infoBox(c, R.drawable.ic_sliders, "long press", Sys.getSecure("long_press_timeout") ?: "padrão"),
-            Ui.infoBox(c, R.drawable.ic_sliders, "multi press", Sys.getSecure("multi_press_timeout") ?: "padrão")
+            Ui.infoBox(c, R.drawable.ic_sliders, "long press", Sys.getSecure("long_press_timeout")?.let { "$it ms" } ?: "padrão"),
+            Ui.infoBox(c, R.drawable.ic_sliders, "multi press", Sys.getSecure("multi_press_timeout")?.let { "$it ms" } ?: "padrão")
         ), Ui.lp(top = 16, c = c))
         add(hero, 12)
         if (!Toque.podeMexer()) add(Ui.dica(c, "Sem permissão e sem ADB. Faça a Conexão primeiro.", Ui.Dica.AVISO), 12)
