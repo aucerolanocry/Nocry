@@ -1117,7 +1117,9 @@ object Sniper {
                 }
                 val info = cliqueInfo[n]
                 if (info != null && info[0] == "sala") {
-                    log("erro", "${info[3]}: a org não aceitou o clique · se ainda estiver na sala, faça pelo Discord")
+                    // a org apagou a sala logo antes do clique chegar: já saiu, não é erro
+                    if (!canais.containsKey(info[1])) log("info", "${info[3]}: a org já tinha fechado a sala")
+                    else log("erro", "${info[3]}: a org não aceitou o clique · se ainda estiver na sala, faça pelo Discord")
                     return
                 }
                 // a org não respondeu ao clique: não entrou nessa fila
@@ -1983,12 +1985,20 @@ object Sniper {
     }
 
     private fun acharBotao(m: DMsg, o: String, modo: String): DBotao? {
-        val botoes = m.botoes.filter { b -> NUNCA_CLICAR.none { b.label.uppercase().contains(it) } }
+        // botões EMULADOR / MISTO nunca (só Mobile)
+        val botoes = m.botoes.filter { b ->
+            NUNCA_CLICAR.none { b.label.uppercase().contains(it) } && plataformaDe(b.label).let { it != "EMU" && it != "MISTO" }
+        }
+        // fila que escolhe a plataforma no botão (SLASH: MOBILE · EMULADOR · MISTO): entra pelo MOBILE
+        botoes.firstOrNull { b -> plataformaDe(b.label) == "MOB" && PALAVRAS_SAIR.none { b.label.uppercase().contains(it) } }?.let { b ->
+            avisarUmaVez("auto|$o|$modo|mob", "info", "$o $modo: entrando pelo botão '${b.label.uppercase()}'")
+            return b
+        }
         val cfg = orgs[o]?.botoes
         if (cfg != null) {
             val alvos = if (modo == "1X1") (if (gelo == "INFINITO") cfg.infinito else cfg.normal) else cfg.outros
             for (a in alvos) botoes.firstOrNull { a in it.label.uppercase() }?.let { return it }
-            return null
+            // a org trocou os botões (a fila Mobile da MOREIRA/MORRO só tem ENTRAR): cai no jeito automático abaixo
         }
         val entrar = botoes.filter { b -> PALAVRAS_SAIR.none { b.label.uppercase().contains(it) } }
         val chave = if (gelo == "INFINITO") "INF" else "NORMAL"
@@ -2049,7 +2059,11 @@ object Sniper {
             for (e in m.embeds) for (f in e.campos) if ("JOGADOR" in f.nome.uppercase()) jogadores = f.valor
             val lido = lerValor(m)
             val texto = textoCard(m).uppercase()
-            val botaoConhecido = orgs[o]?.botoes != null && acharBotao(m, o, modo) != null
+            // botão com o nome que a org usa (o da config dela): sinal forte de que é mesmo a fila
+            val botaoConhecido = orgs[o]?.botoes?.let { cfg ->
+                val alvos = if (modo == "1X1") (if (gelo == "INFINITO") cfg.infinito else cfg.normal) else cfg.outros
+                m.botoes.any { b -> alvos.any { it in b.label.uppercase() } }
+            } == true
             if (lido == null && "JOGADOR" !in texto && "FILA" !in texto && !botaoConhecido) {
                 avisarUmaVez("naofila|$fid", "erro", "$nome: esse ID não parece uma fila (sem valor/jogadores) · não cliquei")
                 status(o, "✗ ID de $modo ${rotuloFila(o, v)} não é fila", "erro")
@@ -2716,7 +2730,7 @@ object Sniper {
                     for ((_, f) in orgs[o]?.filas ?: emptyMap()) for ((_, id) in f) if (id in deOutra) { corrigirValor(id, "-"); tiradas++ }
                     if (outrasPlat.isNotEmpty()) log("info", "$o: pulei " + outrasPlat.entries.joinToString(" e ") { (p, n) ->
                         "$n fila${if (n == 1) "" else "s"} de ${nomePlataforma(p)}" } + " (o bot só entra em fila Mobile)" +
-                        if (tiradas > 0) " · $tiradas que estava${if (tiradas == 1) "" else "m"} salva${if (tiradas == 1) "" else "s"} saiu${if (tiradas == 1) "" else "ram"}" else "")
+                        if (tiradas > 0) " · " + (if (tiradas == 1) "1 que estava salva saiu" else "$tiradas que estavam salvas saíram") else "")
                     if (achadas.isEmpty()) { semFila.add(o); continue }
                     var daOrg = 0
                     for ((modo, vs) in achadas) for ((v, id) in vs) {
