@@ -91,10 +91,13 @@ object Comp {
     fun desativar(force: Boolean): Boolean {
         if (!Toque.podeMexer()) return false
         if (!force && Prefs.compOrig == null && !Prefs.compFlag && Sys.getSecure(K_LONG) != "1") return true
+        // a tela primeiro: density alta deixa o celular quase inutilizavel. Mas se a density nao responder
+        // (ADB lento depois da partida), o toque volta do mesmo jeito - antes saia aqui e o toque longo ficava
+        // preso em 1 ms, com todo toque virando toque longo. A density fica guardada pra tentar de novo.
+        var telaOk = true
         if (force) {
-            // a tela primeiro: density alta deixa o celular quase inutilizavel
-            if (Prefs.densOrig != null && !Adb.connected) return false
-            if (Adb.connected && !(MC.densOff() && MC.recuperar())) return false
+            if (Prefs.densOrig != null && !Adb.connected) telaOk = false
+            else if (Adb.connected && !(MC.densOff() && MC.recuperar())) telaOk = false
         }
         var l = "100"
         var m = "100"
@@ -112,9 +115,9 @@ object Comp {
         Prefs.compFlag = false
         Prefs.markVol = false
         Prefs.markCarga = false
-        NLog.add("comp", "desativar ok ${Toque.lido()}")
+        NLog.add("comp", "desativar ok ${Toque.lido()}" + if (telaOk) "" else " · a density nao voltou, tenta de novo")
         if (estava) Presenca.evento("modo_off", "MODO COMPETITIVO")
-        return true
+        return telaOk
     }
 }
 

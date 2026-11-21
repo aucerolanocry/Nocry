@@ -22,6 +22,8 @@ import android.view.View
 object SegundoPlano {
     private const val OP_AUTO_START_MIUI = 10008
     @Volatile private var jaLiberou = false
+    /** última tentativa que falhou: espera 5 min pra tentar de novo (cada tentativa pode levar até 15 s) */
+    @Volatile private var falhouEm = 0L
 
     fun bateriaLivre(c: Context): Boolean = try {
         c.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(c.packageName) ?: true
@@ -63,6 +65,7 @@ object SegundoPlano {
     fun garantePeloAdb(forcar: Boolean = false): Boolean {
         if (!Adb.connected) return false
         if (jaLiberou && !forcar) return true
+        if (!forcar && falhouEm != 0L && System.currentTimeMillis() - falhouEm < 300_000) return false
         val p = Const.PKG
         val cmds = listOf(
             "cmd deviceidle whitelist +$p",
@@ -73,7 +76,14 @@ object SegundoPlano {
             "cmd appops set $p $OP_AUTO_START_MIUI allow"
         )
         // cada um separado: se um nao existir nesse Android, os outros continuam
-        Adb.exec(cmds.joinToString("; ") { "$it </dev/null >/dev/null 2>&1" }, 15000)
+        val r = Adb.exec(cmds.joinToString("; ") { "$it </dev/null >/dev/null 2>&1" }, 15000)
+        // só dá por feito se o comando terminou: com o ADB caindo no meio, tenta de novo na próxima volta
+        // (antes marcava feito mesmo falhando e só tentava de novo quando o app reiniciava)
+        if (!r.ok) {
+            falhouEm = System.currentTimeMillis()
+            NLog.add("segundo-plano", "liberar pelo ADB não terminou, tento de novo em 5 min")
+            return false
+        }
         jaLiberou = true
         NLog.add("segundo-plano", "liberado pelo ADB · bateria livre=" + bateriaLivre(Sys.app) + " · auto inicio=" + autoInicio(Sys.app))
         return true
