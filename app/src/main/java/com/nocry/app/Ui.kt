@@ -280,14 +280,14 @@ object Ui {
         val dot = View(c)
         dot.background = shape(c, cor, 4)
         val dp2 = LinearLayout.LayoutParams(dp(c, 7), dp(c, 7))
-        dp2.rightMargin = dp(c, 7)
+        dp2.rightMargin = dp(c, 6)
         r.addView(dot, dp2)
         // maiusculo feito aqui mesmo: o "tudo maiusculo" do TextView apagava as cores do texto em Android antigo
         val n = up(nome)
-        val s = android.text.SpannableString(n + "  " + up(valor))
+        val s = android.text.SpannableString(n + " " + up(valor))
         s.setSpan(android.text.style.ForegroundColorSpan(MUTED), 0, n.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        s.setSpan(android.text.style.ForegroundColorSpan(if (ok == true) TEXT else cor), n.length + 2, s.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        val t = text(c, "", 10.5f, TEXT, true, mono = true)
+        s.setSpan(android.text.style.ForegroundColorSpan(if (ok == true) TEXT else cor), n.length + 1, s.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val t = text(c, "", 10f, TEXT, true, mono = true)
         t.setAllCaps(false)
         t.letterSpacing = if (Prefs.maiusc) 0.06f else 0.02f
         t.text = s
@@ -295,7 +295,7 @@ object Ui {
         t.maxLines = 1
         t.ellipsize = android.text.TextUtils.TruncateAt.END
         r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        r.setPadding(dp(c, 9), dp(c, 9), dp(c, 9), dp(c, 9))
+        r.setPadding(dp(c, 7), dp(c, 9), dp(c, 7), dp(c, 9))
         r.contentDescription = "$nome $valor"
         return r
     }
