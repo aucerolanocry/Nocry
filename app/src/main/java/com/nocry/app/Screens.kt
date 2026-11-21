@@ -61,7 +61,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     private var voltandoTela = false
 
     override fun key(): String = listOf(
-    Prefs.otmAuto, Prefs.otmNivel, Prefs.bypassAtivo, Prefs.bypassVolAtivo, precisaEscutaVolume(),
+    Prefs.otmAuto, Prefs.otmNivel, Prefs.bypassAtivo, Prefs.bypassVolAtivo, precisaEscutaVolume(), Prefs.jogarFf,
     Prefs.densOrig, Prefs.ordem, Prefs.ocultos, voltandoTela,
     Adb.connected, 
     NocryService.rodando,
@@ -122,13 +122,13 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    /** o FF que abre no JOGAR: o escolhido no bypass se estiver instalado, senão o outro; null = nenhum instalado */
+    private fun temFf(p: String) = try { act.packageManager.getLaunchIntentForPackage(p) != null } catch (_: Throwable) { false }
+
+    /** o FF que abre no JOGAR: o escolhido se estiver instalado, senão o outro; null = nenhum instalado */
     private fun pacoteFf(): String? {
-        val pm = act.packageManager
-        fun tem(p: String) = try { pm.getLaunchIntentForPackage(p) != null } catch (_: Throwable) { false }
-        val pref = if (Prefs.bypassFf == "normal") Const.FF_NORMAL else Const.FF_MAX
+        val pref = if (Prefs.jogarFf == "max") Const.FF_MAX else Const.FF_NORMAL
         val outro = if (pref == Const.FF_MAX) Const.FF_NORMAL else Const.FF_MAX
-        return if (tem(pref)) pref else if (tem(outro)) outro else null
+        return if (temFf(pref)) pref else if (temFf(outro)) outro else null
     }
 
     private fun abrirFf(ff: String) {
@@ -266,6 +266,13 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             val nomeFf = if (ff == Const.FF_MAX) "Free Fire MAX" else "Free Fire"
             add(Ui.destaque(c, R.drawable.ic_gamepad, nomeFf, "abre o jogo direto daqui", est, otmOn || Prefs.otmAuto,
                 "jogar", true, { jogar(ff) }, { jogar(ff) }), 12)
+            // os dois instalados: escolhe qual o JOGAR abre (fica salvo)
+            if (temFf(Const.FF_NORMAL) && temFf(Const.FF_MAX)) {
+                add(Ui.segmento(c, listOf("Free Fire", "Free Fire MAX"), if (ff == Const.FF_MAX) 1 else 0) { i ->
+                    Prefs.jogarFf = if (i == 1) "max" else "normal"
+                    redesenha()
+                }, 8)
+            }
         }
 
         // ---------------- a tela ficou alterada pelo modo carregador (que saiu do app) ----------------

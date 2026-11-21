@@ -136,6 +136,10 @@ var bypassGatilho: String
 var bypassFf: String
     get() = gs("bypass_ff") ?: "normal"
     set(v) = ps("bypass_ff", v)
+/** qual Free Fire o JOGAR do Início abre: "normal" ou "max" (sem escolha, segue o do bypass) */
+var jogarFf: String
+    get() = gs("jogar_ff") ?: bypassFf
+    set(v) = ps("jogar_ff", if (v == "max") "max" else "normal")
 var bypassTipo: String
     get() = gs("bypass_tipo") ?: "completo"
     set(v) = ps("bypass_tipo", v)
