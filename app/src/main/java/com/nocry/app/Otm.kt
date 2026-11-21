@@ -271,6 +271,9 @@ object Otm {
 
         fun razao(pk: String): String {
             if (HARD.containsMatchIn(pk)) return "NOCRY/FF"
+            // relógio, alarme, agenda, carteira, saúde, tarefas e Keep nunca fecham (nem no FULL): antes a regra só
+            // valia pros apps do sistema, e o Keep/Agenda/relógio instalados pela loja fechavam e perdiam os avisos
+            if (NUNCA_NO_FULL.containsMatchIn(pk)) return "ALARMES/AGENDA"
             if (pk in up) return "SUA LISTA"
             if (pk in mg && pk !in ua && !msgFecha) return "MENSAGENS"
             if (pk in fg) return "EM USO AGORA"
@@ -441,6 +444,9 @@ object Otm {
 
         var kn = 0
         val res = Adb.execScriptLines(script, 240000) { l ->
+            // cada mudança fica registrada na hora: se o NOCRY morrer no meio (limpeza da Xiaomi, travou),
+            // o DESATIVAR ainda sabe o que desfazer. Antes só gravava quando o script inteiro acabava
+            if (l.length > 1 && l[1] == '|' && l[0] in "ELWFNQHXDGA") try { guarda(l) } catch (_: Throwable) {}
             if (l.startsWith("K|")) {
                 val p = l.substring(2)
                 val kb = kbDe[p]
@@ -626,6 +632,7 @@ object Otm {
         val t = (v?.getOrNull(2)?.toIntOrNull() ?: 0) + (s?.getOrNull(2)?.toIntOrNull() ?: 0)
         if (ok >= t) {
             f("otm_estado").delete()
+            statusCache = null
             log("[✓] OTIMIZACAO DESATIVADA!")
             log("• Apps liberados para rodar em segundo plano de novo")
             log("• Animacoes, tela, wi-fi e standby voltaram ao que eram")
@@ -775,11 +782,14 @@ object OtmAuto {
 
     private fun desliga() {
         if (Prefs.otmAutoMarca) {
+            var ok = true
             if (Otm.estado().isNotEmpty()) {
                 log("desativando")
-                Otm.desativar { log(it) }
+                ok = Otm.desativar { log(it) }
             }
-            Prefs.otmAutoMarca = false
+            // se falhou (ex.: o ADB caiu na hora), a marca fica: na próxima volta ele tenta desfazer de novo.
+            // Antes a marca sumia e, no FF seguinte, a otimização parecia "ligada na mão" e nunca mais desligava
+            if (ok) Prefs.otmAutoMarca = false
         }
     }
 

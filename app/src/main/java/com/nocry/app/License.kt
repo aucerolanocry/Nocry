@@ -247,5 +247,7 @@ object License {
         try { Engine.desligarModosAntigos() } catch (_: Throwable) {}
         try { if (Comp.ligado()) Comp.desativar(true) } catch (_: Throwable) {}
         try { if (Prefs.otmAuto) OtmAuto.desligar() } catch (_: Throwable) {}
+        // otimização ligada na mão também volta ao normal (sem a key o botão DESATIVAR some da tela)
+        try { if (Otm.estado().isNotEmpty()) Otm.desativar { } } catch (_: Throwable) {}
     }
 }
