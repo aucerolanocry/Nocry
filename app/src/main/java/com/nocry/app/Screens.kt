@@ -51,6 +51,9 @@ object Atalhos {
 // =====================================================================================
 // INICIO
 // =====================================================================================
+/** a escuta do volume (acessibilidade) só faz falta pro bypass pelo volume; sem ele, o passo é opcional */
+fun precisaEscutaVolume(): Boolean = Prefs.bypassVolAtivo || Prefs.bypassGatilho == "volume"
+
 class HomeScreen(a: MainActivity) : Screen(a) {
     override val titulo = "NOCRY"
     override val semBarra = true
@@ -58,7 +61,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     private var voltandoTela = false
 
     override fun key(): String = listOf(
-    Prefs.otmAuto, Prefs.otmNivel, Prefs.bypassAtivo, Prefs.bypassVolAtivo,
+    Prefs.otmAuto, Prefs.otmNivel, Prefs.bypassAtivo, Prefs.bypassVolAtivo, precisaEscutaVolume(),
     Prefs.densOrig, Prefs.ordem, Prefs.ocultos, voltandoTela,
     Adb.connected, 
     NocryService.rodando,
@@ -78,7 +81,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         Sniper.buscando -> "buscando · ${Sniper.filasEntradas.size} filas · ${Sniper.salas.size} salas"
         Sniper.estado == "online" -> "online · busca parada"
         Sniper.ligado() -> Sniper.estado
-        else -> "filas de aposta do Discord · desligado"
+        else -> "desligado"
     }
 
     private fun textoUltima(): String {
@@ -117,6 +120,36 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             Ui.toast(act, if (!r) "O aparelho não aceitou a mudança" else if (ligar) "MODO COMPETITIVO ATIVO" else "DESATIVADO — tudo voltou ao normal")
             redesenha()
         }
+    }
+
+    /** o FF que abre no JOGAR: o escolhido no bypass se estiver instalado, senão o outro; null = nenhum instalado */
+    private fun pacoteFf(): String? {
+        val pm = act.packageManager
+        fun tem(p: String) = try { pm.getLaunchIntentForPackage(p) != null } catch (_: Throwable) { false }
+        val pref = if (Prefs.bypassFf == "normal") Const.FF_NORMAL else Const.FF_MAX
+        val outro = if (pref == Const.FF_MAX) Const.FF_NORMAL else Const.FF_MAX
+        return if (tem(pref)) pref else if (tem(outro)) outro else null
+    }
+
+    private fun abrirFf(ff: String) {
+        try {
+            val i = act.packageManager.getLaunchIntentForPackage(ff) ?: throw IllegalStateException()
+            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            act.startActivity(i)
+        } catch (_: Throwable) {
+            Ui.toast(act, "Não consegui abrir o jogo")
+        }
+    }
+
+    /** sem otimização nenhuma ligada (nem a automática): pergunta se quer otimizar antes; senão abre direto */
+    private fun jogar(ff: String) {
+        if (Otm.status().first || Prefs.otmAuto || !Adb.connected) { abrirFf(ff); return }
+        android.app.AlertDialog.Builder(act, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            .setTitle("OTIMIZAR ANTES?")
+            .setMessage("A otimização está desligada. Ela fecha os apps em segundo plano pro jogo rodar mais liso.")
+            .setPositiveButton("OTIMIZAR") { _, _ -> act.abre(OtmScreen(act)) }
+            .setNegativeButton("SÓ ABRIR") { _, _ -> abrirFf(ff) }
+            .show()
     }
 
     /** estado, se esta ligado e o que acontece ao tocar, de cada modo */
@@ -189,24 +222,27 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val adb = Adb.connected
         val perm = Sys.hasWriteSecure()
         val acc = Sys.acessibilidadeLigada()
-        val ok = (if (adb) 1 else 0) + (if (perm) 1 else 0) + (if (acc) 1 else 0)
+        // a escuta do volume só faz falta pro bypass pelo volume: sem ele, não conta (antes ficava "Quase lá 2/3" pra sempre)
+        val volPreciso = precisaEscutaVolume()
+        val total = if (volPreciso) 3 else 2
+        val ok = (if (adb) 1 else 0) + (if (perm) 1 else 0) + (if (acc && volPreciso) 1 else 0)
 
-        val hero = Ui.card(c, forte = true, ligado = ok == 3)
+        val hero = Ui.card(c, forte = true, ligado = ok == total)
         val topo = Ui.hbox(c)
         val ring = RingView(c)
         val rw = FrameLayout(c)
         val tamAnel = Ui.dp(c, 84)
         rw.addView(ring, FrameLayout.LayoutParams(tamAnel, tamAnel))
-        val num = Ui.text(c, "$ok/3", 20f, Ui.TEXT, true, mono = true)
+        val num = Ui.text(c, "$ok/$total", 20f, Ui.TEXT, true, mono = true)
         num.gravity = Gravity.CENTER
         rw.addView(num, FrameLayout.LayoutParams(tamAnel, tamAnel))
         topo.addView(rw, LinearLayout.LayoutParams(tamAnel, tamAnel))
-        ring.define(ok / 3f)
+        ring.define(ok / total.toFloat())
 
         val info = Ui.vbox(c)
         info.addView(Ui.label(c, "status do sistema"))
-        val titulo2 = when (ok) { 3 -> "Pronto"; 0 -> "Conecte"; else -> "Quase lá" }
-        info.addView((if (ok == 3) Ui.gradTexto(c, titulo2, 27f) else Ui.text(c, titulo2, 27f, Ui.TEXT, true)).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 2, c = c))
+        val titulo2 = when (ok) { total -> "Pronto"; 0 -> "Conecte"; else -> "Quase lá" }
+        info.addView((if (ok == total) Ui.gradTexto(c, titulo2, 27f) else Ui.text(c, titulo2, 27f, Ui.TEXT, true)).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 2, c = c))
         val precisa = Prefs.precisaServico()
         info.addView(Ui.text(c, if (NocryService.rodando) "monitores rodando" else if (precisa) "monitores iniciando" else "nenhum monitor ligado", 10.5f, Ui.MUTED, mono = true), Ui.lp(top = 2, c = c))
         val ip = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -217,11 +253,20 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         hero.addView(Ui.chips(c,
             Ui.pilulaStatus(c, "ADB", if (adb) "ligado" else "off", adb),
             Ui.pilulaStatus(c, "Perm.", if (perm) "ok" else "falta", perm),
-            Ui.pilulaStatus(c, "Volume", if (acc) "on" else "off", if (acc) true else null)
+            Ui.pilulaStatus(c, "Volume", if (acc) "on" else "off", if (acc) true else if (volPreciso) false else null)
         ), Ui.lp(top = 16, c = c))
         val falta = !adb || !perm
         hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "abrir conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
         add(hero, 16)
+
+        // ---------------- jogar: abre o Free Fire direto daqui ----------------
+        pacoteFf()?.let { ff ->
+            val otmOn = Otm.status().first
+            val est = when { otmOn -> "otimização ativa"; Prefs.otmAuto -> "otimização liga sozinha"; else -> "sem otimização" }
+            val nomeFf = if (ff == Const.FF_MAX) "Free Fire MAX" else "Free Fire"
+            add(Ui.destaque(c, R.drawable.ic_gamepad, nomeFf, "abre o jogo direto daqui", est, otmOn || Prefs.otmAuto,
+                "jogar", true, { jogar(ff) }, { jogar(ff) }), 12)
+        }
 
         // ---------------- a tela ficou alterada pelo modo carregador (que saiu do app) ----------------
         if (Prefs.densOrig != null) {
@@ -317,7 +362,8 @@ class SetupScreen(a: MainActivity) : Screen(a) {
     private val reaberto = HashSet<Int>()
 
     override fun key(): String = listOf(
-        Adb.connected, Sys.hasWriteSecure(), Sys.acessibilidadeLigada(), Pairing.porta, Adb.needsPairing, ocupado, temNotif()
+        Adb.connected, Sys.hasWriteSecure(), Sys.acessibilidadeLigada(), Pairing.porta, Adb.needsPairing, ocupado, temNotif(),
+        precisaEscutaVolume()
     ).joinToString("|")
 
     private fun temNotif(): Boolean =
@@ -352,7 +398,10 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         val perm = Sys.hasWriteSecure()
         val acc = Sys.acessibilidadeLigada()
         val notif = temNotif()
-        val feitos = listOf(conectado, perm, acc, notif).count { it }
+        // sem bypass pelo volume, a escuta do volume é opcional: não conta como passo faltando
+        val volPreciso = precisaEscutaVolume()
+        val accOk = acc || !volPreciso
+        val feitos = listOf(conectado, perm, accOk, notif).count { it }
 
         // ---------------- resumo: anel de progresso + 4 chips ----------------
         val resumo = Ui.card(c, forte = true, ligado = feitos == 4)
@@ -383,7 +432,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         resumo.addView(Ui.chips(c,
             Ui.chip(c, "ADB", if (conectado) "OK" else "OFF", conectado),
             Ui.chip(c, "PERMISSÃO", if (perm) "OK" else "FALTA", perm),
-            Ui.chip(c, "VOLUME", if (acc) "OK" else "OFF", acc),
+            Ui.chip(c, "VOLUME", if (acc) "OK" else "OFF", if (acc) true else if (volPreciso) false else null),
             Ui.chip(c, "AVISOS", if (notif) "OK" else "OFF", notif)
         ), Ui.lp(top = 14, c = c))
         add(resumo, 12)
@@ -391,11 +440,13 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         // ---------------- linha do tempo ----------------
         add(Ui.secao(c, "passo a passo"), 22)
         // 1 a 3 dependem da conexao: se o ADB conectou, a depuracao e o pareamento ja foram feitos
-        val feito = booleanArrayOf(conectado, conectado, conectado, perm, acc, notif)
+        val feito = booleanArrayOf(conectado, conectado, conectado, perm, accOk, notif)
         val atual = feito.indexOfFirst { !it }
-        val nomes = listOf("Depuração sem fio", "Parear (só na 1ª vez)", "Conectar", "Liberar o app", "Escuta do volume", "Avisos e bateria")
+        val nomes = listOf("Depuração sem fio", "Parear (só na 1ª vez)", "Conectar", "Liberar o app",
+            if (volPreciso || acc) "Escuta do volume" else "Escuta do volume (opcional)", "Avisos e bateria")
         for (i in 0 until 6) {
-            val estado = if (feito[i]) 0 else if (i == atual) 1 else 2
+            // escuta do volume desligada e sem uso: fica cinza (opcional), não verde
+            val estado = if (i == 4 && !acc && !volPreciso) 2 else if (feito[i]) 0 else if (i == atual) 1 else 2
             // o passo 4 so funciona com o ADB conectado: enquanto nao conecta, fica recolhido como "depois"
             val bloqueado = i == 3 && !conectado
             // os passos 5 e 6 so abrem sozinhos quando chega a vez deles: antes disso ficam recolhidos

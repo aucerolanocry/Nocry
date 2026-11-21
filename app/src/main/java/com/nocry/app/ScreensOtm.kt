@@ -85,7 +85,7 @@ class OtmScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho("Otimização", "Deixa o celular só pro Free Fire. Desativar volta tudo como era.")
+        cabecalho("Otimização", "Deixa o celular só pro Free Fire. Os apps protegidos ficam de fora e desativar volta tudo como era.")
         val st = Otm.status()
         val on = st.first
         val hero = Ui.hero(c, R.drawable.ic_chip, "otimização", if (on) "Ativa" else "Desativada", on,
@@ -97,7 +97,6 @@ class OtmScreen(a: MainActivity) : Screen(a) {
             Ui.chip(c, "CONGELADOS", if (on) st.second.toString() else "0", if (on) true else null)
         ), Ui.lp(top = 16, c = c))
         add(hero, 12)
-        add(Ui.dica(c, "Os protegidos ficam de fora. Desativar devolve tudo como estava.", Ui.Dica.INFO), 12)
 
         val full = Prefs.otmNivel == "full"
         add(Ui.secao(c, "nível"), 18)
@@ -147,7 +146,7 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         )), 22)
 
         add(Ui.grupo(c, "automático", listOf(
-            Ui.itemChave(c, "Ligar sozinho ao abrir o FF", "abriu o FF = ativa · saiu por 45 s = desativa (só o que ele ativou). Precisa do ADB.", Prefs.otmAuto, R.drawable.ic_play) { v ->
+            Ui.itemChave(c, "Ligar ao abrir o FF", "Liga quando o FF abre e desliga 45 s depois que você sai. Precisa do ADB.", Prefs.otmAuto, R.drawable.ic_play) { v ->
                 if (v) {
                     if (!Adb.connected) { Ui.toast(act, "Conecte o ADB primeiro (CONEXÃO)"); redesenha() }
                     else { OtmAuto.ligar(); Ui.toast(act, "AUTOMÁTICO LIGADO — abra o FF"); redesenha() }

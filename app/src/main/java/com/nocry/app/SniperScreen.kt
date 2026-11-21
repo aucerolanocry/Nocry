@@ -170,6 +170,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         secao("busca", listOf(
             "Na aba Busca escolha a org (ou TODAS), os modos e os valores (de R$ 1 pra cima).",
             "Iniciar busca: ele procura em todas as orgs ao mesmo tempo e entra em toda fila que bate.",
+            "Só entra em fila Mobile: fila de Emulador ou Misto (dito na mensagem, no nome do canal ou da categoria) ele pula.",
             "Cada org tem um limite de filas: quando ela avisa, ele espera e tenta de novo sozinho."))
         secao("salas", listOf(
             "Formou partida: a sala aparece em Partidas, a mensagem automática sai na hora e chega notificação.",
@@ -574,7 +575,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         // escrever
         val linha = Ui.hbox(c)
         linha.gravity = Gravity.CENTER_VERTICAL
-        val e = campoMsg ?: Ui.field(c, "escreva pro adversário...", false).also {
+        val e = campoMsg ?: Ui.field(c, "mensagem", false).also {
             it.imeOptions = EditorInfo.IME_ACTION_SEND
             it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
             it.setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_SEND) { enviarCampo(); true } else false }

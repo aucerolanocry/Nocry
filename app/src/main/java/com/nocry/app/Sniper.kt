@@ -299,6 +299,8 @@ object Sniper {
         sairAoAbrir = sp.getBoolean("sair_ao_abrir2", false)
         tempoResposta = sp.getLong("tempo_resposta", TIMEOUT_RESPOSTA)
         buscarAoLigar = sp.getBoolean("buscar_ao_ligar", false)
+        // versão que separa Mobile de Emulador/Misto: confere os IDs de novo na próxima vez que ligar
+        if (sp.getInt("plataforma_v", 0) < 1) sp.edit().putLong("ultima_conferencia", 0L).putInt("plataforma_v", 1).apply()
     }
 
     private fun lerCache() {
@@ -579,11 +581,14 @@ object Sniper {
             apr.optJSONObject(nome)?.let { a ->
                 for (modo in a.keys()) {
                     val mm = a.optJSONObject(modo) ?: continue
-                    for (v in mm.keys()) {
-                        val id = mm.s(v) ?: continue
+                    for (v0 in mm.keys()) {
+                        val id = mm.s(v0) ?: continue
+                        pend[modo]?.remove(id)
+                        // a correção também vale pras aprendidas ("-" = não usar mais, ex.: fila de emulador)
+                        val v = cor.s(id) ?: v0
+                        if (v == "-") continue
                         val f = filas.getOrPut(modo) { LinkedHashMap() }
                         if (!f.containsKey(v)) f[v] = id
-                        pend[modo]?.remove(id)
                     }
                 }
             }
@@ -2021,6 +2026,16 @@ object Sniper {
             if (agora() < (esperaFila[fid] ?: 0L)) continue
             val m = acharFila(fid, o)
             if (m == null) { Thread.sleep(PAUSA_ENTRE_FILAS); continue }
+            // fila de Emulador/Misto salva de antes (ou que a org trocou): não entra, tira e procura a Mobile
+            val plat = plataformaDaFila(m, canalDaFila[fid])
+            if (plat == "EMU" || plat == "MISTO") {
+                avisarUmaVez("plat|$fid", "info", "$nome é fila de ${nomePlataforma(plat)} · não entrei (o bot só entra em fila Mobile) · procurando a Mobile")
+                status(o, "pulei a fila de ${nomePlataforma(plat)} $modo ${rotuloFila(o, v)}", "info")
+                corrigirValor(fid, "-")
+                agendarProcura(o)
+                Thread.sleep(PAUSA_ENTRE_FILAS)
+                continue
+            }
             var jogadores = ""
             for (e in m.embeds) for (f in e.campos) if ("JOGADOR" in f.nome.uppercase()) jogadores = f.valor
             val lido = lerValor(m)
@@ -2487,6 +2502,38 @@ object Sniper {
         return null
     }
 
+    // ---------------------------------------------------------------- plataforma (o bot só entra em fila Mobile)
+    private val RX_EMU = Regex("""(^|[^A-Z])(EMU|PC([^A-Z]|$))""")
+    private val RX_MOB = Regex("""(^|[^A-Z])(MOB|CELULAR)""")
+    private val RX_MISTO = Regex("""(^|[^A-Z])(MISTO|MISTA|MIXT|MIX([^A-Z]|$))""")
+    // "proibido emulador", "sem emulador", "não pode emulador": é regra de fila Mobile, não fila de emulador
+    private val RX_SEM_EMU = Regex("""(^|\s)(PROIBID[OA]S?|SEM|NAO|NADA DE|PROIBE|VEDAD[OA])\s+(\w+\s+){0,3}?(EMU\w*|PC)""")
+
+    /** "MOB", "EMU", "MISTO" ou null quando o texto não diz */
+    fun plataformaDe(texto: String): String? {
+        val n = RX_SEM_EMU.replace(semAcento(texto).uppercase().replace(Regex("[^A-Z0-9]+"), " "), " ")
+        val emu = RX_EMU.containsMatchIn(n)
+        val mob = RX_MOB.containsMatchIn(n)
+        return when {
+            RX_MISTO.containsMatchIn(n) || (emu && mob) -> "MISTO"
+            emu -> "EMU"
+            mob -> "MOB"
+            else -> null
+        }
+    }
+
+    /** plataforma da fila: título do card, depois o card todo, o nome do canal e a categoria do canal */
+    private fun plataformaDaFila(m: DMsg, cid: String?): String? {
+        val titulo = (listOf(m.conteudo) + m.embeds.map { it.titulo }).joinToString(" ")
+        plataformaDe(titulo)?.let { return it }
+        plataformaDe(textoCard(m))?.let { return it }
+        val c = cid?.let { canais[it] } ?: return null
+        plataformaDe(c.nome)?.let { return it }
+        return c.parentId?.let { canais[it]?.nome }?.let { plataformaDe(it) }
+    }
+
+    private fun nomePlataforma(p: String) = if (p == "EMU") "Emulador" else "Misto"
+
     /** "2X2 R$ 10" lido do card que a org manda na sala */
     private fun filaDoCard(m: DMsg): String? {
         val v = lerValor(m) ?: return null
@@ -2601,6 +2648,7 @@ object Sniper {
             var trocadas = 0
             val semServidor = ArrayList<String>()
             val semFila = ArrayList<String>()
+            val descorrigir = HashSet<String>()   // achadas de novo agora: valem como estão (tira correção antiga)
             try {
                 while (true) {
                     val o = paraProcurar.firstOrNull() ?: break
@@ -2614,6 +2662,8 @@ object Sniper {
                     if (gids.isEmpty()) { semServidor.add(o); procuraFeitas++; continue }
                     val achadas = LinkedHashMap<String, LinkedHashMap<String, String>>()   // modo -> valor -> id
                     val vistas = HashSet<String>()
+                    val deOutra = HashSet<String>()      // filas de Emulador/Misto: vistas, mas o bot não usa
+                    val outrasPlat = HashMap<String, Int>()
                     for (gid in gids) {
                         val (deFila, outros) = textosDe(gid).partition { pareceCanalDeFila(canais[it]?.nome ?: "") }
                         // primeiro os canais com cara de fila; os outros só se ali não tinha nenhuma
@@ -2630,6 +2680,12 @@ object Sniper {
                                     val v = lerValor(m) ?: continue
                                     if ((v.toIntOrNull() ?: 0) < VALOR_MINIMO) continue
                                     val modo = modoDe(m, nomeCanal) ?: continue
+                                    val plat = plataformaDaFila(m, cid)
+                                    if (plat == "EMU" || plat == "MISTO") {
+                                        deOutra.add(m.id)
+                                        outrasPlat[plat] = (outrasPlat[plat] ?: 0) + 1
+                                        continue
+                                    }
                                     achadas.getOrPut(modo) { LinkedHashMap() }.putIfAbsent(v, m.id)
                                     canalDaFila[m.id] = cid
                                     canaisDaOrg.getOrPut(o) { ConcurrentHashMap.newKeySet() }.add(cid)
@@ -2640,17 +2696,24 @@ object Sniper {
                         }
                     }
                     procuraFeitas++
+                    // a fila que o bot usava era de Emulador/Misto: sai (a Mobile, se tiver, entra no lugar)
+                    var tiradas = 0
+                    for ((_, f) in orgs[o]?.filas ?: emptyMap()) for ((_, id) in f) if (id in deOutra) { corrigirValor(id, "-"); tiradas++ }
+                    if (outrasPlat.isNotEmpty()) log("info", "$o: pulei " + outrasPlat.entries.joinToString(" e ") { (p, n) ->
+                        "$n fila${if (n == 1) "" else "s"} de ${nomePlataforma(p)}" } + " (o bot só entra em fila Mobile)" +
+                        if (tiradas > 0) " · $tiradas que estava${if (tiradas == 1) "" else "m"} salva${if (tiradas == 1) "" else "s"} saiu${if (tiradas == 1) "" else "ram"}" else "")
                     if (achadas.isEmpty()) { semFila.add(o); continue }
                     var daOrg = 0
                     for ((modo, vs) in achadas) for ((v, id) in vs) {
                         daOrg++
                         val antigo = orgs[o]?.filas?.get(modo)?.get(v)
                         if (antigo == id) continue
-                        if (antigo != null && antigo in vistas) continue          // as duas existem: fica com a que já usava
+                        if (antigo != null && antigo in vistas && antigo !in deOutra) continue   // as duas existem: fica com a que já usava
                         if (antigo != null) { corrigirValor(antigo, "-"); trocadas++ } else novas++
                         val jo = apr.optJSONObject(o) ?: JSONObject().also { apr.put(o, it) }
                         val jm = jo.optJSONObject(modo) ?: JSONObject().also { jo.put(modo, it) }
                         jm.put(v, id)
+                        descorrigir.add(id)
                         sumida.remove(id)
                     }
                     orgSumida.remove(o)
@@ -2662,6 +2725,11 @@ object Sniper {
             } catch (t: Throwable) {
                 log("erro", "procurar filas: ${t.message ?: t.javaClass.simpleName}")
             } finally {
+                if (descorrigir.isNotEmpty()) {
+                    val cor = try { JSONObject(sp.getString("corrigidos", "{}") ?: "{}") } catch (_: Throwable) { JSONObject() }
+                    for (id in descorrigir) cor.remove(id)
+                    sp.edit().putString("corrigidos", cor.toString()).apply()
+                }
                 sp.edit().putString("aprendidos", apr.toString()).apply()
                 salvarCache()
                 marcarBackup()
