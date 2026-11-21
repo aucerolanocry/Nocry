@@ -397,10 +397,11 @@ private class Luzes(c: Context) : View(c) {
     override fun onDraw(cv: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
+        // pinta so o quadrado de cada mancha (fora dele a mancha ja e transparente): metade do trabalho
         p.shader = s1
-        cv.drawRect(0f, 0f, w, h, p)
+        cv.drawRect(maxOf(0f, w * 0.07f), 0f, w, minOf(h, h * 0.17f + w * 0.78f), p)
         p.shader = s2
-        cv.drawRect(0f, 0f, w, h, p)
+        cv.drawRect(0f, maxOf(0f, h * 0.62f - w * 0.72f), minOf(w, w * 0.78f), minOf(h, h * 0.62f + w * 0.72f), p)
     }
 }
 
@@ -436,6 +437,12 @@ class BgView(c: Context) : FrameLayout(c) {
         aplica()
     }
 
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        super.onSizeChanged(w, h, ow, oh)
+        // tela girou ou mudou de tamanho: o video pequeno do desfoque acompanha
+        if (tv != null) post { desfoque() }
+    }
+
     /** le as preferencias e remonta tudo */
     fun aplica() {
         libera()
@@ -466,8 +473,41 @@ class BgView(c: Context) : FrameLayout(c) {
     private fun desfoque() {
         if (Build.VERSION.SDK_INT >= 31) {
             val r = Prefs.bgBlur * resources.displayMetrics.density
-            conteudo.setRenderEffect(if (r > 0.5f) RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)
+            val t = tv
+            if (t != null) {
+                // video: o desfoque e feito no proprio video, numa copia pequena (ver encaixaVideo)
+                conteudo.setRenderEffect(null)
+                encaixaVideo()
+                val f = reducao()
+                t.setRenderEffect(if (r > 0.5f) RenderEffect.createBlurEffect(r / f, r / f, Shader.TileMode.CLAMP) else null)
+            } else {
+                conteudo.setRenderEffect(if (r > 0.5f) RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)
+            }
         }
+    }
+
+    /**
+     * quantas vezes o video fica menor por dentro quando tem desfoque. Desfocar o video inteiro em toda
+     * imagem nova pesava demais (a tela chegava a travar em celular fraco); desfocado, ele pode ser desenhado
+     * pequeno e esticado: fica igual na tela e da 16x menos trabalho.
+     */
+    private fun reducao(): Float = if (Build.VERSION.SDK_INT < 31 || Prefs.bgBlur <= 0) 1f else if (Prefs.bgBlur < 4) 2f else 4f
+
+    /** poe o video no tamanho de dentro (tela / reducao) e estica ate cobrir a tela */
+    private fun encaixaVideo() {
+        val t = tv ?: return
+        val w = conteudo.width
+        val h = conteudo.height
+        if (w <= 0 || h <= 0) return
+        val f = reducao()
+        val tw = kotlin.math.ceil(w / f).toInt()
+        val th = kotlin.math.ceil(h / f).toInt()
+        val lp = t.layoutParams
+        if (lp == null || lp.width != tw || lp.height != th) t.layoutParams = LayoutParams(tw, th)
+        t.pivotX = 0f
+        t.pivotY = 0f
+        t.scaleX = w.toFloat() / tw
+        t.scaleY = h.toFloat() / th
     }
 
     private fun animado() {
@@ -531,6 +571,8 @@ class BgView(c: Context) : FrameLayout(c) {
             override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
         }
         conteudo.addView(t, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        // o tamanho da tela so e conhecido depois do layout: ai o video vai pro tamanho certo (e o desfoque junto)
+        if (conteudo.width > 0) desfoque() else conteudo.post { if (tv === t) desfoque() }
     }
 
     private fun prepara(arq: File, s: Surface) {
