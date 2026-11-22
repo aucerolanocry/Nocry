@@ -209,8 +209,17 @@ class MainActivity : Activity() {
 
     /** primeira tela depois da abertura: o inicio, ou a tela da key se nao tiver key valida */
     private fun abreInicial() {
-        if (gate || pilha.isNotEmpty()) return
-        if (License.valid()) {
+    if (gate || pilha.isNotEmpty()) return
+    // 👇 FORÇA O LOGIN SE O COFRE ESTIVER VAZIO
+    if (!Cofre.tem(this)) {
+        mostraGate()
+    } else if (License.valid()) {
+        abre(HomeScreen(this))
+        avisoAtividade() 
+    } else {
+        mostraGate()
+    }
+}
             // prévia (prints do CI): dá pra pedir uma fonte, pra conferir o app com o visual que o dono usa
             if (BuildConfig.PREVIEW) intent?.getStringExtra("fonte")?.let { if (Packs.existe(it)) Prefs.fonte = it }
             abre(HomeScreen(this))
