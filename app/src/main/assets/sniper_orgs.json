@@ -1149,5 +1149,65 @@
     "botoes": "auto",
     "servidor": "1384303916405231807",
     "convite": "https://discord.gg/pandaesports"
+  },
+  "FLAMINGO": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1491999482081054730",
+    "convite": "https://discord.gg/flamingoesports"
+  },
+  "MORCEGO": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1354661282057424916",
+    "convite": "https://discord.gg/orgmorcego"
+  },
+  "POLAR": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1506668872206389268",
+    "convite": "https://discord.gg/orgpolar"
+  },
+  "ZOMBIE": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1421556571925647402",
+    "convite": "https://discord.gg/orgzombie"
+  },
+  "NESCAU": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1476032885717864658",
+    "convite": "https://discord.gg/orgnescau"
+  },
+  "FAC7": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1463493002591731714",
+    "convite": "https://discord.gg/orgfac7"
+  },
+  "RYZEN": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1470118383340093550",
+    "convite": "https://discord.gg/orgryzen"
+  },
+  "LAJE": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1200634254460207104",
+    "convite": "https://discord.gg/lajeesports"
+  },
+  "PRYMAX": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1433218148643110966",
+    "convite": "https://discord.gg/orgprymax"
+  },
+  "GALINHAS": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1459138997975777322",
+    "convite": "https://discord.gg/orggalinhas"
   }
 }
