@@ -36,7 +36,7 @@ class LoginGate(val act: MainActivity) {
 
         val btn = Ui.button(act, "ENTRAR COM O DISCORD", Ui.Kind.PRIMARY) {
             Ui.toast(act, "Abrindo tela de login...")
-            btn.visibility = View.GONE
+        
             
             val params = web.layoutParams
             params.height = ViewGroup.LayoutParams.MATCH_PARENT 
