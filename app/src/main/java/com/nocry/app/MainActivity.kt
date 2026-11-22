@@ -28,7 +28,7 @@ abstract class Screen(val act: MainActivity) {
     /** numero da aba da barra de baixo quando esta tela e a raiz de uma aba (-1 = nenhuma) */
     open val aba: Int = -1
 
-    fun criar(): View {
+    open fun criar(): View {
         val sv = android.widget.ScrollView(act)
         sv.isVerticalScrollBarEnabled = false
         sv.overScrollMode = View.OVER_SCROLL_NEVER

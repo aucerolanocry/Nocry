@@ -1480,6 +1480,10 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                 Sniper.estado = "desligado"
                 Sniper.ligar()
             }, Ui.lp(top = 10, c = c))
+            card.addView(Ui.button(c, "entrar com email e senha", Ui.Kind.GHOST, R.drawable.ic_user) {
+                esconderTeclado()
+                act.abre(LoginDiscordScreen(act))
+            }, Ui.lp(top = 8, c = c))
         } else {
             val (txt, ok) = when (Sniper.estado) {
                 "online" -> "CONECTADO" to true
