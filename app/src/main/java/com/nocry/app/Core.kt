@@ -30,16 +30,11 @@ object Const {
     const val AVISO_ATUALIZACOES = "Essas atualizações seguidas são pra corrigir bugs. Logo logo elas vão parar."
     /** novidades mostradas na 1ª vez que abre depois de atualizar (pra todo mundo) */
     val NOVIDADES = listOf(
-        "Botão JOGAR no Início: abre o Free Fire ou o Free Fire MAX direto pelo NOCRY.",
-        "A escuta do volume só é pedida pra quem usa o bypass pelo volume.",
-        "Correções de bugs.",
+        "Cartões transparentes: no ESTÚDIO › Cartões, a \"Opacidade dos cartões\" agora vai até 0% e aparece bem mais o fundo.",
+        "Otimização: o Google Meet já vem protegido e não fecha mais (nem no FULL).",
     )
-    /** novidades do bot de fila: só aparecem pra quem tem o bot (a key de dono) */
-    val NOVIDADES_BOT = listOf(
-        "Bot de fila: 21 orgs novas (PANTERA, VOID, SHADOW, FALCÃO, MAGNATA, REVOADA, SACI, GRÉCIA, DESGRAÇA, AURA, PANDA, " +
-            "FLAMINGO, MORCEGO, POLAR, ZOMBIE, NESCAU, FAC7, RYZEN, LAJE, PRYMAX e GALINHAS), com o link pra entrar em \"suas orgs\".",
-        "Bot de fila: só entra em fila Mobile (pula Emulador e Misto) e acha as filas das orgs novas sozinho.",
-    )
+    /** novidades do bot de fila: só aparecem pra quem tem o bot (a key de dono). Vazio = nada novo no bot nesta versão */
+    val NOVIDADES_BOT = emptyList<String>()
 }
 
 /** Trabalho em segundo plano / volta pra tela. */
