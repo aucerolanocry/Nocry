@@ -494,7 +494,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         val sel = Prefs.tema == t.id
         val box = Ui.vbox(c)
         // base escura com borda fina: o nome do tema fica legivel em cima de qualquer fundo
-        box.background = if (sel) Ui.shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xD8), Ui.raioPeq(16), Theme.alpha(Theme.accent, 0x99), 1)
+        box.background = if (sel) Ui.shape(c, Theme.alpha(0xFF0B0A12.toInt(), Theme.op(0xD8, 0.3f)), Ui.raioPeq(16), Theme.alpha(Theme.accent, 0x99), 1)
             else Ui.peca(c, Ui.raioPeq(16), 0xD8)
         val pd = Ui.dp(c, 6)
         box.setPadding(pd, pd, pd, Ui.dp(c, 10))
@@ -545,7 +545,8 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         add(v, 14)
         val a = secao(c, "ajustes finos", icone = R.drawable.ic_sliders)
         a.addView(Ui.slider(c, "Brilho neon", Prefs.brilho, 0, 100, "%") { x -> Prefs.brilho = x; muda() }, Ui.lp(top = 14, c = c))
-        a.addView(Ui.slider(c, "Opacidade do vidro", Prefs.vidro, 20, 95, "%") { x -> Prefs.vidro = x; muda() }, Ui.lp(top = 12, c = c))
+        a.addView(Ui.slider(c, "Opacidade dos cartões", Prefs.vidro, 0, 95, "%") { x -> Prefs.vidro = x; muda() }, Ui.lp(top = 12, c = c))
+        a.addView(Ui.text(c, "Mais baixo = mais transparente, aparece mais o fundo. Em 0 fica só a borda. Vale pra todos os estilos.", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
         a.addView(Ui.slider(c, "Arredondamento", Prefs.raio, 2, 30, " dp") { x -> Prefs.raio = x; muda() }, Ui.lp(top = 12, c = c))
         a.addView(Ui.slider(c, "Espessura da borda", Prefs.borda, 1, 4, " dp") { x -> Prefs.borda = x; muda() }, Ui.lp(top = 12, c = c))
         add(a, 12)

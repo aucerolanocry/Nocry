@@ -84,8 +84,8 @@ object Ui {
      * no estilo vidro fica um vidro claro com borda branca fina, combinando com os cartoes
      */
     fun peca(c: Context, raio: Int, alfa: Int = 0x9C, borda: Int = 0x1F): GradientDrawable =
-        if (Theme.vidro) shape(c, Theme.alpha(Theme.mix(0xFF10131E.toInt(), Color.WHITE, 0.11f), alfa * 9 / 10), raio, Theme.alpha(Color.WHITE, borda + 0x12), 1)
-        else shape(c, Theme.alpha(0xFF0B0A12.toInt(), alfa), raio, Theme.alpha(Color.WHITE, borda), 1)
+        if (Theme.vidro) shape(c, Theme.alpha(Theme.mix(0xFF10131E.toInt(), Color.WHITE, 0.11f), Theme.op(alfa * 9 / 10)), raio, Theme.alpha(Color.WHITE, borda + 0x12), 1)
+        else shape(c, Theme.alpha(0xFF0B0A12.toInt(), Theme.op(alfa)), raio, Theme.alpha(Color.WHITE, borda + (if (Prefs.vidro < 35) 0x14 else 0)), 1)
 
     /** canto de etiqueta/pilula: redonda de vez no tema redondo, quase reta no tema reto */
     fun raioPilula(): Int = if (Theme.redondo) 99 else raioPeq(8)
@@ -136,7 +136,11 @@ object Ui {
             // texto corrido um pouco menos (senao o paragrafo fica largo demais)
             t.letterSpacing = if (display) Theme.pack().esp else 0.03f
         }
-        if (Theme.temMidiaDeFundo()) t.setShadowLayer(dp(c, 3).toFloat(), 0f, dp(c, 1).toFloat(), 0x99000000.toInt())
+        // com fundo de foto/video a letra ganha sombra; com cartao bem transparente a sombra fica mais forte pra continuar legivel
+        if (Theme.temMidiaDeFundo()) {
+            val fraco = Prefs.vidro < 40
+            t.setShadowLayer(dp(c, if (fraco) 4 else 3).toFloat(), 0f, dp(c, 1).toFloat(), if (fraco) 0xE6000000.toInt() else 0x99000000.toInt())
+        }
         return t
     }
 
@@ -304,7 +308,7 @@ object Ui {
     fun faixaAviso(c: Context, texto: String, acao: String, cor: Int = WARN, onClick: () -> Unit): View {
         val r = hbox(c)
         r.background = ripple(c, android.graphics.drawable.LayerDrawable(arrayOf(
-            shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xB8), raioPeq(16)),
+            shape(c, Theme.alpha(0xFF0B0A12.toInt(), Theme.op(0xB8, 0.3f)), raioPeq(16)),
             shape(c, Theme.alpha(cor, 0x1C), raioPeq(16), Theme.alpha(cor, 0x48), 1))),
             shape(c, Color.WHITE, raioPeq(16)))
         r.setPadding(dp(c, 14), dp(c, 12), dp(c, 14), dp(c, 12))
@@ -625,7 +629,7 @@ object Ui {
         if (tipo == Dica.INFO) {
             // informação comum fica discreta (barrinha no degrade do tema + texto): quase toda tela começa
             // com uma, e uma caixa azul em cada tela competia com o conteúdo e poluía o app
-            r.background = if (Theme.vidro) peca(c, raioPeq(16), 0xA8, 0x0E) else shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xA8), raioPeq(12))
+            r.background = if (Theme.vidro) peca(c, raioPeq(16), 0xA8, 0x0E) else shape(c, Theme.alpha(0xFF0B0A12.toInt(), Theme.op(0xA8, 0.25f)), raioPeq(12))
             // a barrinha da esquerda acompanha o canto arredondado em vez de sair pra fora dele
             r.clipToOutline = true
             r.setPadding(0, dp(c, 10), dp(c, 13), dp(c, 10))
@@ -639,7 +643,7 @@ object Ui {
         }
         // base escura por baixo da cor: o balão fica legível mesmo em cima de fundo claro
         r.background = android.graphics.drawable.LayerDrawable(arrayOf(
-            shape(c, Theme.alpha(0xFF0B0A12.toInt(), 0xC8), raioPeq(14)),
+            shape(c, Theme.alpha(0xFF0B0A12.toInt(), Theme.op(0xC8, 0.3f)), raioPeq(14)),
             shape(c, Theme.alpha(cor, 0x1A), raioPeq(14), Theme.alpha(cor, 0x50), 1)))
         r.setPadding(dp(c, 12), dp(c, 11), dp(c, 13), dp(c, 11))
         // ícone numa bolinha da mesma cor (fica com cara de balão de aviso, não de texto solto)
@@ -700,7 +704,7 @@ object Ui {
         cab.minimumHeight = dp(c, 40)
         // faixa escura atras do titulo: o passo vira uma linha de verdade em vez de texto solto no fundo
         cab.background = if (Theme.vidro && estado != 1) peca(c, raioPeq(14), 0xA8, 0x0E)
-            else shape(c, Theme.alpha(0xFF0B0A12.toInt(), if (estado == 1) 0xD8 else 0xA8), raioPeq(if (Theme.vidro) 14 else 10),
+            else shape(c, Theme.alpha(0xFF0B0A12.toInt(), Theme.op(if (estado == 1) 0xD8 else 0xA8, 0.25f)), raioPeq(if (Theme.vidro) 14 else 10),
                 if (estado == 1) Theme.alpha(Theme.accent, 0x70) else Theme.alpha(Color.WHITE, 0x1A), 1)
         cab.setPadding(dp(c, 12), dp(c, 6), dp(c, 10), dp(c, 6))
         val t = text(c, titulo, 13f, if (estado == 2) MUTED else TEXT, true)

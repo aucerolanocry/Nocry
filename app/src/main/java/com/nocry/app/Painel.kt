@@ -96,7 +96,8 @@ class Painel(
                     Theme.alpha(Theme.mix(fundo, c1, tint + 0.03f), a(0.76f * k)), Theme.alpha(Theme.mix(fundo, Color.BLACK, 0.25f), a(0.80f * k)), Shader.TileMode.CLAMP)
             }
             "solido" -> {
-                val al = a(0.55f + 0.42f * ((Prefs.vidro - 20) / 75f))
+                // de 20% pra cima continua igual a antes; abaixo de 20 vai sumindo ate ficar so a borda
+                val al = if (Prefs.vidro >= 20) a(0.55f + 0.42f * ((Prefs.vidro - 20) / 75f)) else a(0.55f * Prefs.vidro / 20f)
                 LinearGradient(b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
                     Theme.alpha(Theme.mix(Theme.mix(base, 0xFF1B150D.toInt(), 0.5f), c1, tint + 0.04f), al),
                     Theme.alpha(Theme.mix(base, 0xFF000000.toInt(), 0.35f), al), Shader.TileMode.CLAMP)
@@ -304,16 +305,16 @@ class Botao(
         if (tipo == "ico" && vidro) {
             // base escura por baixo do brilho: o icone claro continua aparecendo
             pFill.shader = null
-            pFill.color = Theme.alpha(0xFF10131E.toInt(), 0x80)
+            pFill.color = Theme.alpha(0xFF10131E.toInt(), Theme.op(0x80, 0.3f))
             cv.drawPath(path, pFill)
         }
         pFill.shader = shFill
         pFill.color = when (tipo) {
-            "ghost" -> if (vidro) Theme.alpha(Theme.mix(0xFF10131E.toInt(), Color.WHITE, 0.13f), 0xA8)
-                else Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.07f), 0xB8)
+            "ghost" -> if (vidro) Theme.alpha(Theme.mix(0xFF10131E.toInt(), Color.WHITE, 0.13f), Theme.op(0xA8, 0.35f))
+                else Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.07f), Theme.op(0xB8, 0.35f))
             "danger" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Ui.BAD, 0.22f), 0xC8)
-            "campo" -> Theme.alpha(Color.BLACK, 0x88)
-            "ico" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.08f), 0xB0)
+            "campo" -> Theme.alpha(Color.BLACK, Theme.op(0x88, 0.4f))
+            "ico" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.08f), Theme.op(0xB0, 0.3f))
             else -> Color.BLACK
         }
         cv.drawPath(path, pFill)

@@ -16,7 +16,9 @@ object Otm {
     private val opLock = Any()
 
     private const val MSG_APPS = "com.whatsapp com.whatsapp.w4b org.telegram.messenger org.thoughtcrime.securesms com.facebook.orca com.discord"
-    private const val EXTRAS = "com.android.chrome com.google.android.youtube com.google.android.apps.youtube.music com.google.android.apps.photos com.google.android.gm com.google.android.apps.maps com.google.android.apps.docs com.google.android.videos com.google.android.apps.tachyon"
+    private const val EXTRAS = "com.android.chrome com.google.android.youtube com.google.android.apps.youtube.music com.google.android.apps.photos com.google.android.gm com.google.android.apps.maps com.google.android.apps.docs com.google.android.videos"
+    /** chamada de video (Google Meet, o novo e o antigo): ja vem protegido no NORMAL e no FULL; a pessoa pode liberar */
+    private const val CHAMADAS = "com.google.android.apps.tachyon com.google.android.apps.meetings"
     /** FULL: serviços do sistema que o bypass antigo fechava e que são seguros de fechar durante o jogo */
     private const val FULL_EXTRAS = "com.miui.cloudservice com.miui.cloudbackup com.miui.backup com.miui.micloudsync com.xiaomi.ota com.android.updater " +
         "com.miui.personalassistant com.miui.voiceassist com.xiaomi.aiasst.service com.xiaomi.aiasst.vision com.miui.yellowpage com.miui.readassistant " +
@@ -263,6 +265,7 @@ object Otm {
         val ua = liberadosMsg()
         val uex = emptySet<String>()      // "fechar mais apps" saiu: no FULL já fecha todos os do sistema que podem
         val mg = MSG_APPS.split(' ').toSet()
+        val ch = CHAMADAS.split(' ').toSet()
         val ex = HashSet<String>(EXTRAS.split(' '))
         if (props["ro.miui.ui.version.name"].orEmpty().isNotEmpty() || props["ro.mi.os.version.name"].orEmpty().isNotEmpty()) ex.addAll(MIUI.split(' '))
         if (Prefs.otmNivel == "full") ex.addAll(FULL_EXTRAS.split(' '))
@@ -276,6 +279,8 @@ object Otm {
             if (NUNCA_NO_FULL.containsMatchIn(pk)) return "ALARMES/AGENDA"
             if (pk in up) return "SUA LISTA"
             if (pk in mg && pk !in ua && !msgFecha) return "MENSAGENS"
+            // Meet nunca fecha (nem no FULL), a nao ser que a pessoa libere na lista
+            if (pk in ch && pk !in ua) return "CHAMADA DE VIDEO"
             if (pk in fg) return "EM USO AGORA"
             if (pk in home) return "LAUNCHER"
             val sp = setp[pk]
@@ -326,7 +331,11 @@ object Otm {
     // ---------------- textos ----------------
     fun mb(kb: Long): Long = kb / 1024
     fun gb(kb: Long): String = String.format(java.util.Locale.US, "%.1f", kb / 1048576.0)
-    fun curto(pk: String): String = pk.removePrefix("com.google.android.").removePrefix("com.android.").removePrefix("com.")
+    fun curto(pk: String): String = when (pk) {
+        // nome de verdade pros que a pessoa conhece (o pacote do Meet e "tachyon", ninguem ia reconhecer)
+        "com.google.android.apps.tachyon", "com.google.android.apps.meetings" -> nome(pk)
+        else -> pk.removePrefix("com.google.android.").removePrefix("com.android.").removePrefix("com.")
+    }
     fun nome(pk: String): String = when (pk) {
         "com.whatsapp" -> "WhatsApp"
         "com.whatsapp.w4b" -> "WhatsApp Business"
@@ -334,6 +343,8 @@ object Otm {
         "org.thoughtcrime.securesms" -> "Signal"
         "com.facebook.orca" -> "Messenger"
         "com.discord" -> "Discord"
+        "com.google.android.apps.tachyon" -> "Google Meet"
+        "com.google.android.apps.meetings" -> "Google Meet (antigo)"
         else -> pk.removePrefix("com.")
     }
 
@@ -662,7 +673,7 @@ object Otm {
                     "$p PROTEGIDO — NUNCA FECHA"
                 }
             }
-            "MENSAGENS" -> {
+            "MENSAGENS", "CHAMADA DE VIDEO" -> {
                 return if (prot.contains("!$p")) {
                     prot.removeAll { it == "!$p" }
                     gravar("otm_prot", prot)

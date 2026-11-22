@@ -304,7 +304,7 @@ class OtmProtegerScreen(a: MainActivity) : Screen(a) {
                 Ui.button(c, "tentar de novo", Ui.Kind.GHOST) { carrega() })), 0)
             return
         }
-        add(Ui.dica(c, "Toque num app para alternar. Sem escudo = fecha na otimização · com escudo = nunca fecha. Só dá para mudar o que você protegeu e as mensagens.", Ui.Dica.INFO), 0)
+        add(Ui.dica(c, "Toque num app para alternar. Sem escudo = fecha na otimização · com escudo = nunca fecha. Só dá para mudar o que você protegeu, as mensagens e o Google Meet (que já vem protegido).", Ui.Dica.INFO), 0)
         val fecham = p.c.filter { !it.escolhido }.map { a2 ->
             Ui.item(c, Otm.curto(a2.pk), "toque para proteger", R.drawable.ic_xcircle, "${Otm.mb(a2.kb)} MB") { alterna(a2.pk, "") }
         }

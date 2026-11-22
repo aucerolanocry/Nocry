@@ -59,6 +59,12 @@ object Theme {
     /** estilo vidro: cartoes claros e translucidos, fundo desfocado com manchas de luz */
     val vidro: Boolean get() = Prefs.cartao == "vidro"
 
+    /** quanto os cartoes tampam o fundo, em relacao ao normal (70% = 1.0; 0 = transparente) */
+    fun opaco(): Float = Prefs.vidro / 70f
+
+    /** transparencia de uma peca escura seguindo a opacidade escolhida; min = o minimo que ela nunca perde */
+    fun op(alfa: Int, min: Float = 0f): Int = (alfa * maxOf(opaco(), min)).toInt().coerceIn(0, 255)
+
     /** tema de cantos bem redondos: botoes, abas e etiquetas viram pilula */
     val redondo: Boolean get() = Prefs.raio >= 16
 

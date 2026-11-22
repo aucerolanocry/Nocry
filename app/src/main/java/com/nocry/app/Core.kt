@@ -359,10 +359,10 @@ var bypassVolAtivo: Boolean
     var cartao: String
         get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido") it else "contorno" }
         set(v) = ps("cartao", v)
-    /** quanto o cartao de vidro e opaco (20 a 95 %) */
+    /** quanto os cartoes (de qualquer estilo) tampam o fundo: 0 = so a borda, 95 = quase cheio */
     var vidro: Int
-        get() = gi("vidro", 70, 20, 95)
-        set(v) = pi("vidro", v.coerceIn(20, 95))
+        get() = gi("vidro", 70, 0, 95)
+        set(v) = pi("vidro", v.coerceIn(0, 95))
     var raio: Int
         get() = gi("raio", 2, 2, 30)
         set(v) = pi("raio", v.coerceIn(2, 30))
