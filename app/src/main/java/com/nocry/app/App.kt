@@ -16,6 +16,8 @@ class App : Application() {
         Prefs.init(this)
         // visual novo (Vidro) aplicado uma vez; o de antes fica guardado em Meus temas
         try { VisualSalvo.migraVidro() } catch (_: Throwable) {}
+        // cartoes transparentes (opacidade 0) pra todo mundo, uma vez
+        try { VisualSalvo.migraCartaoZero() } catch (_: Throwable) {}
         Sys.init(this)
         NLog.init(this)
         Notif.init(this)

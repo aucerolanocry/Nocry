@@ -908,6 +908,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         Prefs.bgTipo = "animado"
         Prefs.bgEscuro = 25
         Prefs.bgBlur = 0
+        Prefs.vidro = 0
         Prefs.escala = 100
         Prefs.maiusc = true
         Prefs.anim = true

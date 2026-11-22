@@ -30,6 +30,7 @@ object Const {
     const val AVISO_ATUALIZACOES = "Essas atualizações seguidas são pra corrigir bugs. Logo logo elas vão parar."
     /** novidades mostradas na 1ª vez que abre depois de atualizar (pra todo mundo) */
     val NOVIDADES = listOf(
+        "Os cartões agora vêm transparentes pra aparecer o fundo. Quer eles mais escuros? ESTÚDIO › Cartões › \"Opacidade dos cartões\".",
         "Ver o fundo inteiro: no ESTÚDIO tem o botão \"ver o fundo inteiro\" (cartões sem fundo, fundo sem escurecer e sem desfoque).",
         "Cartões transparentes: a \"Opacidade dos cartões\" vai até 0%, e \"Escurecer o fundo\" agora chega a 0% de verdade também com vídeo ou foto.",
         "Otimização: o Google Meet já vem protegido e não fecha mais (nem no FULL).",
@@ -355,9 +356,9 @@ var bypassVolAtivo: Boolean
     var cartao: String
         get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido") it else "contorno" }
         set(v) = ps("cartao", v)
-    /** quanto os cartoes (de qualquer estilo) tampam o fundo: 0 = so a borda, 95 = quase cheio */
+    /** quanto os cartoes (de qualquer estilo) tampam o fundo: 0 = so a borda (o padrao), 95 = quase cheio */
     var vidro: Int
-        get() = gi("vidro", 70, 0, 95)
+        get() = gi("vidro", 0, 0, 95)
         set(v) = pi("vidro", v.coerceIn(0, 95))
     var raio: Int
         get() = gi("raio", 2, 2, 30)
@@ -400,6 +401,10 @@ var bypassVolAtivo: Boolean
     /** os 3 visuais guardados pelo usuario no ESTUDIO (texto com os valores; null = vazio) */
     fun temaSalvo(i: Int): String? = gs("tema_salvo_$i")
     fun salvaTema(i: Int, v: String?) = ps("tema_salvo_$i", v)
+    /** os cartoes ja foram deixados transparentes (opacidade 0) uma vez pra todo mundo (1.0.62) */
+    var cartaoZero: Boolean
+        get() = sp.getBoolean("cartao_zero", false)
+        set(v) = pb("cartao_zero", v)
     /** o visual Vidro ja foi aplicado uma vez (1.0.53) */
     var visualVidro: Boolean
         get() = sp.getBoolean("visual_vidro", false)

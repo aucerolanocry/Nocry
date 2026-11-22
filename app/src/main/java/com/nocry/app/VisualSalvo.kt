@@ -73,6 +73,13 @@ object VisualSalvo {
         Temas.aplica(Temas.get("vidro"))
     }
 
+    /** 1.0.62: os cartoes passam a vir transparentes pra todo mundo (uma vez so; depois vale o que a pessoa escolher) */
+    fun migraCartaoZero() {
+        if (Prefs.cartaoZero) return
+        Prefs.cartaoZero = true
+        Prefs.vidro = 0
+    }
+
     /** codigo curto pra copiar e mandar pra alguem */
     fun codigo(): String = PREFIXO + Base64.encodeToString(atual().toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
 

@@ -119,7 +119,7 @@ object Temas {
         Prefs.raio = t.raio
         Prefs.borda = t.borda
         Prefs.brilho = t.brilho
-        Prefs.vidro = t.vidro
+        // a opacidade dos cartoes e escolha da pessoa (padrao 0 = transparente): trocar de tema nao mexe nela
         Prefs.bgPreset = t.fundo
         Prefs.scanner = t.scanner
         if (t.blur >= 0) Prefs.bgBlur = t.blur
