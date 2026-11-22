@@ -1037,7 +1037,8 @@ object Sniper {
     private fun guilda(g: JSONObject) {
         val gid = g.s("id") ?: return
         val nome = g.s("name") ?: g.optJSONObject("properties")?.s("name")
-        if (nome != null) guildas[gid] = nome
+        // registra o servidor mesmo sem nome (chega vazio e o nome preenche depois): assim "na conta" é confiável
+        guildas[gid] = nome ?: guildas[gid] ?: ""
         (g.s("vanity_url_code") ?: g.optJSONObject("properties")?.s("vanity_url_code"))?.let { if (it.isNotBlank()) vanity[gid] = it }
         g.optJSONArray("channels")?.let { cs ->
             val ids = ArrayList<String>()
@@ -2618,15 +2619,21 @@ object Sniper {
 
     /** os servidores da org que a conta conhece */
     private fun servidoresDa(o: String): Set<String> {
+        // servidores que SABEMOS pertencer a essa org: aprendidos (salvos no disco) ou fixos da lista
+        val cand = LinkedHashSet<String>()
+        canaisDaOrg[o]?.forEach { cid -> canais[cid]?.guildId?.let { cand.add(it) } }
+        for ((gid, org) in orgDoServidor) if (org == o) cand.add(gid)
+        val temFixo = servidorFixo.values.any { it == o }
+        servidorFixo.filterValues { it == o }.keys.forEach { cand.add(it) }
+        // "na conta" = a conta logada AGORA está no servidor. guildas = servidores dessa conta.
+        // (orgDoServidor/canaisDaOrg são aprendidos com a conta de dono e ficam salvos; sozinhos não provam nada)
         val g = LinkedHashSet<String>()
-        canaisDaOrg[o]?.forEach { cid -> canais[cid]?.guildId?.let { g.add(it) } }
-        for ((gid, org) in orgDoServidor) if (org == o && servidorFixo[gid].let { it == null || it == o }) g.add(gid)
-        // servidor fixo: só conta se a conta está nele
-        val fixos = servidorFixo.filterValues { it == o }.keys
-        for (gid in fixos) if (guildas.containsKey(gid)) g.add(gid)
-        if (fixos.isNotEmpty()) return g
-        val n = normal(o)
-        if (n.isNotEmpty()) for ((gid, nome) in guildas) if (n in normal(nome) && servidorFixo[gid] == null) g.add(gid)
+        for (gid in cand) if (guildas.containsKey(gid)) g.add(gid)
+        // org sem servidor fixo e ainda sem match: casa pelo nome do servidor (já é da conta, vem de guildas)
+        if (g.isEmpty() && !temFixo) {
+            val n = normal(o)
+            if (n.isNotEmpty()) for ((gid, nome) in guildas) if (n in normal(nome) && servidorFixo[gid] == null) g.add(gid)
+        }
         return g
     }
 
