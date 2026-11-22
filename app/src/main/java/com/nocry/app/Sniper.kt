@@ -654,6 +654,9 @@ object Sniper {
         return n
     }
 
+    /** id do aparelho (pro login por email/senha usar o mesmo nos headers do Discord) */
+    fun idAparelho(): String = vendorId()
+
     // ======================================================================== textos
     fun reais(c: String): String {
         val n = c.toIntOrNull() ?: return c

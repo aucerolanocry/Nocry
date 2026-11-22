@@ -194,6 +194,16 @@ class Resp(val codigo: Int, val corpo: String) {
     fun captcha(): Boolean = corpo.contains("captcha_key")
 }
 
+/** resultado do login por email e senha (direto na API, sem abrir o Discord inteiro) */
+sealed class LoginResultado {
+    data class Ok(val token: String) : LoginResultado()
+    /** a conta tem 2 fatores: precisa do código do app autenticador */
+    data class PrecisaCodigo(val ticket: String) : LoginResultado()
+    /** o Discord pediu captcha: não dá pra logar direto, tem que colar o token */
+    object Captcha : LoginResultado()
+    data class Erro(val msg: String) : LoginResultado()
+}
+
 class Discord(private val token: String, private val vendorId: String, private val ouvinte: Ouvinte) {
 
     interface Ouvinte {
@@ -209,6 +219,71 @@ class Discord(private val token: String, private val vendorId: String, private v
         const val API = "https://discord.com/api/v9"
         const val GATEWAY = "wss://gateway.discord.gg"
         private val JSON = "application/json".toMediaType()
+
+        private val clienteLogin by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+        }
+
+        private fun superPropsLogin(vendorId: String): String {
+            val p = JSONObject()
+                .put("os", "Android").put("browser", "Discord Android")
+                .put("device", Build.MODEL ?: "")
+                .put("system_locale", "pt-BR").put("client_version", VERSAO)
+                .put("release_channel", "googleRelease").put("device_vendor_id", vendorId)
+                .put("browser_user_agent", "").put("browser_version", "")
+                .put("os_version", Build.VERSION.SDK_INT.toString())
+                .put("client_build_number", BUILD).put("client_event_source", JSONObject.NULL)
+                .put("design_id", 0)
+            return Base64.encodeToString(p.toString().toByteArray(), Base64.NO_WRAP)
+        }
+
+        private fun pedirLogin(caminho: String, corpo: JSONObject, vendorId: String): Resp {
+            val b = Request.Builder().url(API + caminho)
+                .header("User-Agent", "Discord-Android/$BUILD;RNA")
+                .header("X-Super-Properties", superPropsLogin(vendorId))
+                .header("X-Discord-Locale", "pt-BR")
+                .header("Accept-Language", "pt-BR")
+                .post(corpo.toString().toRequestBody(JSON))
+            return try {
+                clienteLogin.newCall(b.build()).execute().use { x -> Resp(x.code, x.body?.string() ?: "") }
+            } catch (_: Throwable) { Resp(-1, "sem conexão") }
+        }
+
+        private fun interpretar(r: Resp): LoginResultado {
+            if (r.captcha()) return LoginResultado.Captcha
+            val o = r.obj() ?: return LoginResultado.Erro("o Discord respondeu estranho, tente de novo")
+            val tk = o.optString("token", "")
+            if (tk.isNotBlank() && tk != "null") return LoginResultado.Ok(tk)
+            val ticket = o.optString("ticket", "")
+            if (o.optBoolean("mfa", false) || ticket.isNotBlank()) {
+                if (ticket.isNotBlank()) return LoginResultado.PrecisaCodigo(ticket)
+            }
+            val msg = o.optString("message", "").ifBlank {
+                o.optJSONObject("errors")?.optJSONObject("login")
+                    ?.optJSONArray("_errors")?.optJSONObject(0)?.optString("message", "") ?: ""
+            }
+            return LoginResultado.Erro(if (msg.isNotBlank()) msg else "email ou senha incorretos")
+        }
+
+        /** entra com email e senha; volta o token, ou pede código (2FA), ou captcha, ou erro */
+        fun login(email: String, senha: String, vendorId: String): LoginResultado {
+            val corpo = JSONObject()
+                .put("login", email.trim()).put("password", senha)
+                .put("undelete", false).put("login_source", JSONObject.NULL)
+                .put("gift_code_sku_id", JSONObject.NULL)
+            return interpretar(pedirLogin("/auth/login", corpo, vendorId))
+        }
+
+        /** segunda etapa quando a conta tem 2 fatores: manda o código do app autenticador */
+        fun loginCodigo(ticket: String, codigo: String, vendorId: String): LoginResultado {
+            val corpo = JSONObject()
+                .put("code", codigo.trim()).put("ticket", ticket)
+                .put("login_type", "login").put("gift_code_sku_id", JSONObject.NULL)
+            return interpretar(pedirLogin("/auth/mfa/totp", corpo, vendorId))
+        }
     }
 
     private val ua = "Discord-Android/$BUILD;RNA"
