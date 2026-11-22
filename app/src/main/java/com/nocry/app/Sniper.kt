@@ -938,8 +938,17 @@ object Sniper {
 
     fun salvarToken(t: String) {
         val limpo = t.trim().removePrefix("\"").removeSuffix("\"")
+        val trocou = limpo != Cofre.le(app)
         Cofre.guarda(app, limpo)
         sp.edit().putBoolean("tk_apagado", false).apply()
+        // trocou de conta: larga logo os servidores/estado da conta antiga pra UI não mostrar as orgs
+        // dela até a conta nova conectar (o aoPronto repovoa com os servidores certos)
+        if (trocou) {
+            guildas.clear()
+            statusOrg.clear()
+            nomeConta = ""
+            eu = ""
+        }
         log("ok", "token salvo (vai cifrado no backup, só abre com a sua key de dono)")
         marcarBackup()
     }
@@ -991,6 +1000,9 @@ object Sniper {
         conectado = true
         estado = "online"
         log("ok", "conectado como $nome")
+        // cada conexão reflete a conta que está logada AGORA: zera os servidores da conta anterior
+        // (senão, ao trocar de conta, apareciam as orgs da conta antiga junto)
+        guildas.clear()
         d.optJSONArray("guilds")?.let { gs ->
             for (i in 0 until gs.length()) gs.optJSONObject(i)?.let { guilda(it) }
         }
