@@ -210,11 +210,6 @@ class MainActivity : Activity() {
     /** primeira tela depois da abertura: o inicio, ou a tela da key se nao tiver key valida */
     private fun abreInicial() {
         if (gate || pilha.isNotEmpty()) return
-        // força o login se o cofre estiver vazio (menos no modo prévia dos prints do CI)
-        if (!Cofre.tem(this) && !BuildConfig.PREVIEW) {
-            mostraGate()
-            return
-        }
         if (License.valid()) {
             // prévia (prints do CI): dá pra pedir uma fonte, pra conferir o app com o visual que o dono usa
             if (BuildConfig.PREVIEW) intent?.getStringExtra("fonte")?.let { if (Packs.existe(it)) Prefs.fonte = it }
@@ -417,7 +412,7 @@ class MainActivity : Activity() {
         topo.visibility = View.GONE
         nav.removeAllViews()
         conteudo.removeAllViews()
-        val g = LoginGate(this)
+        val g = KeyGate(this)
         conteudo.addView(g.criar(), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
