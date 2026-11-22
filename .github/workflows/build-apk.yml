@@ -37,6 +37,10 @@ on:
         description: "Só lançar de novo uma versão escondida (ex.: v1.0.44): vira pública e aparece no app"
         required: false
         default: ""
+      notas:
+        description: "Novidades na página do lançamento (vazio = texto padrão)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -147,10 +151,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: v${{ steps.v.outputs.name }}
+          NOTAS_IN: ${{ github.event.inputs.notas }}
         run: |
-          NOTAS="Baixe o **Nocry.apk**, instale e abra. No primeiro uso o app guia o pareamento do ADB (depuração sem fio)."
+          PADRAO="Baixe o **Nocry.apk**, instale e abra. No primeiro uso o app guia o pareamento do ADB (depuração sem fio)."
+          NOTAS="${NOTAS_IN:-$PADRAO}"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/Nocry.apk --clobber
+            if [ -n "$NOTAS_IN" ]; then gh release edit "$TAG" --notes "$NOTAS"; fi
           else
             gh release create "$TAG" dist/Nocry.apk --title "Nocry $TAG" --notes "$NOTAS" --target "${GITHUB_SHA}"
           fi
@@ -175,8 +182,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.mostrar }}
+          NOTAS_IN: ${{ github.event.inputs.notas }}
         run: |
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+          # a página do pré-lançamento dizia "só no app do dono": troca pelas novidades (ou pelo texto padrão)
+          PADRAO="Baixe o **Nocry.apk**, instale e abra. No primeiro uso o app guia o pareamento do ADB (depuração sem fio)."
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest --notes "${NOTAS_IN:-$PADRAO}"
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease
 
   prints:

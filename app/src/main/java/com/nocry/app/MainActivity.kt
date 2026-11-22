@@ -260,7 +260,9 @@ class MainActivity : Activity() {
         Prefs.versaoVista = atual
         if (!atualizou) return
         avisoAberto = true
-        Ui.dialogAviso(this, "NOCRY atualizado", "Você está na v$atual.\n\n" + Const.AVISO_ATUALIZACOES, "Entendi") {
+        val novidades = Const.NOVIDADES + (if (License.isOwner()) Const.NOVIDADES_BOT else emptyList())
+        val msg = "Você está na v$atual.\n\nNovidades:\n" + novidades.joinToString("\n") { "• $it" } + "\n\n" + Const.AVISO_ATUALIZACOES
+        Ui.dialogAviso(this, "NOCRY atualizado", msg, "Entendi") {
             avisoAberto = false
         }
     }
