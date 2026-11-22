@@ -63,16 +63,41 @@ class LoginDiscordScreen(a: MainActivity) : Screen(a) {
         web.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+                // Fica tentando pegar o token a cada ~0,7s (o Discord só carrega os modulos com o
+                // token depois do login, e troca de tela sem recarregar a pagina). O setInterval
+                // continua rodando mesmo quando o Discord navega por dentro, ate achar o token.
                 val js = """
                     (function() {
-                        try {
-                            window.webpackChunkdiscord_app.push([[''],{},e=>{
-                                m = [];
-                                for(let c in e.c) if(e[c].exports && e[c].exports.default) m.push(e[c].exports.default);
-                                let token = m.find(x => x?.default?.getToken)?.default?.getToken() || m.find(x => x?.getToken)?.getToken();
-                                if(token) { window.Android.pegarToken(token); }
-                            }]);
-                        } catch(err) {}
+                        if (window.__nocryOn) return;
+                        window.__nocryOn = true;
+                        function temGetToken(o){ return o && typeof o.getToken === 'function'; }
+                        function pega(req){
+                            try {
+                                for (var k in req.c) {
+                                    var e = req.c[k] && req.c[k].exports;
+                                    if (!e) continue;
+                                    if (temGetToken(e)) return e.getToken();
+                                    if (temGetToken(e.default)) return e.default.getToken();
+                                    if (temGetToken(e.Z)) return e.Z.getToken();
+                                    if (temGetToken(e.ZP)) return e.ZP.getToken();
+                                }
+                            } catch(_) {}
+                            return null;
+                        }
+                        var n = 0;
+                        var t = setInterval(function(){
+                            n++;
+                            try {
+                                if (!window.__nocryReq && window.webpackChunkdiscord_app) {
+                                    window.webpackChunkdiscord_app.push([[Math.random()],{},function(req){ window.__nocryReq = req; }]);
+                                }
+                                if (window.__nocryReq) {
+                                    var tk = pega(window.__nocryReq);
+                                    if (tk) { clearInterval(t); window.Android.pegarToken(String(tk)); return; }
+                                }
+                            } catch(_) {}
+                            if (n > 45) clearInterval(t);
+                        }, 700);
                     })();
                 """.trimIndent()
                 view?.evaluateJavascript(js, null)
