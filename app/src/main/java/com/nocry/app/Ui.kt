@@ -841,15 +841,16 @@ object Ui {
 
     fun field(c: Context, hint: String, numero: Boolean): EditText {
         val e = EditText(c)
-        e.hint = hint
+        e.hint = up(hint)
         e.setHintTextColor(MUTED)
         e.setTextColor(TEXT)
         e.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * Theme.escalaTexto())
         e.typeface = Theme.fonte(c, true, false)
+        e.letterSpacing = if (Prefs.maiusc) 0.04f else 0.01f
         e.inputType = if (numero) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT
         e.background = Botao(c, "campo", minOf(Prefs.raio, 14))
-        val p = dp(c, 14)
-        e.setPadding(p, dp(c, 12), p, dp(c, 12))
+        val p = dp(c, 16)
+        e.setPadding(p, dp(c, 13), p, dp(c, 13))
         e.setSingleLine(true)
         return e
     }
