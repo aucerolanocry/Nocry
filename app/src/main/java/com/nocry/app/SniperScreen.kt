@@ -168,7 +168,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             box.addView(Ui.lista(c, itens), Ui.lp(top = 8, c = c))
         }
         secao("busca", listOf(
-            "Na aba Busca escolha a org (ou TODAS), os modos e os valores (de R$ 1 pra cima).",
+            "Na aba Busca escolha a org (ou TODAS), os modos e os valores (de R$ 1 pra cima). Fila de R$ 7,50 entra no R$ 7 (as de ,50 vão junto com o valor normal).",
             "Iniciar busca: ele procura em todas as orgs ao mesmo tempo e entra em toda fila que bate.",
             "Só entra em fila Mobile: fila de Emulador ou Misto (dito na mensagem, no nome do canal ou da categoria) ele pula.",
             "Cada org tem um limite de filas: quando ela avisa, ele espera e tenta de novo sozinho."))

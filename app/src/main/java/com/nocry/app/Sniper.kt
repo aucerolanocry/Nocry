@@ -293,7 +293,7 @@ object Sniper {
     private fun lerEscolha() {
         org = sp.getString("org", "TODAS")?.takeIf { it == "TODAS" || orgs.containsKey(it) } ?: "TODAS"
         modos.clear(); modos.addAll((sp.getString("modos", "3X3") ?: "3X3").split(",").filter { it in MODOS })
-        valores.clear(); valores.addAll((sp.getString("valores", "300") ?: "300").split(",").filter { it in todosValores })
+        valores.clear(); valores.addAll((sp.getString("valores", "300") ?: "300").split(",").map { grupoValor(it) }.filter { it in todosValores })
         if (valores.isEmpty() && todosValores.isNotEmpty()) valores.add(if ("300" in todosValores) "300" else todosValores[0])
         gelo = sp.getString("gelo", "NORMAL") ?: "NORMAL"
         maxFilas = sp.getInt("max_filas3", 300)
@@ -610,7 +610,13 @@ object Sniper {
         orgs = out
         semValor = sem
         pendentes = pendAll
-        todosValores = out.values.flatMap { it.filas.values.flatMap { f -> f.keys } }.toSet().sortedBy { it.toIntOrNull() ?: 0 }
+        todosValores = out.values.flatMap { it.filas.values.flatMap { f -> f.keys.map { grupoValor(it) } } }.toSet().sortedBy { it.toIntOrNull() ?: 0 }
+    }
+
+    /** botão de valor de cada fila: as de ",50" entram junto com o valor normal (R$ 7,50 conta como R$ 7) */
+    fun grupoValor(v: String): String {
+        val n = v.toIntOrNull() ?: return v
+        return if (n >= 100) ((n / 100) * 100).toString() else v
     }
 
     private fun salvarEscolha() {
@@ -749,7 +755,7 @@ object Sniper {
 
     fun valoresDisponiveis(): Set<String> {
         val tem = HashSet<String>()
-        for (o in orgsAlvo()) for (m in (if (modos.isEmpty()) MODOS else modos.toList())) orgs[o]?.filas?.get(m)?.keys?.let { tem.addAll(it) }
+        for (o in orgsAlvo()) for (m in (if (modos.isEmpty()) MODOS else modos.toList())) orgs[o]?.filas?.get(m)?.keys?.let { ks -> ks.forEach { tem.add(grupoValor(it)) } }
         return tem
     }
 
@@ -761,8 +767,9 @@ object Sniper {
             val od = orgs[o] ?: continue
             for (m in modos.sorted()) {
                 val f = od.filas[m] ?: continue
-                for (v in valores.sortedBy { it.toIntOrNull() ?: 0 }) {
-                    val fid = f[v] ?: continue
+                // valor marcado R$ 7 pega a fila de R$ 7 e a de R$ 7,50
+                for ((v, fid) in f.entries.sortedBy { it.key.toIntOrNull() ?: 0 }) {
+                    if (grupoValor(v) !in valores) continue
                     if (vistos.add(fid)) out.add(arrayOf(o, m, v, fid))
                 }
             }
