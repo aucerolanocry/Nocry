@@ -409,6 +409,9 @@ class BgView(c: Context) : FrameLayout(c) {
     private val conteudo = FrameLayout(c)
     private val escuro = View(c)
     private val luzes = Luzes(c)
+    /** sombras de cima (atras da hora) e de baixo (atras da barra): ficam mais leves quando o fundo nao e escurecido */
+    private val sombraTopo = View(c)
+    private val sombraBase = View(c)
     private var anim: AnimBg? = null
     private var tv: TextureView? = null
     private var mp: MediaPlayer? = null
@@ -425,12 +428,12 @@ class BgView(c: Context) : FrameLayout(c) {
         addView(escuro, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         addView(luzes, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         // sombra em cima (atrás da hora e do título): o título fica legível mesmo com céu claro no fundo
-        val topo = View(c)
+        val topo = sombraTopo
         topo.background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(0xB0000000.toInt(), 0x60000000, 0x00000000))
         addView(topo, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (170 * c.resources.displayMetrics.density).toInt(), android.view.Gravity.TOP))
         // e embaixo (atrás da barra de abas): fecha a tela como uma vinheta e a barra ganha destaque
-        val base = View(c)
+        val base = sombraBase
         base.background = android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.BOTTOM_TOP,
             intArrayOf(0xD0000000.toInt(), 0x70000000, 0x00000000))
         addView(base, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (240 * c.resources.displayMetrics.density).toInt(), android.view.Gravity.BOTTOM))
@@ -460,10 +463,14 @@ class BgView(c: Context) : FrameLayout(c) {
 
     /** so escurecimento e desfoque (pode ser chamado enquanto o usuario arrasta a barra, sem reiniciar o video) */
     fun ajustaEfeitos() {
-        // foto ou video do usuario costuma ter partes bem claras (ceu, lua); um minimo de escurecimento
-        // segura a leitura do texto cinza por cima. O desenho animado do app ja e escuro, entao vale o que ele escolheu
-        val nivel = if (Theme.temMidiaDeFundo()) maxOf(Prefs.bgEscuro, 30) else Prefs.bgEscuro
+        // vale exatamente o que a pessoa escolheu (antes foto/video tinha um minimo de 30%, e o fundo nunca aparecia inteiro).
+        // A leitura com fundo claro fica por conta da sombra das letras, que engrossa quando o fundo nao e escurecido
+        val nivel = Prefs.bgEscuro
         escuro.setBackgroundColor(Theme.alpha(0xFF000000.toInt(), nivel * 255 / 100))
+        // sombras de cima e de baixo acompanham: inteiras a partir de 48%, bem leves em 0% (so pra hora e a barra aparecerem)
+        val s = (0.3f + 0.7f * nivel / 48f).coerceIn(0.3f, 1f)
+        sombraTopo.alpha = s
+        sombraBase.alpha = s
         // estilo vidro: manchas de luz por cima do fundo escurecido
         luzes.visibility = if (Theme.vidro) View.VISIBLE else View.GONE
         if (Theme.vidro) luzes.monta()

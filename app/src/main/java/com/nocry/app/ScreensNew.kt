@@ -528,6 +528,17 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         add(k3, 12)
     }
 
+    /** um toque: cartoes sem fundo, fundo sem escurecer e sem desfoque. Mostra o maximo do video/foto */
+    private fun botaoTransparente(c: Context): View =
+        Ui.button(c, "ver o fundo inteiro (tudo transparente)", Ui.Kind.GHOST, R.drawable.ic_image) {
+            Prefs.vidro = 0
+            Prefs.bgEscuro = 0
+            Prefs.bgBlur = 0
+            Ui.toast(act, "TUDO TRANSPARENTE · AJUSTE NOS CONTROLES SE QUISER UM POUCO MAIS ESCURO")
+            act.ajustaFundo()
+            muda()
+        }
+
     // ---------------- cartoes e botoes ----------------
     private fun abaCartoes(c: Context) {
         val v = secao(c, "estilo dos cartões", forte = true, icone = R.drawable.ic_image)
@@ -546,7 +557,8 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         val a = secao(c, "ajustes finos", icone = R.drawable.ic_sliders)
         a.addView(Ui.slider(c, "Brilho neon", Prefs.brilho, 0, 100, "%") { x -> Prefs.brilho = x; muda() }, Ui.lp(top = 14, c = c))
         a.addView(Ui.slider(c, "Opacidade dos cartões", Prefs.vidro, 0, 95, "%") { x -> Prefs.vidro = x; muda() }, Ui.lp(top = 12, c = c))
-        a.addView(Ui.text(c, "Mais baixo = mais transparente, aparece mais o fundo. Em 0 fica só a borda. Vale pra todos os estilos.", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        a.addView(Ui.text(c, "Mais baixo = mais transparente, aparece mais o fundo. Em 0 fica só a borda. Vale pra todos os estilos. Pra ver ainda mais, baixe também \"Escurecer o fundo\" na aba FUNDO, ou use o botão abaixo.", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        a.addView(botaoTransparente(c), Ui.lp(top = 10, c = c))
         a.addView(Ui.slider(c, "Arredondamento", Prefs.raio, 2, 30, " dp") { x -> Prefs.raio = x; muda() }, Ui.lp(top = 12, c = c))
         a.addView(Ui.slider(c, "Espessura da borda", Prefs.borda, 1, 4, " dp") { x -> Prefs.borda = x; muda() }, Ui.lp(top = 12, c = c))
         add(a, 12)
@@ -887,6 +899,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         } else {
             f.addView(Ui.dica(c, "O desfoque do fundo precisa do Android 12 ou mais novo.", Ui.Dica.AVISO), Ui.lp(top = 12, c = c))
         }
+        f.addView(botaoTransparente(c), Ui.lp(top = 14, c = c))
         return f
     }
 

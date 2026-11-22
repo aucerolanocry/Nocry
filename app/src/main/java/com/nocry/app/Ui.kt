@@ -138,7 +138,7 @@ object Ui {
         }
         // com fundo de foto/video a letra ganha sombra; com cartao bem transparente a sombra fica mais forte pra continuar legivel
         if (Theme.temMidiaDeFundo()) {
-            val fraco = Prefs.vidro < 40
+            val fraco = Prefs.vidro < 40 || Prefs.bgEscuro < 25
             t.setShadowLayer(dp(c, if (fraco) 4 else 3).toFloat(), 0f, dp(c, 1).toFloat(), if (fraco) 0xE6000000.toInt() else 0x99000000.toInt())
         }
         return t
