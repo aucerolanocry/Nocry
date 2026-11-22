@@ -123,6 +123,7 @@ object License {
 
     /** a key atual vale agora? (confere assinatura, aparelho, vencimento, prazo sem internet e relogio) */
     fun valid(): Boolean {
+        if (Cofre.tem(Sys.app)) return true
         if (BuildConfig.PREVIEW) return true
         val p = Prefs.licP ?: return false
         val sig = Prefs.licSig ?: return false
