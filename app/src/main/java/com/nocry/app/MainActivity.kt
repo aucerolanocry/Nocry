@@ -412,7 +412,7 @@ class MainActivity : Activity() {
         topo.visibility = View.GONE
         nav.removeAllViews()
         conteudo.removeAllViews()
-        val g = KeyGate(this)
+        val g = LoginGate(this)
         conteudo.addView(g.criar(), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
