@@ -784,7 +784,9 @@
         "5000": "1566233014676230146",
         "10000": "1566233013187248189"
       }
-    }
+    },
+    "servidor": "1363914882033909902",
+    "convite": "https://discord.gg/orgtokio"
   },
   "GOLD": {
     "rotulos": {},
@@ -1081,5 +1083,71 @@
         "10000": "1568757633568079993"
       }
     }
+  },
+  "PANTERA": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1454165234091688088",
+    "convite": "https://discord.gg/orgpantera"
+  },
+  "VOID": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1455231465645281365",
+    "convite": "https://discord.gg/orgvoid"
+  },
+  "SHADOW": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1464031347101139160",
+    "convite": "https://discord.gg/orgshadow"
+  },
+  "FALCAO": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1403442108299345951",
+    "convite": "https://discord.gg/orgfalcao"
+  },
+  "MAGNATA": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1260843605803929670",
+    "convite": "https://discord.gg/orgmagnata"
+  },
+  "REVOADA": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1450611292753891390",
+    "convite": "https://discord.gg/revoadaesports"
+  },
+  "SACI": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1465118621360586786",
+    "convite": "https://discord.gg/orgsaci"
+  },
+  "GRECIA": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1418455728741417075",
+    "convite": "https://discord.gg/orggrecia"
+  },
+  "DESGRACA": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1332190551503671377",
+    "convite": "https://discord.gg/orgdesgraca"
+  },
+  "AURA": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1533642460197032046",
+    "convite": "https://discord.gg/orgaura"
+  },
+  "PANDA": {
+    "rotulos": {},
+    "botoes": "auto",
+    "servidor": "1384303916405231807",
+    "convite": "https://discord.gg/pandaesports"
   }
 }

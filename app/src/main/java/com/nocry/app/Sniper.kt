@@ -250,6 +250,8 @@ object Sniper {
     private val sumida = ConcurrentHashMap<String, Long>()
     private val orgSumida = ConcurrentHashMap<String, Long>()
     private val orgDoServidor = ConcurrentHashMap<String, String>()
+    /** servidor (guild id) de cada org que vem na lista do app: vale mais que o nome do servidor, que muda (NATAL NA SACI...) */
+    private val servidorFixo = ConcurrentHashMap<String, String>()
     private val falhasOrg = ConcurrentHashMap<String, Int>()
     private val jaAvisou: MutableSet<String> = ConcurrentHashMap.newKeySet()
     private val entrouEm = ConcurrentHashMap<String, Long>()
@@ -598,7 +600,11 @@ object Sniper {
             filas.entries.removeAll { it.value.isEmpty() }
             val pendLimpo = pend.filterValues { it.isNotEmpty() }
             if (pendLimpo.isNotEmpty()) pendAll[nome] = pendLimpo
-            if (filas.isEmpty()) { if (pendLimpo.isNotEmpty()) sem.add(nome); continue }
+            // servidor e convite da org (as novas vêm só com isso: as filas o bot acha sozinho quando a conta entra)
+            val fixo = d.s("servidor")
+            if (fixo != null) servidorFixo[fixo] = nome
+            d.s("convite")?.let { convites.putIfAbsent(nome, it) }
+            if (filas.isEmpty() && fixo == null) { if (pendLimpo.isNotEmpty()) sem.add(nome); continue }
             out[nome] = SOrg(nome, rot, botoes, filas, pendLimpo.values.sumOf { it.size })
         }
         orgs = out
@@ -996,6 +1002,12 @@ object Sniper {
         log("info", "${guildas.size} servidores · ${dosOrgs.size} de org · escolha org, modo e valor e toque em INICIAR BUSCA")
         guardarConvites()
         conferirAoLigar()
+        // org nova (sem nenhuma fila salva) em que a conta já está: procura as filas dela agora
+        val novas = orgs.values.filter { it.filas.isEmpty() && naConta(it.nome) }.map { it.nome }
+        if (novas.isNotEmpty()) {
+            log("info", "org nova na conta: ${novas.joinToString(", ")} · procurando as filas (só lê)")
+            procurarFilasNovas(novas, sozinho = true)
+        }
         if (buscarAoLigar && !buscando) alternarBusca()
         mudou()
     }
@@ -1046,7 +1058,17 @@ object Sniper {
         }
         when (t) {
             "RESUMED" -> { conectado = true; estado = "online"; log("info", "reconectado") }
-            "GUILD_CREATE" -> guilda(d)
+            "GUILD_CREATE" -> {
+                guilda(d)
+                // a conta entrou agora num servidor de org (pelo app do Discord): assina os eventos e acha as filas
+                val gid = d.s("id")
+                val o = servidorFixo[gid ?: ""]
+                if (gid != null && o != null && conectado) {
+                    dc?.assinar(gid)
+                    if (orgs[o]?.filas.isNullOrEmpty()) agendarProcura(o)
+                    mudou()
+                }
+            }
             "CHANNEL_CREATE", "CHANNEL_UPDATE", "THREAD_CREATE", "THREAD_UPDATE" -> {
                 // o Discord só avisa ao vivo de canal que você consegue ver
                 val c = canalDe(d, null, eu, aoVivo = true)
@@ -1133,12 +1155,14 @@ object Sniper {
     }
 
     // ======================================================================== salas
-    private fun normal(s: String) = s.lowercase().filter { it.isLetterOrDigit() }
+    private fun normal(s: String) = semAcento(s).lowercase().filter { it.isLetterOrDigit() }
 
     private fun adivinharOrg(gid: String?, nomeSala: String = ""): String {
+        if (gid != null) servidorFixo[gid]?.let { return it }
         if (gid != null) orgDoServidor[gid]?.let { return it }
         val texto = normal((if (gid != null) guildas[gid] ?: "" else "") + " " + nomeSala)
-        for (o in orgs.keys) if (normal(o) in texto) return o
+        val fixas = servidorFixo.values.toSet()
+        for (o in orgs.keys) if (o !in fixas && normal(o) in texto) return o
         return "?"
     }
 
@@ -2574,9 +2598,13 @@ object Sniper {
     private fun servidoresDa(o: String): Set<String> {
         val g = LinkedHashSet<String>()
         canaisDaOrg[o]?.forEach { cid -> canais[cid]?.guildId?.let { g.add(it) } }
-        for ((gid, org) in orgDoServidor) if (org == o) g.add(gid)
+        for ((gid, org) in orgDoServidor) if (org == o && servidorFixo[gid].let { it == null || it == o }) g.add(gid)
+        // servidor fixo: só conta se a conta está nele
+        val fixos = servidorFixo.filterValues { it == o }.keys
+        for (gid in fixos) if (guildas.containsKey(gid)) g.add(gid)
+        if (fixos.isNotEmpty()) return g
         val n = normal(o)
-        if (n.isNotEmpty()) for ((gid, nome) in guildas) if (n in normal(nome)) g.add(gid)
+        if (n.isNotEmpty()) for ((gid, nome) in guildas) if (n in normal(nome) && servidorFixo[gid] == null) g.add(gid)
         return g
     }
 
