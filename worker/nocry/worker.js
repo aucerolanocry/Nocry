@@ -17,6 +17,14 @@ const KINDS = ["bypass_on", "bypass_off", "bypass_aplicou", "bypass_restaurou", 
 
 let ready = false;
 let signKeyCache = null;
+
+// ---------------------------------------------------------------- revogação geral (pedido do dono, 23/11/2026)
+// Toda key criada ANTES deste instante (ms) é revogada, menos as de papel "owner". Roda uma vez só
+// (marca na tabela meta). Antes copia a tabela keys pra keys_bak_<corte>, pra dar pra desfazer.
+// A key de dono vem do secret OWNER_KEY (não está na tabela) e não é afetada.
+// As keys criadas depois do corte não são afetadas.
+const REVOGAR_ATE = 1795451192635;
+let revogacaoVista = false;
 let ultimaLimpeza = 0;
 
 // ---------------------------------------------------------------- util
@@ -83,6 +91,21 @@ function ownerKey(env) {
 }
 
 // ---------------------------------------------------------------- banco
+async function revogacaoGeral(env) {
+  if (revogacaoVista || !REVOGAR_ATE) return;
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)").run();
+  const feito = await env.DB.prepare("SELECT v FROM meta WHERE k = 'revogar_ate'").first();
+  if (!feito || feito.v !== String(REVOGAR_ATE)) {
+    await env.DB.batch([
+      env.DB.prepare("CREATE TABLE IF NOT EXISTS keys_bak_" + REVOGAR_ATE + " AS SELECT * FROM keys"),
+      env.DB.prepare("UPDATE keys SET revoked = 1 WHERE role != 'owner' AND revoked = 0 AND created_at < ?").bind(REVOGAR_ATE),
+      env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('revogar_ate', ?)").bind(String(REVOGAR_ATE)),
+    ]);
+    console.log("revogacao geral feita (corte " + REVOGAR_ATE + ")");
+  }
+  revogacaoVista = true;
+}
+
 async function init(env) {
   if (ready) return;
   await env.DB.batch([
@@ -598,6 +621,7 @@ export default {
       }
 
       await init(env);
+      await revogacaoGeral(env);
       if (req.method === "POST" && path === "/v1/auth") return await authRoute(req, env, ip, country);
       if (req.method === "POST" && path === "/v1/ping") return await pingRoute(req, env, ip, country);
       if (req.method === "POST" && path.indexOf("/api/") === 0) return await apiRoute(req, env, ip, path.slice(5));
