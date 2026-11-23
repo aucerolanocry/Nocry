@@ -30,10 +30,8 @@ object Const {
     const val AVISO_ATUALIZACOES = "Essas atualizações seguidas são pra corrigir bugs. Logo logo elas vão parar."
     /** novidades mostradas na 1ª vez que abre depois de atualizar (pra todo mundo) */
     val NOVIDADES = listOf(
-        "Os cartões agora vêm transparentes pra aparecer o fundo. Quer eles mais escuros? ESTÚDIO › Cartões › \"Opacidade dos cartões\".",
-        "Ver o fundo inteiro: no ESTÚDIO tem o botão \"ver o fundo inteiro\" (cartões sem fundo, fundo sem escurecer e sem desfoque).",
-        "Cartões transparentes: a \"Opacidade dos cartões\" vai até 0%, e \"Escurecer o fundo\" agora chega a 0% de verdade também com vídeo ou foto.",
-        "Otimização: o Google Meet já vem protegido e não fecha mais (nem no FULL).",
+        "Aviso mais claro quando a chave é bloqueada (\"CHAVE BLOQUEADA\").",
+        "Os cartões vêm transparentes pra aparecer o fundo. Quer mais escuro? ESTÚDIO › Cartões › \"Opacidade dos cartões\".",
     )
     /** novidades do bot de fila: só aparecem pra quem tem o bot (a key de dono). Vazio = nada novo no bot nesta versão */
     val NOVIDADES_BOT = emptyList<String>()
