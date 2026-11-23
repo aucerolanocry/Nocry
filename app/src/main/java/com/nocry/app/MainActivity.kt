@@ -217,7 +217,7 @@ class MainActivity : Activity() {
             if (BuildConfig.PREVIEW) { abrirPrevia(intent); return }
             avisoAtividade()
             avisoAtualizou()
-            if (intent?.getStringExtra("abrir") == "sniper" && License.isOwner()) abre(SniperScreen(this))
+            if (intent?.getStringExtra("abrir") == "sniper") abre(SniperScreen(this))
         } else mostraGate()
     }
 
@@ -451,7 +451,7 @@ class MainActivity : Activity() {
 
     override fun onNewIntent(i: android.content.Intent) {
         super.onNewIntent(i)
-        if (i.getStringExtra("abrir") == "sniper" && License.isOwner() && !gate && pilha.lastOrNull() !is SniperScreen) {
+        if (i.getStringExtra("abrir") == "sniper" && !gate && pilha.lastOrNull() !is SniperScreen) {
             abre(SniperScreen(this))
         }
     }

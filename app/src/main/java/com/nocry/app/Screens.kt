@@ -298,9 +298,9 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             add(Ui.faixaAviso(c, if (novos == 1) "1 erro registrado" else "$novos erros registrados", "ver em logs") { act.irAba(3) }, 12)
         }
 
-        // ---------------- SNIPER (só a key de dono vê) ----------------
+        // ---------------- SNIPER (todo mundo com key vê) ----------------
         botSub = null
-        if (License.isOwner()) {
+        run {
             val linhaBot = Ui.row(c, "Bot de fila", subBot(), R.drawable.ic_crown) { act.abre(SniperScreen(act)) }
             botSub = linhaBot.findViewWithTag("sub")
             add(linhaBot, 12)

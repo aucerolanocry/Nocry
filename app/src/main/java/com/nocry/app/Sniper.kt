@@ -832,7 +832,6 @@ object Sniper {
 
     // ======================================================================== ligar / desligar
     fun ligar(): Boolean {
-        if (!License.isOwner()) { log("erro", "o bot de fila é só pra key de dono"); return false }
         if (dc != null) return true
         val tk = Cofre.le(app)
         if (tk.isNullOrBlank()) { log("erro", "cole o token da conta primeiro"); return false }

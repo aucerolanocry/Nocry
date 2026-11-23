@@ -95,10 +95,6 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         chatTopo = null
         contagemTxt = null
         val c = act
-        if (!License.isOwner()) {
-            cabecalho(titulo, "Só a key de dono usa essa tela.")
-            return
-        }
         Bg.io { if (Sniper.restaurarSozinho()) Bg.ui { for (p in pedacos) p.atualiza() } }
         add(pedaco({ assinaturaTopo() }) { topo(it) }, 4)
         add(pedaco({ Sniper.formularios.joinToString("|") { it.nonce } }) { formularios(it) }, 0)
