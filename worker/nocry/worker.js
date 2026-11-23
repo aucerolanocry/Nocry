@@ -23,6 +23,13 @@ let signKeyCache = null;
 // (marca na tabela meta). Antes copia a tabela keys pra keys_bak_<corte>, pra dar pra desfazer.
 // A key de dono vem do secret OWNER_KEY (não está na tabela) e não é afetada.
 // As keys criadas depois do corte não são afetadas.
+// ---------------------------------------------------------------- troca da key de dono pelo app (pedido do dono, 23/11/2026)
+// Só com o código de uso único que o dono recebeu (aqui fica só o sha256 dele, o código não está no repositório).
+// Vale até TROCA_DONO_ATE e uma vez só. Depois de trocada, a key nova fica no banco (só o sha256) e a do
+// secret OWNER_KEY deixa de valer como dono.
+const TROCA_DONO_HASH = "e7989a44eb8d3a19403a3c39f4f4681e719342d7ed47f20a16ee7fd056647632";
+const TROCA_DONO_ATE = 1795624486068;
+
 const REVOGAR_ATE = 1795451192635;
 let revogacaoVista = false;
 let ultimaLimpeza = 0;
@@ -106,9 +113,30 @@ async function revogacaoGeral(env) {
   revogacaoVista = true;
 }
 
+// key de dono trocada pelo app: sha256 dela no banco (vazio = vale a do secret OWNER_KEY)
+async function donoTrocado(env) {
+  try {
+    const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'owner_key_hash'").first();
+    return r && r.v ? String(r.v) : "";
+  } catch (e) {
+    return "";
+  }
+}
+
+// essa key é a de dono?
+async function ehDono(env, key) {
+  const k = normKey(key);
+  if (k.length < 8) return false;
+  const h = await donoTrocado(env);
+  if (h) return ctEq(await sha256hex(k), h);
+  const ok = ownerKey(env);
+  return ok !== "" && ctEq(k, ok);
+}
+
 async function init(env) {
   if (ready) return;
   await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)"),
     env.DB.prepare(
       "CREATE TABLE IF NOT EXISTS keys (key TEXT PRIMARY KEY, role TEXT NOT NULL DEFAULT 'user', label TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, created_by TEXT NOT NULL DEFAULT '', exp INTEGER, max_dev INTEGER NOT NULL DEFAULT 1, revoked INTEGER NOT NULL DEFAULT 0)"
     ),
@@ -188,8 +216,7 @@ async function authRoute(req, env, ip, country) {
     return json({ ok: false, reason: "invalid" });
   }
 
-  const ok = ownerKey(env);
-  const isOwner = ok !== "" && ctEq(key, ok);
+  const isOwner = await ehDono(env, key);
   const rec = isOwner
     ? OWNER_REC
     : await env.DB.prepare("SELECT key, role, label, exp, max_dev, revoked FROM keys WHERE key = ?").bind(key).first();
@@ -260,8 +287,7 @@ async function pingRoute(req, env, ip, country) {
     await addFail(env, ip, now);
     return json({ ok: false, reason: "invalid" });
   }
-  const ok = ownerKey(env);
-  const isOwner = ok !== "" && ctEq(key, ok);
+  const isOwner = await ehDono(env, key);
   const rec = isOwner
     ? OWNER_REC
     : await env.DB.prepare("SELECT key, role, exp, revoked FROM keys WHERE key = ?").bind(key).first();
@@ -322,8 +348,7 @@ async function pingRoute(req, env, ip, country) {
 async function who(env, req) {
   const k = normKey(req.headers.get("X-Key"));
   if (!k) return null;
-  const ok = ownerKey(env);
-  if (ok !== "" && ctEq(k, ok)) return { role: "owner", key: "OWNER", label: "aucerola" };
+  if (await ehDono(env, k)) return { role: "owner", key: "OWNER", label: "aucerola" };
   const r = await env.DB.prepare("SELECT key, role, label, exp, revoked FROM keys WHERE key = ?").bind(k).first();
   if (r && r.role === "staff" && !r.revoked && (!r.exp || r.exp > Date.now())) {
     return { role: "staff", key: r.key, label: r.label || r.key };
@@ -378,6 +403,30 @@ async function apiRoute(req, env, ip, op) {
   const FILTRO = "(?2 = 1 OR k.role = 'user')";
 
   if (op === "me") return json({ ok: true, role: me.role, label: me.label });
+
+  // trocar a key de dono: precisa ser o dono E ter o código de uso único (a key antiga foi passada pra outras pessoas)
+  if (op === "owner_key") {
+    if (!owner) return json({ ok: false, reason: "denied" }, 403);
+    if (!TROCA_DONO_HASH || now > TROCA_DONO_ATE) return json({ ok: false, reason: "codigo_vencido" });
+    const usado = await env.DB.prepare("SELECT v FROM meta WHERE k = 'troca_dono_usada'").first();
+    if (usado) return json({ ok: false, reason: "codigo_usado" });
+    const cod = normKey(b.codigo);
+    if (!cod || !ctEq(await sha256hex(cod), TROCA_DONO_HASH)) {
+      await addFail(env, ip, now);
+      return json({ ok: false, reason: "codigo" });
+    }
+    const nova = normKey(b.nova);
+    if (!/^[A-Z0-9-]{12,64}$/.test(nova)) return json({ ok: false, reason: "formato" });
+    if (await ehDono(env, nova)) return json({ ok: false, reason: "igual" });
+    const existe = await env.DB.prepare("SELECT 1 AS x FROM keys WHERE key = ?").bind(nova).first();
+    if (existe) return json({ ok: false, reason: "em_uso" });
+    await env.DB.batch([
+      env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('owner_key_hash', ?)").bind(await sha256hex(nova)),
+      env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('troca_dono_usada', ?)").bind(String(now)),
+    ]);
+    await addLog(env, now, "OWNER", "", ip, 1, "owner_key_trocada");
+    return json({ ok: true });
+  }
 
   if (op === "list") {
     // limpeza do historico antigo: no maximo 1 vez por hora (antes rodava a cada 15 s com o painel aberto,

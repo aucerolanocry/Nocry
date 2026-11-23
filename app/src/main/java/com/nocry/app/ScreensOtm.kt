@@ -832,6 +832,57 @@ class SobreScreen(a: MainActivity) : Screen(a) {
 
     private fun versao(): String = try { act.packageManager.getPackageInfo(Const.PKG, 0).versionName ?: "?" } catch (_: Exception) { "?" }
 
+    /** troca a key de dono: código de uso único + key nova (duas vezes). Depois a antiga para de valer pra todo mundo */
+    private fun trocarKeyDono() {
+        val semSugestao = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
+            android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+        val box = Ui.vbox(c)
+        box.setPadding(Ui.dp(c, 22), Ui.dp(c, 8), Ui.dp(c, 22), 0)
+        box.addView(Ui.text(c, "Digite o código de uso único que você recebeu e a key nova (de 12 a 64 letras, números ou traço). " +
+            "Depois de trocar, a key antiga para de valer pra todo mundo. Anote a nova: sem ela você perde o acesso de dono.", 11f, Ui.MUTED))
+        val cod = Ui.field(c, "código de uso único", false).also { it.inputType = semSugestao; it.typeface = Theme.fonte(c, true, false) }
+        val nova = Ui.field(c, "key nova", false).also { it.inputType = semSugestao; it.typeface = Theme.fonte(c, true, false) }
+        val rep = Ui.field(c, "repita a key nova", false).also { it.inputType = semSugestao; it.typeface = Theme.fonte(c, true, false) }
+        box.addView(cod, Ui.lp(top = 12, c = c))
+        box.addView(nova, Ui.lp(top = 8, c = c))
+        box.addView(rep, Ui.lp(top = 8, c = c))
+        val erro = Ui.text(c, "", 11f, Ui.BAD)
+        box.addView(erro, Ui.lp(top = 8, c = c))
+        val d = android.app.AlertDialog.Builder(act, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            .setTitle("TROCAR KEY DE DONO")
+            .setView(box)
+            .setPositiveButton("TROCAR", null)
+            .setNegativeButton("CANCELAR", null)
+            .create()
+        d.setOnShowListener {
+            val ok = d.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+            ok.setOnClickListener {
+                val k = nova.text.toString().trim().uppercase().replace(Regex("\\s+"), "")
+                val k2 = rep.text.toString().trim().uppercase().replace(Regex("\\s+"), "")
+                erro.text = when {
+                    cod.text.isBlank() -> "Falta o código."
+                    !Regex("^[A-Z0-9-]{12,64}$").matches(k) -> "A key nova precisa ter de 12 a 64 letras, números ou traço."
+                    k != k2 -> "As duas keys novas não são iguais."
+                    else -> ""
+                }
+                if (erro.text.isNotEmpty()) return@setOnClickListener
+                ok.isEnabled = false
+                erro.text = "Trocando..."
+                Bg.run({ License.trocarKeyDono(cod.text.toString(), k) }) { r ->
+                    if (r == null) {
+                        d.dismiss()
+                        Ui.dialogAviso(act, "KEY DE DONO TROCADA", "A key antiga parou de valer: quem estava com ela sai em poucos minutos. " +
+                            "Use só a nova daqui pra frente.", "Entendi") { redesenha() }
+                    } else {
+                        ok.isEnabled = true
+                        erro.text = r
+                    }
+                }
+            }
+        }
+        d.show()
+    }
+
     private fun abre(url: String) {
         try { act.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Exception) { Ui.toast(act, "Não consegui abrir o navegador") }
     }
@@ -900,6 +951,9 @@ class SobreScreen(a: MainActivity) : Screen(a) {
                 abre(BuildConfig.API_URL.trimEnd('/') + "/admin")
             }, Ui.lp(top = 14, c = c))
             kc.addView(Ui.dica(c, "No painel, entre com a sua própria key.", Ui.Dica.INFO), Ui.lp(top = 8, c = c))
+        }
+        if (License.isOwner() && BuildConfig.API_URL.isNotBlank()) {
+            kc.addView(Ui.button(c, "trocar key de dono", Ui.Kind.GHOST, R.drawable.ic_key) { trocarKeyDono() }, Ui.lp(top = 10, c = c))
         }
         kc.addView(Ui.button(c, "sair da key", Ui.Kind.GHOST, R.drawable.ic_logout) {
             Ui.dialogConfirma(act, "SAIR DA KEY", "O app volta para a tela da key e os monitores param (o toque e a tela voltam ao normal).", "SAIR") {

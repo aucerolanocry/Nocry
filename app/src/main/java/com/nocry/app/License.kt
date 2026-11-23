@@ -169,6 +169,47 @@ object License {
     }
 
     /**
+     * troca a key de dono (bloqueia: chame fora da tela). Precisa estar como dono e ter o código de uso único.
+     * null = trocou (a key guardada no app já passa a ser a nova); senão, o motivo pra mostrar.
+     */
+    fun trocarKeyDono(codigo: String, nova: String): String? {
+        val base = BuildConfig.API_URL.trim().trimEnd('/')
+        if (base.isEmpty()) return "Sem servidor configurado."
+        val atual = Prefs.licKey ?: return "Entre com a sua key de dono primeiro."
+        if (!isOwner()) return "Só a key de dono pode trocar."
+        return try {
+            val cx = URL("$base/api/owner_key").openConnection() as HttpURLConnection
+            cx.requestMethod = "POST"
+            cx.connectTimeout = 10000
+            cx.readTimeout = 12000
+            cx.doOutput = true
+            cx.setRequestProperty("Content-Type", "application/json")
+            cx.setRequestProperty("X-Key", atual)
+            val corpo = JSONObject().put("codigo", codigo.trim()).put("nova", nova)
+            cx.outputStream.use { it.write(corpo.toString().toByteArray(Charsets.UTF_8)) }
+            val stream = if (cx.responseCode in 200..299) cx.inputStream else cx.errorStream
+            val j = JSONObject(stream?.bufferedReader()?.use { it.readText() } ?: "{}")
+            if (j.optBoolean("ok")) {
+                Prefs.licKey = nova
+                NLog.add("key", "trocou a key de dono")
+                null
+            } else when (val r = j.optString("reason")) {
+                "codigo" -> "Código errado."
+                "codigo_usado" -> "Esse código já foi usado."
+                "codigo_vencido" -> "O código venceu. Peça outro."
+                "formato" -> "A key nova precisa ter de 12 a 64 letras, números ou traço."
+                "igual" -> "A key nova é igual à atual."
+                "em_uso" -> "Essa key já existe. Escolha outra."
+                "denied" -> "Só a key de dono pode trocar."
+                "limit" -> "Muitas tentativas. Espere uns minutos."
+                else -> "O servidor não aceitou ($r)."
+            }
+        } catch (_: Throwable) {
+            "Sem internet agora. Tente de novo."
+        }
+    }
+
+    /**
      * entra com uma key (bloqueia: chame fora da tela). So guarda se a resposta vier assinada e certa.
      * renovar = o app so esta reconfirmando sozinho (no painel aparece como "renovou", nao como "entrou")
      */
