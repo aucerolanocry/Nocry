@@ -73,8 +73,15 @@ class KeyWatcher {
     @Volatile private var go = false
     @Volatile private var stream: AdbStream? = null
     private var th: Thread? = null
+    @Volatile private var ult = System.currentTimeMillis()
 
     val vivo: Boolean get() = go && (th?.isAlive == true)
+    /** está de fato ouvindo agora (com stream aberto) */
+    val ouvindo: Boolean get() = go && stream != null
+    /** vivo, mas sem conseguir abrir o stream faz um tempão (ex.: preso depois que o ADB voltou) */
+    fun travado(): Boolean = go && stream == null && System.currentTimeMillis() - ult > 15_000L
+    /** fecha só o stream atual (destrava o readLine e libera o ADB pro ensure) sem parar a thread, que reata sozinha */
+    fun soltaStream() { try { stream?.close() } catch (_: Throwable) {} }
 
     private fun achaTeclas(): List<String> {
         val r = Adb.exec("getevent -lp </dev/null 2>/dev/null", 10000)
@@ -107,6 +114,7 @@ class KeyWatcher {
                     val s = Adb.stream("getevent -l " + nodes.joinToString(" ")) ?: run { sleep(3000); null }
                     if (s == null) continue
                     stream = s
+                    ult = System.currentTimeMillis()
                     val r = BufferedReader(InputStreamReader(s.openInputStream(), Charsets.UTF_8))
                     while (go) {
                         val l = r.readLine() ?: break
@@ -290,24 +298,29 @@ class NocryService : Service() {
         // com cópia rodando não testa a conexão (o teste demorado derrubava o ADB no meio e o bypass falhava)
         if (precisaAdb() && !Adb.ocupado()) {
             if (!Adb.alive()) {
-                watcher?.stop()
-                watcher = null
+                // ADB caiu: solta só o stream da escuta (destrava o readLine e libera a conexão pro ensure),
+                // mas NÃO mata o watcher — ele continua tentando e reata sozinho quando o ADB voltar
+                watcher?.soltaStream()
                 if (!Adb.ensure(applicationContext)) NLog.add("servico", "ADB sem resposta: " + Adb.lastError)
             }
         }
-        val querGetevent = Engine.precisaTeclas() && !KeyService.ativo && Adb.connected
+        val precisaOuvir = Engine.precisaTeclas() && !KeyService.ativo
         val w = watcher
-        if (querGetevent) {
-            if (w == null || !w.vivo) {
+        if (precisaOuvir && Adb.connected) {
+            // precisa ouvir e o ADB está de pé: garante uma escuta ativa.
+            // recria se nunca teve, se a thread morreu, ou se travou (viva mas sem abrir o stream faz tempo)
+            if (w == null || !w.vivo || w.travado()) {
                 w?.stop()
                 val novo = KeyWatcher()
                 watcher = novo
                 novo.start()
             }
-        } else if (w != null) {
+        } else if (!precisaOuvir && w != null) {
+            // bypass por volume desligado de vez: para a escuta
             w.stop()
             watcher = null
         }
+        // precisaOuvir mas ADB caído: não mexe no watcher — ele se cura sozinho quando o ADB voltar
     }
 
     /**

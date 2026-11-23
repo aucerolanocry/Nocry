@@ -73,6 +73,18 @@ class KeyGate(private val act: MainActivity) {
         col.addView(marca(c, "N", null, "App desenvolvido por Aucerola"))
         col.addView(Ui.text(c, "Modo competitivo, toque e otimização direto no celular. Para entrar, use a sua key.", 10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
 
+        // ---------------- aviso de bloqueio (o servidor recusou a key de vez) ----------------
+        if (Prefs.licBloqueio.isNotEmpty()) {
+            val box = Ui.vbox(c)
+            box.background = Botao(c, "danger", 16)
+            val pp = Ui.dp(c, 14)
+            box.setPadding(pp, pp, pp, pp)
+            val (tit, corpo) = bloqueioTexto(Prefs.licBloqueio)
+            box.addView(Ui.text(c, tit, 13f, Ui.BAD, true, mono = true))
+            box.addView(Ui.text(c, corpo, 11f, Ui.TEXT), Ui.lp(top = 6, c = c))
+            col.addView(box, Ui.lp(top = 16, c = c))
+        }
+
         // ---------------- entrar ----------------
         val card = Ui.card(c, forte = true)
         card.addView(Ui.labelIcone(c, R.drawable.ic_key, "entrar com a sua key"))
@@ -128,12 +140,21 @@ class KeyGate(private val act: MainActivity) {
             if (r.ok) act.entrou()
             else {
                 erro = r.texto()
-                // se a key salva foi recusada de vez, esquece ela
-                if (r.negado()) Prefs.licKey = null
+                // se a key salva foi recusada de vez, esquece ela e guarda o motivo pro aviso de bloqueio
+                if (r.negado()) { Prefs.licKey = null; Prefs.licBloqueio = r.reason }
                 monta()
             }
         }
     }
+}
+
+/** título + corpo do aviso de bloqueio na tela da key, pelo motivo que o servidor mandou */
+private fun bloqueioTexto(motivo: String): Pair<String, String> = when (motivo) {
+    "revoked" -> "CHAVE DESATIVADA" to "Sua key foi desativada. Você não pode mais usar o app. Fale com quem te passou a key."
+    "blocked", "device_limit" -> "APARELHO BLOQUEADO" to "Este aparelho foi bloqueado nessa key. Você não pode usar o app. Fale com quem te passou a key."
+    "expired" -> "KEY VENCIDA" to "Sua key venceu. Você não pode mais usar o app até renovar. Fale com quem te passou a key."
+    "invalid" -> "KEY INVÁLIDA" to "Essa key não existe mais. Confira se digitou certo ou fale com quem te passou a key."
+    else -> "CHAVE BLOQUEADA" to "Sua chave está bloqueada. Você não poderá usar o app. Fale com quem te passou a key."
 }
 
 /** cabecalho de marca das telas de bloqueio (key e atualizacao): icone, nome em degrade e uma linha */

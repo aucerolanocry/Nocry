@@ -491,6 +491,10 @@ var bypassVolAtivo: Boolean
     var licLabel: String
         get() = gs("lic_label") ?: ""
         set(v) = ps("lic_label", v)
+    /** motivo do último "não" do servidor (blocked/revoked/...); mostra o aviso na tela da key. "" = nenhum */
+    var licBloqueio: String
+        get() = gs("lic_bloqueio") ?: ""
+        set(v) = ps("lic_bloqueio", v)
     var licVisto: Long
         get() = sp.getLong("lic_visto", 0L)
         set(v) { sp.edit().putLong("lic_visto", v).apply() }

@@ -239,6 +239,7 @@ object License {
         Prefs.licP = p
         Prefs.licSig = sig
         Prefs.licLabel = j.optString("label", "")
+        Prefs.licBloqueio = ""
         Prefs.licVisto = System.currentTimeMillis()
         // quem entra pela tela da key ja leu (e marcou) a lista do que o app envia, incluindo a atividade
         if (!renovar) Prefs.avisoAtividade = true
@@ -252,7 +253,7 @@ object License {
         val k = Prefs.licKey ?: return Result(false, "invalid")
         ultimaTentativa = System.currentTimeMillis()
         val r = login(c, k, renovar = true)
-        if (r.negado()) sair("o servidor disse: " + r.reason)
+        if (r.negado()) { Prefs.licBloqueio = r.reason; sair("o servidor disse: " + r.reason) }
         else if (!r.ok) NLog.add("key", "não consegui confirmar agora (" + r.reason + ")")
         return r
     }
