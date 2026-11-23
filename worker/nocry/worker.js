@@ -261,19 +261,36 @@ async function authRoute(req, env, ip, country) {
   const row = await env.DB.prepare("SELECT blocked FROM devices WHERE key = ? AND dev = ?").bind(rec.key, dev).first();
   if (row) {
     if (row.blocked) return deny("blocked");
-    await env.DB.prepare(
-      "UPDATE devices SET last_seen = ?, n = n + 1, ip = ?, country = ?, brand = ?, model = ?, android = ?, sdk = ?, app = ?, lang = ?, tela = ?, ram = ?, armaz = ?, emu = ?, patch = ?, fuso = ?, cpu = ?, root = ? WHERE key = ? AND dev = ?"
-    )
-      .bind(now, ip, country, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, rec.key, dev)
-      .run();
+    try {
+      await env.DB.prepare(
+        "UPDATE devices SET last_seen = ?, n = n + 1, ip = ?, country = ?, brand = ?, model = ?, android = ?, sdk = ?, app = ?, lang = ?, tela = ?, ram = ?, armaz = ?, emu = ?, patch = ?, fuso = ?, cpu = ?, root = ? WHERE key = ? AND dev = ?"
+      )
+        .bind(now, ip, country, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, rec.key, dev)
+        .run();
+    } catch (e) {
+      // blindagem: se as colunas novas ainda nao existirem, grava so o basico (login nunca quebra)
+      await env.DB.prepare(
+        "UPDATE devices SET last_seen = ?, n = n + 1, ip = ?, country = ?, brand = ?, model = ?, android = ?, sdk = ?, app = ?, lang = ? WHERE key = ? AND dev = ?"
+      )
+        .bind(now, ip, country, brand, model, android, sdk, app, lang, rec.key, dev)
+        .run();
+    }
   } else {
     const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM devices WHERE key = ?").bind(rec.key).first();
     if (c && c.n >= rec.max_dev) return deny("device_limit");
-    await env.DB.prepare(
-      "INSERT INTO devices (key, dev, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, ip, country, first_seen, last_seen, n, blocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)"
-    )
-      .bind(rec.key, dev, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, ip, country, now, now)
-      .run();
+    try {
+      await env.DB.prepare(
+        "INSERT INTO devices (key, dev, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, ip, country, first_seen, last_seen, n, blocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)"
+      )
+        .bind(rec.key, dev, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, ip, country, now, now)
+        .run();
+    } catch (e) {
+      await env.DB.prepare(
+        "INSERT INTO devices (key, dev, brand, model, android, sdk, app, lang, ip, country, first_seen, last_seen, n, blocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)"
+      )
+        .bind(rec.key, dev, brand, model, android, sdk, app, lang, ip, country, now, now)
+        .run();
+    }
   }
   // "renew" = o app so reconfirmou a key sozinho (a cada 6 h); "ok" = a pessoa entrou com a key
   await addLog(env, now, rec.key, dev.slice(0, 12), ip, true, b.modo === "renovar" ? "renew" : "ok");
