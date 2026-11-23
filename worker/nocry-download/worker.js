@@ -23,12 +23,36 @@ function ownerKey(env) {
   return k.length >= 8 ? k : "";
 }
 
+async function sha256hex(s) {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(d)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// key de dono trocada pelo app: o worker "nocry" guarda o sha256 dela no mesmo
+// banco D1 (tabela meta, chave "owner_key_hash"). Sem checar isso aqui, uma
+// troca de key de dono (OWNER_KEY) nao era reconhecida por esse servidor de
+// download e a pessoa levava 401 mesmo com a key nova certa.
+async function donoTrocado(env) {
+  if (!env.DB) return "";
+  try {
+    const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'owner_key_hash'").first();
+    return r && r.v ? String(r.v) : "";
+  } catch (e) {
+    return "";
+  }
+}
+
 async function chaveValida(env, keyHeader) {
   const key = normKey(keyHeader);
   if (!/^[A-Z0-9-]{4,64}$/.test(key)) return false;
 
-  const ok = ownerKey(env);
-  if (ok !== "" && ctEq(key, ok)) return true;
+  const h = await donoTrocado(env);
+  if (h) {
+    if (await ctEq(await sha256hex(key), h)) return true;
+  } else {
+    const ok = ownerKey(env);
+    if (ok !== "" && ctEq(key, ok)) return true;
+  }
 
   if (!env.DB) return false; // sem banco configurado, nega por seguranca
   const rec = await env.DB.prepare("SELECT revoked, exp FROM keys WHERE key = ?").bind(key).first();
