@@ -160,6 +160,14 @@ async function init(env) {
     env.DB.prepare("CREATE INDEX IF NOT EXISTS events_t ON events (t)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS log_t ON log (t)"),
   ]);
+  // migração: colunas novas de specs do aparelho (ADD COLUMN dá erro se já existe, então ignora)
+  const colunasNovas = [
+    "tela TEXT", "ram INTEGER", "armaz INTEGER", "emu INTEGER",
+    "patch TEXT", "fuso TEXT", "cpu TEXT", "root INTEGER",
+  ];
+  for (const col of colunasNovas) {
+    try { await env.DB.prepare("ALTER TABLE devices ADD COLUMN " + col).run(); } catch (e) { /* já existe */ }
+  }
   ready = true;
 }
 
@@ -241,22 +249,30 @@ async function authRoute(req, env, ip, country) {
   const sdk = clamp(toInt(b.sdk, 0), 0, 99);
   const app = clean(b.app, 20);
   const lang = clean(b.lang, 20);
+  const tela = clean(b.tela, 24);
+  const ram = Math.max(0, toInt(b.ram, 0));
+  const armaz = Math.max(0, toInt(b.armaz, 0));
+  const emu = b.emu ? 1 : 0;
+  const patch = clean(b.patch, 16);
+  const fuso = clean(b.fuso, 48);
+  const cpu = clean(b.cpu, 40);
+  const root = b.root ? 1 : 0;
 
   const row = await env.DB.prepare("SELECT blocked FROM devices WHERE key = ? AND dev = ?").bind(rec.key, dev).first();
   if (row) {
     if (row.blocked) return deny("blocked");
     await env.DB.prepare(
-      "UPDATE devices SET last_seen = ?, n = n + 1, ip = ?, country = ?, brand = ?, model = ?, android = ?, sdk = ?, app = ?, lang = ? WHERE key = ? AND dev = ?"
+      "UPDATE devices SET last_seen = ?, n = n + 1, ip = ?, country = ?, brand = ?, model = ?, android = ?, sdk = ?, app = ?, lang = ?, tela = ?, ram = ?, armaz = ?, emu = ?, patch = ?, fuso = ?, cpu = ?, root = ? WHERE key = ? AND dev = ?"
     )
-      .bind(now, ip, country, brand, model, android, sdk, app, lang, rec.key, dev)
+      .bind(now, ip, country, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, rec.key, dev)
       .run();
   } else {
     const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM devices WHERE key = ?").bind(rec.key).first();
     if (c && c.n >= rec.max_dev) return deny("device_limit");
     await env.DB.prepare(
-      "INSERT INTO devices (key, dev, brand, model, android, sdk, app, lang, ip, country, first_seen, last_seen, n, blocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)"
+      "INSERT INTO devices (key, dev, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, ip, country, first_seen, last_seen, n, blocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0)"
     )
-      .bind(rec.key, dev, brand, model, android, sdk, app, lang, ip, country, now, now)
+      .bind(rec.key, dev, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, ip, country, now, now)
       .run();
   }
   // "renew" = o app so reconfirmou a key sozinho (a cada 6 h); "ok" = a pessoa entrou com a key
@@ -449,7 +465,7 @@ async function apiRoute(req, env, ip, op) {
     ).results;
     const devs = (
       await env.DB.prepare(
-        "SELECT key, dev, brand, model, android, sdk, app, lang, ip, country, first_seen, last_seen, n, blocked FROM devices ORDER BY last_seen DESC LIMIT 3000"
+        "SELECT key, dev, brand, model, android, sdk, app, lang, tela, ram, armaz, emu, patch, fuso, cpu, root, ip, country, first_seen, last_seen, n, blocked FROM devices ORDER BY last_seen DESC LIMIT 3000"
       ).all()
     ).results;
     const by = {};
@@ -469,7 +485,7 @@ async function apiRoute(req, env, ip, op) {
   if (op === "live") {
     const rows = (
       await env.DB.prepare(
-        "SELECT s.key, s.dev, s.start, s.last, s.fg, s.app, s.ip, s.country, s.st, k.label, k.role, d.brand, d.model, d.android " +
+        "SELECT s.key, s.dev, s.start, s.last, s.fg, s.app, s.ip, s.country, s.st, k.label, k.role, d.brand, d.model, d.android, d.emu, d.root " +
           "FROM sessions s LEFT JOIN keys k ON k.key = s.key LEFT JOIN devices d ON d.key = s.key AND d.dev = s.dev " +
           "WHERE s.last >= ?1 AND " + FILTRO + " ORDER BY s.start DESC LIMIT 300"
       )
@@ -1132,6 +1148,7 @@ input[type=password]{font-family:var(--mono);text-transform:none}
     var s = ((r.brand || "") + " " + (r.model || "")).trim();
     return s || "APARELHO " + String(r.dev || "").slice(0, 6).toUpperCase();
   }
+  function gb(bytes) { if (!bytes) return ""; var g = bytes / 1073741824; return (g < 10 ? (Math.round(g * 10) / 10) : Math.round(g)) + " GB"; }
   function papel(role) {
     if (role === "owner") return chip("roxo", null, "DONO");
     if (role === "staff") return chip("info", null, "STAFF");
@@ -1329,7 +1346,7 @@ input[type=password]{font-family:var(--mono);text-transform:none}
       h("div", { class: "pess" }, [
         avatar(s, s.fg ? "on" : "bg"),
         h("div", { class: "grow" }, [
-          h("div", { class: "row" }, [h("span", { class: "nome ell", text: nome(s) }), papel(s.role)]),
+          h("div", { class: "row" }, [h("span", { class: "nome ell", text: nome(s) }), papel(s.role), s.emu ? chip("bad", "x", "EMULADOR") : null, s.root ? chip("warn", "shield", "ROOT") : null]),
           h("div", { class: "meta", text: aparelho(s) + (s.android ? " · ANDROID " + s.android : "") + (s.app ? " · APP " + s.app : "") }),
           h("div", { class: "keytxt", text: s.key === "OWNER" ? "KEY DO DONO" : s.key })
         ]),
@@ -1525,8 +1542,11 @@ input[type=password]{font-family:var(--mono);text-transform:none}
       devs.forEach(function (d) {
         var don = d.last_seen && agora() - d.last_seen < ONLINE;
         dl.appendChild(h("div", { class: "dev" }, [
-          h("div", { class: "row" }, [h("span", { class: "ds" + (don ? " on" : "") }), h("b", { class: "grow ell", text: aparelho(d) }), d.blocked ? chip("bad", "ban", "BLOQUEADO") : null]),
+          h("div", { class: "row" }, [h("span", { class: "ds" + (don ? " on" : "") }), h("b", { class: "grow ell", text: aparelho(d) }), d.emu ? chip("bad", "x", "EMULADOR") : null, d.root ? chip("warn", "shield", "ROOT") : null, d.blocked ? chip("bad", "ban", "BLOQUEADO") : null]),
           h("div", { class: "meta", text: "ANDROID " + (d.android || "?") + (d.sdk ? " (API " + d.sdk + ")" : "") + " · APP " + (d.app || "?") + (d.lang ? " · " + d.lang.toUpperCase() : "") }),
+          (d.tela || d.ram || d.armaz) ? h("div", { class: "meta", text: [d.tela ? "TELA " + d.tela : null, d.ram ? gb(d.ram) + " RAM" : null, d.armaz ? gb(d.armaz) + " ARMAZ" : null].filter(Boolean).join(" · ") }) : null,
+          (d.cpu || d.patch) ? h("div", { class: "meta", text: [d.cpu ? String(d.cpu).toUpperCase() : null, d.patch ? "PATCH " + d.patch : null].filter(Boolean).join(" · ") }) : null,
+          d.fuso ? h("div", { class: "meta", text: "FUSO " + String(d.fuso).toUpperCase() }) : null,
           h("div", { class: "meta", text: (d.n || 0) + " ACESSOS · VISTO " + ha(d.last_seen) + " · DESDE " + data(d.first_seen) }),
           h("div", { class: "meta mono", text: (owner ? "IP " + (d.ip || "?") + (d.country ? " (" + d.country + ")" : "") + " · " : "") + "ID " + String(d.dev).slice(0, 10) }),
           h("div", { class: "acts", style: "margin-top:8px" }, [h("button", { class: "btn " + (d.blocked ? "" : "d"), onclick: function () {

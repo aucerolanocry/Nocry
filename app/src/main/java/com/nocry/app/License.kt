@@ -1,10 +1,15 @@
 package com.nocry.app
 
+import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
+import android.os.Environment
+import android.os.StatFs
 import android.provider.Settings
 import android.util.Base64
 import org.json.JSONObject
+import java.io.File
+import java.util.TimeZone
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.KeyFactory
@@ -68,6 +73,63 @@ object License {
     }
 
     fun versao(c: Context): String = try { c.packageManager.getPackageInfo(Const.PKG, 0).versionName ?: "?" } catch (_: Exception) { "?" }
+
+    // --------- infos do aparelho (pro painel): tudo leitura rápida, sem permissão ---------
+    /** resolução da tela: "largura x altura @densidade" */
+    private fun tela(c: Context): String = try {
+        val d = c.resources.displayMetrics
+        "${d.widthPixels}x${d.heightPixels}@${d.densityDpi}"
+    } catch (_: Throwable) { "" }
+
+    /** RAM total em bytes */
+    private fun ramTotal(c: Context): Long = try {
+        val am = c.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val mi = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(mi)
+        mi.totalMem
+    } catch (_: Throwable) { 0L }
+
+    /** armazenamento total do aparelho em bytes */
+    private fun armazTotal(): Long = try {
+        val s = StatFs(Environment.getDataDirectory().path)
+        s.blockCountLong * s.blockSizeLong
+    } catch (_: Throwable) { 0L }
+
+    /** heurística: o "celular" é na verdade um emulador no PC? */
+    private fun ehEmulador(): Boolean {
+        val fp = (Build.FINGERPRINT ?: "")
+        val mo = (Build.MODEL ?: "")
+        val hw = (Build.HARDWARE ?: "")
+        val pr = (Build.PRODUCT ?: "")
+        return fp.startsWith("generic") || fp.startsWith("unknown") || fp.contains("vbox") || fp.contains("emulator") ||
+            mo.contains("google_sdk") || mo.contains("Emulator") || mo.contains("Android SDK built for") ||
+            (Build.MANUFACTURER ?: "").contains("Genymotion") || (Build.BRAND ?: "").startsWith("generic") ||
+            hw == "goldfish" || hw == "ranchu" || hw.contains("vbox") || hw.contains("ttVM") ||
+            pr == "sdk" || pr.contains("emulator") || pr.contains("simulator") || pr.contains("vbox")
+    }
+
+    /** fuso horário: "Zona GMT±h" */
+    private fun fuso(): String = try {
+        val tz = TimeZone.getDefault()
+        val h = tz.rawOffset / 3600000
+        tz.id + " GMT" + (if (h >= 0) "+$h" else "$h")
+    } catch (_: Throwable) { "" }
+
+    /** CPU: "N núcleos · arquitetura" */
+    private fun cpu(): String = try {
+        val n = Runtime.getRuntime().availableProcessors()
+        val abi = Build.SUPPORTED_ABIS?.firstOrNull() ?: "?"
+        "$n núcleos · $abi"
+    } catch (_: Throwable) { "" }
+
+    /** heurística básica de root (su/magisk/test-keys) — pode dar falso negativo se escondido */
+    private fun temRoot(): Boolean = try {
+        if ((Build.TAGS ?: "").contains("test-keys")) true
+        else arrayOf(
+            "/system/bin/su", "/system/xbin/su", "/sbin/su", "/su/bin/su",
+            "/system/app/Superuser.apk", "/system/bin/magisk", "/data/adb/magisk", "/data/adb/su"
+        ).any { File(it).exists() }
+    } catch (_: Throwable) { false }
 
     // ------------------------------------------------------------------ estado
     private fun campos(p: String): List<String>? {
@@ -231,6 +293,14 @@ object License {
             .put("sdk", Build.VERSION.SDK_INT)
             .put("app", versao(c))
             .put("lang", Locale.getDefault().toString())
+            .put("tela", tela(c))
+            .put("ram", ramTotal(c))
+            .put("armaz", armazTotal())
+            .put("emu", if (ehEmulador()) 1 else 0)
+            .put("patch", if (Build.VERSION.SDK_INT >= 23) (Build.VERSION.SECURITY_PATCH ?: "") else "")
+            .put("fuso", fuso())
+            .put("cpu", cpu())
+            .put("root", if (temRoot()) 1 else 0)
             .put("modo", if (renovar) "renovar" else "entrar")
         val j = post("/v1/auth", corpo) ?: return Result(false, "net")
         if (!j.optBoolean("ok", false)) return Result(false, j.optString("reason", "server"))
