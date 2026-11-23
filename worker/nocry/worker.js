@@ -1526,8 +1526,8 @@ input[type=password]{font-family:var(--mono);text-transform:none}
         var don = d.last_seen && agora() - d.last_seen < ONLINE;
         dl.appendChild(h("div", { class: "dev" }, [
           h("div", { class: "row" }, [h("span", { class: "ds" + (don ? " on" : "") }), h("b", { class: "grow ell", text: aparelho(d) }), d.blocked ? chip("bad", "ban", "BLOQUEADO") : null]),
-          h("div", { class: "meta", text: "ANDROID " + (d.android || "?") + " · APP " + (d.app || "?") + " · " + (d.n || 0) + " ACESSOS" }),
-          h("div", { class: "meta", text: "VISTO " + ha(d.last_seen) + " · PRIMEIRA VEZ " + data(d.first_seen) }),
+          h("div", { class: "meta", text: "ANDROID " + (d.android || "?") + (d.sdk ? " (API " + d.sdk + ")" : "") + " · APP " + (d.app || "?") + (d.lang ? " · " + d.lang.toUpperCase() : "") }),
+          h("div", { class: "meta", text: (d.n || 0) + " ACESSOS · VISTO " + ha(d.last_seen) + " · DESDE " + data(d.first_seen) }),
           h("div", { class: "meta mono", text: (owner ? "IP " + (d.ip || "?") + (d.country ? " (" + d.country + ")" : "") + " · " : "") + "ID " + String(d.dev).slice(0, 10) }),
           h("div", { class: "acts", style: "margin-top:8px" }, [h("button", { class: "btn " + (d.blocked ? "" : "d"), onclick: function () {
             var bloq = !d.blocked;
