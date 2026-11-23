@@ -41,13 +41,21 @@ on:
         description: "Novidades na página do lançamento (vazio = texto padrão)"
         required: false
         default: ""
+      limpar:
+        description: "Só apagar releases antigas: tags a MANTER, separadas por vírgula (ex.: v1.0.77). Vazio = não apaga nada"
+        required: false
+        default: ""
+      limpar_confirmar:
+        description: "Pra apagar de verdade, digite APAGAR (é irreversível)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
 
 jobs:
   build:
-    if: github.event.inputs.prints != 'true' && github.event.inputs.ocultar == '' && github.event.inputs.mostrar == ''
+    if: github.event.inputs.prints != 'true' && github.event.inputs.ocultar == '' && github.event.inputs.mostrar == '' && github.event.inputs.limpar == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -188,6 +196,65 @@ jobs:
           PADRAO="Baixe o **Nocry.apk**, instale e abra. No primeiro uso o app guia o pareamento do ADB (depuração sem fio)."
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest --notes "${NOTAS_IN:-$PADRAO}"
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease
+
+  # apaga TODAS as releases menos as listadas em "limpar" (roda pela sniper: o workflow separado
+  # limpar-releases.yml so rodava se estivesse na main)
+  limpar:
+    if: github.event.inputs.limpar != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conferir confirmação
+        if: github.event.inputs.limpar_confirmar != 'APAGAR'
+        run: |
+          echo "Confirmação errada. Digite APAGAR no campo 'limpar_confirmar' pra rodar."
+          exit 1
+
+      - name: Apagar releases (menos as mantidas)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANTER: ${{ github.event.inputs.limpar }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          keep=",$(echo "$MANTER" | tr -d ' '),"
+          echo "Mantendo: $keep"
+          # 1) junta TODAS as releases (todas as páginas) antes de apagar, pra paginação não pular nada
+          all="$(mktemp)"
+          page=1
+          while : ; do
+            resp="$(gh api "repos/$REPO/releases?per_page=100&page=$page")"
+            n="$(echo "$resp" | jq 'length')"
+            [ "$n" -eq 0 ] && break
+            echo "$resp" | jq -r '.[] | "\(.id)\t\(.tag_name)"' >> "$all"
+            page=$((page+1))
+          done
+          echo "Encontradas $(wc -l < "$all" | tr -d ' ') releases."
+          # segurança: se nenhuma das mantidas existe, não apaga nada (evita ficar sem versão nenhuma)
+          achou=0
+          while IFS="$(printf '\t')" read -r id tag; do
+            echo "$keep" | grep -q ",$tag," && achou=1
+          done < "$all"
+          if [ "$achou" -ne 1 ]; then
+            echo "Nenhuma das versões pra manter ($MANTER) existe. Não apaguei nada."
+            exit 1
+          fi
+          # 2) apaga o resto (release e tag)
+          apagadas=0
+          while IFS="$(printf '\t')" read -r id tag; do
+            [ -z "$id" ] && continue
+            if echo "$keep" | grep -q ",$tag,"; then
+              echo "MANTER  $tag"
+            else
+              if gh api -X DELETE "repos/$REPO/releases/$id"; then
+                apagadas=$((apagadas+1))
+                echo "apagada $tag"
+                gh api -X DELETE "repos/$REPO/git/refs/tags/$tag" >/dev/null 2>&1 || true
+              else
+                echo "(falhou apagar $tag)"
+              fi
+            fi
+          done < "$all"
+          echo "Pronto. Apaguei $apagadas releases; mantive: $MANTER"
 
   prints:
     if: github.event.inputs.prints == 'true'
