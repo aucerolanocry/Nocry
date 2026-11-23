@@ -150,7 +150,7 @@ class KeyGate(private val act: MainActivity) {
 
 /** título + corpo do aviso de bloqueio na tela da key, pelo motivo que o servidor mandou */
 private fun bloqueioTexto(motivo: String): Pair<String, String> = when (motivo) {
-    "revoked" -> "CHAVE DESATIVADA" to "Sua key foi desativada. Você não pode mais usar o app. Fale com quem te passou a key."
+    "revoked" -> "CHAVE BLOQUEADA" to "Sua chave foi bloqueada. Você não pode mais usar o app. Fale com quem te passou a key."
     "blocked", "device_limit" -> "APARELHO BLOQUEADO" to "Este aparelho foi bloqueado nessa key. Você não pode usar o app. Fale com quem te passou a key."
     "expired" -> "KEY VENCIDA" to "Sua key venceu. Você não pode mais usar o app até renovar. Fale com quem te passou a key."
     "invalid" -> "KEY INVÁLIDA" to "Essa key não existe mais. Confira se digitou certo ou fale com quem te passou a key."

@@ -1445,8 +1445,16 @@ input[type=password]{font-family:var(--mono);text-transform:none}
       if (k.key !== "OWNER") conta[situacao(k)]++;
       if (!(k.devices || []).length) conta.nunca++;
     });
+    var devsBloq = 0;
+    ks.forEach(function (k) { (k.devices || []).forEach(function (d) { if (d.blocked) devsBloq++; }); });
     box.appendChild(h("div", { class: "lead", text: reais.length + " KEYS · " + conta.ativa + " ATIVAS · " + conta.online + " ONLINE AGORA" }));
-    var F = [["todas", "TODAS"], ["online", "ONLINE"], ["ativa", "ATIVAS"], ["vencida", "VENCIDAS"], ["revogada", "REVOGADAS"], ["nunca", "NUNCA USADAS"]];
+    box.appendChild(h("div", { class: "stats" }, [
+      stat(reais.length, "KEYS NO TOTAL", "key"),
+      stat(conta.ativa, "ATIVAS", "check"),
+      stat(conta.revogada, "KEYS BLOQUEADAS", "ban"),
+      stat(conta.online, "ONLINE AGORA", "live", devsBloq ? devsBloq + " APARELHOS BLOQUEADOS" : null)
+    ]));
+    var F = [["todas", "TODAS"], ["online", "ONLINE"], ["ativa", "ATIVAS"], ["vencida", "VENCIDAS"], ["revogada", "BLOQUEADAS"], ["nunca", "NUNCA USADAS"]];
     box.appendChild(h("div", { class: "pills" }, F.map(function (f) {
       return h("button", { class: "pill" + (S.kf === f[0] ? " on" : ""), onclick: function () { S.kf = f[0]; render(true); } }, [f[1], h("i", { text: String(conta[f[0]]) })]);
     })));
@@ -1486,7 +1494,7 @@ input[type=password]{font-family:var(--mono);text-transform:none}
           isO ? h("div", { class: "keytxt", text: "SUA KEY DE DONO (FICA ESCONDIDA)" }) :
             h("button", { class: "keycp", title: "Copiar key", onclick: function () { copiar(k.key); } }, [h("span", { class: "keytxt", text: k.key }), ico("copy", 13)])
         ]),
-        isO ? null : chip(cor, "dot", sit.toUpperCase())
+        isO ? null : chip(cor, "dot", sit === "revogada" ? "BLOQUEADA" : sit.toUpperCase())
       ]),
       h("div", { class: "info" }, [
         inf("AGORA", on ? "ONLINE" : "OFFLINE", false, on ? "ok" : ""),
@@ -1498,6 +1506,11 @@ input[type=password]{font-family:var(--mono);text-transform:none}
       h("div", { class: "acts linha" }, [
         h("button", { class: "btn f", onclick: function () { verHist(k.key, nome(k)); } }, [ico("hist", 14), "HISTÓRICO"]),
         h("button", { class: "btn f" + (aberto ? " on" : ""), onclick: function () { S.open[k.key] = !aberto; render(true); } }, [ico("phone", 14), "APARELHOS " + devs.length]),
+        isO ? null : h("button", { class: "btn ic" + (k.revoked ? " on" : " d"), title: k.revoked ? "Desbloquear key" : "Bloquear key", onclick: function () {
+          var bloq = !k.revoked;
+          var go = function () { api("revoke", { key: k.key, revoked: bloq }).then(function () { toast(bloq ? "KEY BLOQUEADA" : "KEY DESBLOQUEADA"); carregaLista(); }).catch(falha); };
+          if (bloq) confirma("BLOQUEAR A KEY?", nome(k) + " NÃO VAI MAIS CONSEGUIR USAR O APP · DESLOGA EM ATÉ 1 MIN", "BLOQUEAR", true, go); else go();
+        } }, [ico(k.revoked ? "undo" : "ban", 15)]),
         isO ? null : h("button", { class: "btn ic", title: "Editar", onclick: function () { editar(k); } }, [ico("edit", 15)]),
         h("button", { class: "btn ic", title: "Mais", onclick: function () { mais(k); } }, [ico("more", 15)])
       ])
@@ -1526,10 +1539,10 @@ input[type=password]{font-family:var(--mono);text-transform:none}
   function mais(k) {
     var isO = k.key === "OWNER", owner = S.me.role === "owner", fecha;
     var itens = [
-      isO ? null : opc(k.revoked ? "undo" : "ban", k.revoked ? "REATIVAR KEY" : "REVOGAR KEY",
-        k.revoked ? "VOLTA A FUNCIONAR NA HORA" : "PARA DE FUNCIONAR E O APP DESLOGA EM ATÉ 1 MIN", !k.revoked, function () {
+      isO ? null : opc(k.revoked ? "undo" : "ban", k.revoked ? "DESBLOQUEAR KEY" : "BLOQUEAR KEY",
+        k.revoked ? "VOLTA A FUNCIONAR NA HORA" : "A KEY PARA E O APP DESLOGA EM ATÉ 1 MIN · APARECE 'CHAVE BLOQUEADA'", !k.revoked, function () {
           fecha();
-          api("revoke", { key: k.key, revoked: !k.revoked }).then(function () { toast(k.revoked ? "KEY REATIVADA" : "KEY REVOGADA"); carregaLista(); }).catch(falha);
+          api("revoke", { key: k.key, revoked: !k.revoked }).then(function () { toast(k.revoked ? "KEY DESBLOQUEADA" : "KEY BLOQUEADA"); carregaLista(); }).catch(falha);
         }),
       opc("unlink", "SOLTAR APARELHOS", "LIBERA A KEY PRA SER USADA EM OUTRO CELULAR", false, function () {
         fecha();
