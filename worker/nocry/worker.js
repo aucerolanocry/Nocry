@@ -773,6 +773,11 @@ svg{flex:none;display:block}
 .stat .l{font:700 8.5px var(--body);letter-spacing:.16em;color:var(--mut);margin-top:5px;line-height:1.35;padding-right:18px}
 .stat svg{position:absolute;right:11px;top:12px;color:var(--mut2)}
 .stat .l2{font:700 8px var(--body);letter-spacing:.16em;color:var(--mut2);margin-top:2px}
+.stat.ok{border-color:var(--okln)} .stat.ok .n,.stat.ok svg{color:var(--ok)}
+.stat.bad{border-color:var(--badln)} .stat.bad .n,.stat.bad svg{color:var(--bad)}
+.stat.info{border-color:var(--infoln)} .stat.info .n,.stat.info svg{color:var(--info)}
+.stat.warn{border-color:var(--warnln)} .stat.warn .n,.stat.warn svg{color:var(--warn)}
+.stat.roxo{border-color:var(--roxoln)} .stat.roxo .n,.stat.roxo svg{color:var(--roxo)}
 
 /* chips */
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
@@ -1024,7 +1029,7 @@ input[type=password]{font-family:var(--mono);text-transform:none}
   function inf(rot, val, mono, cor) {
     return h("div", null, [h("small", { text: rot }), h("span", { class: (mono ? "mono " : "") + (cor || ""), text: val })]);
   }
-  function stat(n, l, ic, sub) { return h("div", { class: "stat" }, [ico(ic, 15), h("div", { class: "n", text: String(n == null ? 0 : n) }), h("div", { class: "l", text: l }), sub ? h("div", { class: "l2", text: sub }) : null]); }
+  function stat(n, l, ic, sub, cor) { return h("div", { class: "stat" + (cor ? " " + cor : "") }, [ico(ic, 15), h("div", { class: "n", text: String(n == null ? 0 : n) }), h("div", { class: "l", text: l }), sub ? h("div", { class: "l2", text: sub }) : null]); }
   function carregando() { return h("div", { class: "load" }, [h("span", { class: "spin" }), "CARREGANDO"]); }
   function vazio(ic, t, s) { return h("div", { class: "card vazio" }, [ico(ic, 30), h("b", { text: t }), s]); }
   function campoBusca(ph, val, onIn) {
@@ -1301,10 +1306,10 @@ input[type=password]{font-family:var(--mono);text-transform:none}
       h("div", { class: "chips" }, [chip("ok", "dot", fg + " COM O APP NA TELA"), chip("warn", "dot", (on.length - fg) + " EM 2º PLANO"), chip("", "shield", byp + " COM BYPASS LIGADO")])
     ]));
     box.appendChild(h("div", { class: "stats" }, [
-      stat(st.entradas, "ENTRADAS COM KEY", "login", "ÚLTIMAS 24 H"),
-      stat(st.aplicados, "BYPASS APLICADOS", "check", "ÚLTIMAS 24 H"),
-      stat(st.pessoas, "APARELHOS QUE USARAM", "users", "ÚLTIMAS 24 H"),
-      stat(st.sessoes, "VEZES QUE ABRIRAM O APP", "app", "ÚLTIMAS 24 H")
+      stat(st.entradas, "ENTRADAS COM KEY", "login", "ÚLTIMAS 24 H", "info"),
+      stat(st.aplicados, "BYPASS APLICADOS", "check", "ÚLTIMAS 24 H", "ok"),
+      stat(st.pessoas, "APARELHOS QUE USARAM", "users", "ÚLTIMAS 24 H", "roxo"),
+      stat(st.sessoes, "VEZES QUE ABRIRAM O APP", "app", "ÚLTIMAS 24 H", "warn")
     ]));
     box.appendChild(sec("ONLINE", on.length));
     if (!on.length) box.appendChild(vazio("live", "NINGUÉM ONLINE AGORA", "QUANDO ALGUÉM ABRIR O APP (VERSÃO 1.0.39 OU MAIS NOVA) APARECE AQUI NA HORA."));
@@ -1447,12 +1452,11 @@ input[type=password]{font-family:var(--mono);text-transform:none}
     });
     var devsBloq = 0;
     ks.forEach(function (k) { (k.devices || []).forEach(function (d) { if (d.blocked) devsBloq++; }); });
-    box.appendChild(h("div", { class: "lead", text: reais.length + " KEYS · " + conta.ativa + " ATIVAS · " + conta.online + " ONLINE AGORA" }));
     box.appendChild(h("div", { class: "stats" }, [
-      stat(reais.length, "KEYS NO TOTAL", "key"),
-      stat(conta.ativa, "ATIVAS", "check"),
-      stat(conta.revogada, "KEYS BLOQUEADAS", "ban"),
-      stat(conta.online, "ONLINE AGORA", "live", devsBloq ? devsBloq + " APARELHOS BLOQUEADOS" : null)
+      stat(conta.todas, "KEYS NO TOTAL", "key"),
+      stat(conta.ativa, "ATIVAS", "check", null, "ok"),
+      stat(conta.revogada, "KEYS BLOQUEADAS", "ban", null, "bad"),
+      stat(conta.online, "ONLINE AGORA", "live", devsBloq ? devsBloq + " APARELHOS BLOQUEADOS" : null, "info")
     ]));
     var F = [["todas", "TODAS"], ["online", "ONLINE"], ["ativa", "ATIVAS"], ["vencida", "VENCIDAS"], ["revogada", "BLOQUEADAS"], ["nunca", "NUNCA USADAS"]];
     box.appendChild(h("div", { class: "pills" }, F.map(function (f) {
