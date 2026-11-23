@@ -1,0 +1,81 @@
+name: Limpar releases antigas
+
+# Apaga TODAS as releases menos as que você listar em "manter".
+# Irreversível. Por isso tem o campo "confirmar": só roda se você digitar APAGAR.
+
+on:
+  workflow_dispatch:
+    inputs:
+      manter:
+        description: "Tags a MANTER (separadas por vírgula). As outras releases são apagadas."
+        required: true
+        default: "v1.0.76"
+      apagar_tags:
+        description: "Apagar também as tags das releases removidas?"
+        type: boolean
+        default: true
+      confirmar:
+        description: "Digite APAGAR para confirmar"
+        required: true
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  limpar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conferir confirmação
+        if: ${{ github.event.inputs.confirmar != 'APAGAR' }}
+        run: |
+          echo "Confirmação errada. Digite APAGAR no campo 'confirmar' pra rodar."
+          exit 1
+
+      - name: Apagar releases (menos as mantidas)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANTER: ${{ github.event.inputs.manter }}
+          APAGAR_TAGS: ${{ github.event.inputs.apagar_tags }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          keep=",$(echo "$MANTER" | tr -d ' '),"
+          echo "Mantendo: $keep"
+
+          # 1) coleta TODAS as releases (todas as páginas) antes de apagar,
+          #    pra a paginação não "pular" itens enquanto a lista encolhe
+          all="$(mktemp)"
+          page=1
+          while : ; do
+            resp="$(gh api "repos/$REPO/releases?per_page=100&page=$page")"
+            n="$(echo "$resp" | jq 'length')"
+            [ "$n" -eq 0 ] && break
+            echo "$resp" | jq -r '.[] | "\(.id)\t\(.tag_name)"' >> "$all"
+            page=$((page+1))
+          done
+
+          total="$(wc -l < "$all" | tr -d ' ')"
+          echo "Encontradas $total releases."
+
+          # 2) apaga o que não está na lista de manter
+          apagadas=0
+          while IFS="$(printf '\t')" read -r id tag; do
+            [ -z "$id" ] && continue
+            if echo "$keep" | grep -q ",$tag,"; then
+              echo "MANTER  $tag"
+            else
+              echo "apagar  $tag (release $id)"
+              if gh api -X DELETE "repos/$REPO/releases/$id"; then
+                apagadas=$((apagadas+1))
+                if [ "$APAGAR_TAGS" = "true" ] && [ -n "$tag" ]; then
+                  gh api -X DELETE "repos/$REPO/git/refs/tags/$tag" >/dev/null 2>&1 \
+                    && echo "        tag $tag apagada" || echo "        (tag $tag já não existia)"
+                fi
+              else
+                echo "        (falhou apagar $tag)"
+              fi
+            fi
+          done < "$all"
+
+          echo "Pronto. Apaguei $apagadas releases; mantive: $MANTER"
