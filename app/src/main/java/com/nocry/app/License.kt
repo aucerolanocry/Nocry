@@ -144,6 +144,9 @@ object License {
     /** quanto falta pro prazo sem internet acabar (ms); negativo = ja acabou */
     fun restaOffline(): Long = ts() + GRACE_MS - System.currentTimeMillis()
 
+    /** quando o servidor confirmou a key pela última vez (ms epoch); 0 = nunca */
+    fun ultimaConfirmacao(): Long = ts()
+
     // ------------------------------------------------------------------ servidor
     private fun nonce(): String {
         val b = ByteArray(16)

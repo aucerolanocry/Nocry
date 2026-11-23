@@ -937,10 +937,26 @@ class SobreScreen(a: MainActivity) : Screen(a) {
         val fmt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
         val e = License.expira()
         val horas = (License.restaOffline() / 3600000L).coerceAtLeast(0)
+        val label = License.label()
+        val confMs = License.ultimaConfirmacao()
+        val confTxt = if (confMs == 0L) "nunca" else {
+            val min = (System.currentTimeMillis() - confMs) / 60000L
+            when {
+                min < 1L -> "agora"
+                min < 60L -> "há ${min}min"
+                min < 1440L -> "há ${min / 60L}h"
+                else -> "há ${min / 1440L}d"
+            }
+        }
+        kc.addView(Ui.secao(c, "sua key"), Ui.lp(top = 16, c = c))
         kc.addView(Ui.chips(c,
             Ui.infoBox(c, R.drawable.ic_key, "validade", if (e == 0L) "Vitalícia" else fmt.format(java.util.Date(e)), Ui.OK),
+            Ui.infoBox(c, R.drawable.ic_shield, "plano", if (label.isNotEmpty()) label else License.roleNome().ifEmpty { "—" })
+        ), Ui.lp(top = 10, c = c))
+        kc.addView(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_stat, "confirmado", confTxt, if (confMs != 0L && System.currentTimeMillis() - confMs < 12 * 3600000L) Ui.OK else Ui.WARN),
             Ui.infoBox(c, R.drawable.ic_globe, "sem internet", if (horas >= 48) "${horas / 24} dias" else "$horas h", if (horas >= 12) Ui.OK else Ui.WARN)
-        ), Ui.lp(top = 16, c = c))
+        ), Ui.lp(top = 8, c = c))
         kc.addView(Ui.chips(c,
             Ui.infoBox(c, R.drawable.ic_chip, "aparelho", License.devId(c).take(8)),
             Ui.infoBox(c, R.drawable.ic_info, "versão", versao())
