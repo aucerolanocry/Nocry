@@ -836,18 +836,18 @@ class SobreScreen(a: MainActivity) : Screen(a) {
     private fun trocarKeyDono() {
         val semSugestao = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD or
             android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
-        val box = Ui.vbox(c)
-        box.setPadding(Ui.dp(c, 22), Ui.dp(c, 8), Ui.dp(c, 22), 0)
-        box.addView(Ui.text(c, "Digite o código de uso único que você recebeu e a key nova (de 12 a 64 letras, números ou traço). " +
+        val box = Ui.vbox(act)
+        box.setPadding(Ui.dp(act, 22), Ui.dp(act, 8), Ui.dp(act, 22), 0)
+        box.addView(Ui.text(act, "Digite o código de uso único que você recebeu e a key nova (de 12 a 64 letras, números ou traço). " +
             "Depois de trocar, a key antiga para de valer pra todo mundo. Anote a nova: sem ela você perde o acesso de dono.", 11f, Ui.MUTED))
-        val cod = Ui.field(c, "código de uso único", false).also { it.inputType = semSugestao; it.typeface = Theme.fonte(c, true, false) }
-        val nova = Ui.field(c, "key nova", false).also { it.inputType = semSugestao; it.typeface = Theme.fonte(c, true, false) }
-        val rep = Ui.field(c, "repita a key nova", false).also { it.inputType = semSugestao; it.typeface = Theme.fonte(c, true, false) }
-        box.addView(cod, Ui.lp(top = 12, c = c))
-        box.addView(nova, Ui.lp(top = 8, c = c))
-        box.addView(rep, Ui.lp(top = 8, c = c))
-        val erro = Ui.text(c, "", 11f, Ui.BAD)
-        box.addView(erro, Ui.lp(top = 8, c = c))
+        val cod = Ui.field(act, "código de uso único", false).also { it.inputType = semSugestao; it.typeface = Theme.fonte(act, true, false) }
+        val nova = Ui.field(act, "key nova", false).also { it.inputType = semSugestao; it.typeface = Theme.fonte(act, true, false) }
+        val rep = Ui.field(act, "repita a key nova", false).also { it.inputType = semSugestao; it.typeface = Theme.fonte(act, true, false) }
+        box.addView(cod, Ui.lp(top = 12, c = act))
+        box.addView(nova, Ui.lp(top = 8, c = act))
+        box.addView(rep, Ui.lp(top = 8, c = act))
+        val erro = Ui.text(act, "", 11f, Ui.BAD)
+        box.addView(erro, Ui.lp(top = 8, c = act))
         val d = android.app.AlertDialog.Builder(act, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
             .setTitle("TROCAR KEY DE DONO")
             .setView(box)
