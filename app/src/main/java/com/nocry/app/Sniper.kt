@@ -154,9 +154,7 @@ object Sniper {
     const val PAUSA_LIMITE = 45_000L      // org disse "limite máximo de filas": espera isso e tenta de novo
     const val FORM_VALIDO = 12 * 60_000L  // formulário aberto vale uns 15 min no Discord
     const val VALOR_MINIMO = 100          // em centavos: R$ 1,00 pra cima
-    const val MSG_PADRAO = "go | bora | regras ok"
-    // mensagem padrão das versões antigas — quem ainda está nela é migrado pro padrão novo
-    private val MSGS_ANTIGAS = setOf("# FULL UMP E XM8 SEM MOBILADOR E SEM BUG DE KIT", "FULL UMP E XM8 SEM MOBILADOR E SEM BUG DE KIT")
+    const val MSG_PADRAO = "# FULL UMP E XM8 SEM MOBILADOR E SEM BUG DE KIT"
     val MODOS = listOf("1X1", "2X2", "3X3", "4X4")
     private val PALAVRAS_SALA = listOf("aguardando", "partida", "match", "vs", "sala", "duelo", "confronto")
     /** canal com esse nome nunca é sala de partida */
@@ -304,7 +302,7 @@ object Sniper {
         if (valores.isEmpty() && todosValores.isNotEmpty()) valores.add(if ("300" in todosValores) "300" else todosValores[0])
         gelo = sp.getString("gelo", "NORMAL") ?: "NORMAL"
         maxFilas = sp.getInt("max_filas3", 300)
-        msgAuto = (sp.getString("msg_auto", MSG_PADRAO) ?: MSG_PADRAO).let { if (it.trim() in MSGS_ANTIGAS) MSG_PADRAO else it }
+        msgAuto = sp.getString("msg_auto", MSG_PADRAO) ?: MSG_PADRAO
         sairAoAbrir = sp.getBoolean("sair_ao_abrir2", false)
         tempoResposta = sp.getLong("tempo_resposta", TIMEOUT_RESPOSTA)
         buscarAoLigar = sp.getBoolean("buscar_ao_ligar", false)
