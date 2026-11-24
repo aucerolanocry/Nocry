@@ -276,10 +276,13 @@ object Ui {
     }
 
     /** pilula de estado deitada: "● ADB  LIGADO" (bolinha colorida, nome apagado, valor na cor do estado) */
-    fun pilulaStatus(c: Context, nome: String, valor: String, ok: Boolean?): View {
+    fun pilulaStatus(c: Context, nome: String, valor: String, ok: Boolean?, clicavel: Boolean = false, ico: Int = 0): View {
         val r = hbox(c)
         r.gravity = Gravity.CENTER
-        r.background = peca(c, raioPilula(), 0x8C)
+        // clicável ganha borda de destaque + ripple pra ficar claro que dá pra tocar
+        r.background = if (clicavel)
+            ripple(c, shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x12), raioPilula(), Theme.alpha(Theme.accent, 0x70), 1))
+        else peca(c, raioPilula(), 0x8C)
         val cor = when (ok) { true -> OK; false -> BAD; null -> WARN }
         val dot = View(c)
         dot.background = shape(c, cor, 4)
@@ -299,7 +302,12 @@ object Ui {
         t.maxLines = 1
         t.ellipsize = android.text.TextUtils.TruncateAt.END
         r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        r.setPadding(dp(c, 7), dp(c, 9), dp(c, 7), dp(c, 9))
+        // ícone de ação na ponta (ex.: liga/desliga) só quando dá pra tocar
+        if (clicavel && ico != 0) {
+            val ac = icone(c, ico, Theme.alpha(Theme.accent, 0xDD), 12)
+            r.addView(ac, LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)).also { it.leftMargin = dp(c, 6) })
+        }
+        r.setPadding(dp(c, if (clicavel && ico != 0) 10 else 7), dp(c, 9), dp(c, if (clicavel && ico != 0) 8 else 7), dp(c, 9))
         r.contentDescription = "$nome $valor"
         return r
     }

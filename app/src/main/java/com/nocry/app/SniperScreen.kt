@@ -308,8 +308,9 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val c = act
         val col = Ui.vbox(c)
         col.gravity = Gravity.CENTER_HORIZONTAL
-        col.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, if (aceso) 0x10 else 0x08), Ui.raioPeq(14),
-            if (aceso) Theme.alpha(Theme.accent, 0x77) else Theme.alpha(android.graphics.Color.WHITE, 0x1C), 1)
+        // ripple pra dar o toque e deixar claro que é clicável
+        col.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, if (aceso) 0x10 else 0x08), Ui.raioPeq(14),
+            if (aceso) Theme.alpha(Theme.accent, 0x77) else Theme.alpha(android.graphics.Color.WHITE, 0x1C), 1))
         col.setPadding(Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 12))
         val cab = Ui.hbox(c)
         cab.gravity = Gravity.CENTER
@@ -317,6 +318,9 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val r = Ui.text(c, rotulo, 9f, Ui.MUTED, true, mono = true)
         r.letterSpacing = 0.08f
         cab.addView(r, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 5) })
+        // setinha: avisa que dá pra tocar e abrir
+        cab.addView(Ui.icone(c, R.drawable.ic_chevron, Theme.alpha(Theme.accent, 0xAA), 9),
+            LinearLayout.LayoutParams(Ui.dp(c, 11), Ui.dp(c, 11)).also { it.leftMargin = Ui.dp(c, 3) })
         col.addView(cab, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val v = if (aceso) Ui.gradTexto(c, valor, 22f) else Ui.text(c, valor, 22f, Ui.TEXT, true)
         v.gravity = Gravity.CENTER

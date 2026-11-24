@@ -250,22 +250,25 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         topo.addView(info, ip)
         hero.addView(topo)
 
-        val pAdb = Ui.pilulaStatus(c, "ADB", if (adb) "ligado" else "off", adb)
+        val pAdb = Ui.pilulaStatus(c, "ADB", if (adb) "ligado" else "off", adb, clicavel = true, ico = R.drawable.ic_power)
         Ui.clique(pAdb) {
-            if (adb) act.irAba(1)
-            else {
+            if (adb) {
+                // ligado: desliga. Mas se o bypass/otimização está usando o ADB, ele religaria sozinho — então avisa.
+                if (Prefs.precisaServico()) Ui.toast(act, "o ADB está em uso — desligue o bypass antes")
+                else Bg.io { Adb.disconnect(); Bg.ui { Ui.toast(act, "ADB desligado"); redesenha() } }
+            } else {
                 Ui.toast(act, "reconectando o ADB...")
                 Bg.io { val ok = Adb.ensure(act); Bg.ui { Ui.toast(act, if (ok) "ADB reconectado" else "não consegui — abra a conexão"); redesenha() } }
             }
         }
-        val pPerm = Ui.pilulaStatus(c, "Perm.", if (perm) "ok" else "falta", perm)
+        val pPerm = Ui.pilulaStatus(c, "Perm.", if (perm) "ok" else "falta", perm, clicavel = true, ico = R.drawable.ic_chevron)
         Ui.clique(pPerm) {
             if (perm) act.irAba(1)
             else if (Build.VERSION.SDK_INT >= 33) act.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 11)
         }
-        val pVol = Ui.pilulaStatus(c, "Volume", if (acc) "on" else "off", if (acc) true else if (volPreciso) false else null)
+        val pVol = Ui.pilulaStatus(c, "Volume", if (acc) "on" else "off", if (acc) true else if (volPreciso) false else null, clicavel = true, ico = R.drawable.ic_power)
         Ui.clique(pVol) {
-            if (acc) Ui.toast(act, "a escuta de volume já está ligada")
+            if (acc) { Sys.desligarAcessibilidade(); Ui.toast(act, "escuta de volume desligada") }
             else if (Sys.ligarAcessibilidade()) Ui.toast(act, "escuta de volume ligada")
             else Ui.toast(act, "conecte o ADB e toque de novo")
             redesenha()
