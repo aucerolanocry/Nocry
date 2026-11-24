@@ -1338,10 +1338,13 @@ object Sniper {
         return if (vars.size > 1) vars.random() else base.trim()
     }
 
-    /** marca na frente da mensagem automática só o jogador exato da partida (o que o card marcou),
-     *  nunca o adm. Se ainda não dá pra saber quem é, volta vazio (manda a mensagem normal). */
+    /** marca na frente da mensagem automática o jogador da partida, nunca o adm. Prefere quem o
+     *  card já marcou como exato, mas sempre tenta: se o card não disse, marca quem a sala já
+     *  aprendeu como jogador (quem falou primeiro etc). Só volta vazio se ninguém é conhecido ainda. */
     private fun marcacaoAuto(s: SSala): String {
-        val jog = s.pessoas.values.filter { it.papel == "jogador" && it.id != eu && it.doCard }.map { it.id }.distinct()
+        val todos = s.pessoas.values.filter { it.papel == "jogador" && it.id != eu }
+        val doCard = todos.filter { it.doCard }
+        val jog = (if (doCard.isNotEmpty()) doCard else todos).map { it.id }.distinct()
         return if (jog.isEmpty()) "" else jog.take(3).joinToString(" ") { "<@$it>" } + " "
     }
 
