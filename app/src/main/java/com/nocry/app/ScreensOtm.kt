@@ -746,12 +746,64 @@ object Update {
         return false
     }
 
-    /** o que o app ja sabe (sem rede, instantaneo): se a versao instalada ja esta desatualizada frente a ultima conhecida */
-    fun pendente(c: Context): Info? {
+    /** quanto tempo a pessoa pode deixar a atualizacao pra depois; passou disso, vira obrigatoria */
+    const val PRAZO_ADIAR = 3 * 60 * 60 * 1000L
+
+    /**
+     * a versao instalada esta desatualizada frente a ultima conhecida? (sem rede, instantaneo)
+     * Nao olha o "deixar pra depois": serve pra saber se tem atualizacao, mesmo adiada.
+     */
+    fun pendenteReal(c: Context): Info? {
         val tag = Prefs.updateTagConhecida
-        if (tag.isEmpty()) return null
-        if (!maisNova(versaoInstalada(c), tag)) return null
+        val atrasado = tag.isNotEmpty() && maisNova(versaoInstalada(c), tag)
+        if (!atrasado) {
+            // em dia: zera o prazo, a proxima versao nova ganha 3h de novo
+            if (Prefs.updatePendenteDesde != 0L) Prefs.updatePendenteDesde = 0L
+            if (Prefs.updateAdiadoAte != 0L) Prefs.updateAdiadoAte = 0L
+            return null
+        }
+        val agora = System.currentTimeMillis()
+        // o prazo conta da primeira vez que soube que estava atrasado (versoes novas no meio nao renovam)
+        if (Prefs.updatePendenteDesde == 0L || Prefs.updatePendenteDesde > agora) Prefs.updatePendenteDesde = agora
         return Info(tag, Prefs.updatePaginaConhecida, Prefs.updateApkConhecida.takeIf { it.isNotEmpty() })
+    }
+
+    /** o que bloqueia o app: atualizacao pendente que nao esta adiada (ou cujo prazo de 3h ja acabou) */
+    fun pendente(c: Context): Info? {
+        val i = pendenteReal(c) ?: return null
+        if (System.currentTimeMillis() < Prefs.updateAdiadoAte) return null
+        return i
+    }
+
+    /** quando acaba o prazo pra adiar (0 = nao tem atualizacao pendente) */
+    fun fimDoPrazo(): Long = Prefs.updatePendenteDesde.let { if (it > 0L) it + PRAZO_ADIAR else 0L }
+
+    /** ainda da pra deixar pra depois? */
+    fun podeAdiar(): Boolean = System.currentTimeMillis() < fimDoPrazo()
+
+    /** adiada agora (tem atualizacao, mas a pessoa escolheu depois e o prazo nao acabou) */
+    fun adiada(c: Context): Boolean = pendenteReal(c) != null && System.currentTimeMillis() < Prefs.updateAdiadoAte
+
+    /** deixa pra depois ate o fim do prazo. Falso se o prazo ja acabou (ai e obrigatoria) */
+    fun adiar(): Boolean {
+        if (!podeAdiar()) return false
+        Prefs.updateAdiadoAte = fimDoPrazo()
+        return true
+    }
+
+    /** "2h 15min", "40min", "menos de 1min" ate o prazo acabar */
+    fun faltaTexto(): String {
+        val ms = fimDoPrazo() - System.currentTimeMillis()
+        if (ms <= 0L) return "agora"
+        val min = (ms / 60_000L).toInt()
+        val h = min / 60
+        val m = min % 60
+        return when {
+            min < 1 -> "menos de 1min"
+            h == 0 -> "${m}min"
+            m == 0 -> "${h}h"
+            else -> "${h}h ${m}min"
+        }
     }
 
     /** busca no github (no maximo a cada 20 min), atualiza o cache local e avisa (notificacao) na primeira vez que ve cada versao nova */

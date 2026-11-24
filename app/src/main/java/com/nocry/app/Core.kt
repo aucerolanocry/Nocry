@@ -30,8 +30,9 @@ object Const {
     const val AVISO_ATUALIZACOES = "Essas atualizações seguidas são pra corrigir bugs. Logo logo elas vão parar."
     /** novidades mostradas na 1ª vez que abre depois de atualizar (pra todo mundo) */
     val NOVIDADES = listOf(
-        "Aviso mais claro quando a chave é bloqueada (\"CHAVE BLOQUEADA\").",
-        "Os cartões vêm transparentes pra aparecer o fundo. Quer mais escuro? ESTÚDIO › Cartões › \"Opacidade dos cartões\".",
+        "Atualização nova não trava mais na hora: dá pra deixar pra depois por até 3 horas.",
+        "Botões ADB, Perm. e Volume do início agora dá pra tocar: liga e desliga direto.",
+        "Bot de fila: a mensagem automática sempre tenta marcar o jogador da partida.",
     )
     /** novidades do bot de fila: só aparecem pra quem tem o bot (a key de dono). Vazio = nada novo no bot nesta versão */
     val NOVIDADES_BOT = emptyList<String>()
@@ -441,6 +442,14 @@ var bypassVolAtivo: Boolean
     var updateUltimaChecagem: Long
         get() = sp.getLong("update_ultima_checagem", 0L)
         set(v) { sp.edit().putLong("update_ultima_checagem", v).apply() }
+    /** desde quando o app sabe que esta desatualizado (0 = em dia). Dali conta o prazo de 3h pra poder adiar */
+    var updatePendenteDesde: Long
+        get() = sp.getLong("update_pendente_desde", 0L)
+        set(v) { sp.edit().putLong("update_pendente_desde", v).apply() }
+    /** a pessoa tocou "deixar pra depois": o aviso nao bloqueia ate esse horario (nunca passa do prazo de 3h) */
+    var updateAdiadoAte: Long
+        get() = sp.getLong("update_adiado_ate", 0L)
+        set(v) { sp.edit().putLong("update_adiado_ate", v).apply() }
     /** tag da versao nova sobre a qual ja avisamos (evita avisar de novo toda hora) */
     var updateAvisada: String
         get() = gs("update_avisada") ?: ""
@@ -620,7 +629,7 @@ object Notif {
             val n = Notification.Builder(c, CH_ALERT)
                 .setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle("NOCRY $tag disponível")
-                .setContentText("Atualização obrigatória. Toque para instalar agora.")
+                .setContentText("Toque para instalar. Dá pra deixar pra depois por até 3h.")
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .build()

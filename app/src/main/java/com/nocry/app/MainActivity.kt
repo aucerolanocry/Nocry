@@ -174,6 +174,18 @@ class MainActivity : Activity() {
         conteudo.addView(AtualizarGate(this, info).criar(), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
+    /** tocou "deixar pra depois": tira a tela de atualizacao e volta pra onde estava (ou pra key/inicio) */
+    fun fechaUpdateGate() {
+        if (gateAtualizacaoTag == null) return
+        gateAtualizacaoTag = null
+        gate = false
+        when {
+            !License.valid() -> mostraGate()
+            pilha.isNotEmpty() && views.isNotEmpty() -> { mostra(false); atual()?.aoMostrar() }
+            else -> abreInicial()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = Color.TRANSPARENT

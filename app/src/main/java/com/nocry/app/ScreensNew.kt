@@ -208,8 +208,12 @@ class AtualizarGate(private val act: MainActivity, private val info: Update.Info
         val p = Ui.dp(c, 18)
         col.setPadding(p, Ui.dp(c, 30), p, Ui.dp(c, 28))
 
-        col.addView(marca(c, null, R.drawable.ic_download, "Atualização obrigatória"))
-        col.addView(Ui.text(c, "Saiu uma versão nova e essa aqui ficou pra trás. Baixa e instala pra voltar a usar o NOCRY.", 10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
+        val adiavel = Update.podeAdiar()
+        col.addView(marca(c, null, R.drawable.ic_download, if (adiavel) "Atualização disponível" else "Atualização obrigatória"))
+        col.addView(Ui.text(c,
+            if (adiavel) "Saiu uma versão nova. Dá pra deixar pra depois, mas em ${Update.faltaTexto()} ela vira obrigatória e o app só abre depois de instalar."
+            else "Saiu uma versão nova e essa aqui ficou pra trás. Baixa e instala pra voltar a usar o NOCRY.",
+            10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
         col.addView(Ui.dica(c, Const.AVISO_ATUALIZACOES, Ui.Dica.INFO), Ui.lp(top = 12, c = c))
 
         val card = Ui.card(c, forte = true)
@@ -239,6 +243,12 @@ class AtualizarGate(private val act: MainActivity, private val info: Update.Info
         card.addView(Ui.button(c, "abrir no navegador", Ui.Kind.GHOST, R.drawable.ic_globe) {
             try { c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.pagina))) } catch (_: Exception) {}
         }, Ui.lp(top = 8, c = c))
+        if (adiavel && !instalando) {
+            card.addView(Ui.button(c, "deixar pra depois (${Update.faltaTexto()})", Ui.Kind.GHOST, R.drawable.ic_info) {
+                // o prazo pode ter acabado com a tela aberta: ai so refaz (sem o botao)
+                if (Update.adiar()) act.fechaUpdateGate() else monta()
+            }, Ui.lp(top = 8, c = c))
+        }
         col.addView(card, Ui.lp(top = 18, c = c))
 
         val como = Ui.card(c)

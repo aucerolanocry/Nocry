@@ -68,7 +68,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Sys.acessibilidadeLigada(),
     License.isOwner(),
     Erros.novos(),
-    Comp.ligado(), ocupadoComp
+    Comp.ligado(), ocupadoComp,
+    Update.adiada(act)
 ).joinToString("|")
     private fun ultimaLinha(): String = NLog.ultima()
 
@@ -315,6 +316,13 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val novos = Erros.novos()
         if (novos > 0) {
             add(Ui.faixaAviso(c, if (novos == 1) "1 erro registrado" else "$novos erros registrados", "ver em logs") { act.irAba(3) }, 12)
+        }
+
+        // ---------------- atualização deixada pra depois: lembra o prazo ----------------
+        if (Update.adiada(c)) {
+            add(Ui.faixaAviso(c, "Atualização pendente · obrigatória em ${Update.faltaTexto()}", "instalar") {
+                Update.pendenteReal(act)?.let { act.mostraUpdateGate(it) }
+            }, 12)
         }
 
         // ---------------- SNIPER (todo mundo com key vê) ----------------
