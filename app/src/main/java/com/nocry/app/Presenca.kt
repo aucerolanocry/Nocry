@@ -18,6 +18,7 @@ object Presenca {
     private const val MAX_FILA = 100
     private const val POR_ENVIO = 50
     private const val REVALIDA_MIN = 5 * 60_000L
+    @Volatile private var ultimaManut = 0L
 
     /** true enquanto alguma tela do app esta aberta (a MainActivity liga e desliga) */
     @Volatile var naTela = false
@@ -104,6 +105,11 @@ object Presenca {
             .put("ev", mandar)
         val j = License.post("/v1/ping", corpo) ?: return // sem internet: tenta de novo no proximo
         if (j.optBoolean("ok", false)) {
+            // o dono ligou a manutenção: confere a key agora (aí o app trava na tela de manutenção)
+            if (j.optBoolean("manutencao", false) && Prefs.licBloqueio != "manutencao") {
+                val agora = System.currentTimeMillis()
+                if (agora - ultimaManut > 20_000L) { ultimaManut = agora; License.revalida(c) }
+            }
             if (ids.isNotEmpty()) synchronized(trava) {
                 val atual = lerFila()
                 val resto = JSONArray()

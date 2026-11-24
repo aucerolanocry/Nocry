@@ -385,7 +385,8 @@ async function pingRoute(req, env, ip, country) {
     );
   }
   await env.DB.batch(ops);
-  return json({ ok: true, ts: now });
+  // o app pergunta a cada minuto: se o dono ligou a manutenção, avisa na hora (o dono nunca é travado)
+  return json({ ok: true, ts: now, manutencao: !isOwner && (await emManutencao(env)) });
 }
 
 // ---------------------------------------------------------------- /api (o painel)
