@@ -137,7 +137,9 @@ class MainActivity : Activity() {
             val updPendente = if (gateAtualizacaoTag == null) Update.pendente(applicationContext) else null
             if (updPendente != null) mostraUpdateGate(updPendente)
             // durante a intro nao abre a key por baixo (ela so aparece quando a intro termina)
-            else if (intro == null && !gate && !License.valid()) mostraGate() else if (!gate) atual()?.tick()
+            else if (intro == null && !gate && !License.valid()) mostraGate()
+            else if (!gate) atual()?.tick()
+            else if (Prefs.licBloqueio == "manutencao") Bg.io { License.tick(applicationContext) }   // na tela de manutenção segue conferindo pra voltar sozinho
             h.postDelayed(this, 1200)
         }
     }
@@ -189,6 +191,7 @@ class MainActivity : Activity() {
         setContentView(raiz)
 
         License.saiu = { mostraGate() }
+        License.voltou = { entrou() }
         montaChrome()
         UpdateJob.agenda(applicationContext)
         val updJaConhecida = if (BuildConfig.PREVIEW) null else Update.pendente(applicationContext)
@@ -600,6 +603,7 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         intro?.acabaJa()
         License.saiu = null
+        License.voltou = null
         bg.encerra()
         super.onDestroy()
     }

@@ -141,7 +141,8 @@ class KeyGate(private val act: MainActivity) {
             else {
                 erro = r.texto()
                 // se a key salva foi recusada de vez, esquece ela e guarda o motivo pro aviso de bloqueio
-                if (r.negado()) { Prefs.licKey = null; Prefs.licBloqueio = r.reason }
+                if (r.reason == "manutencao") Prefs.licBloqueio = "manutencao"   // trava sem apagar a key, volta sozinho
+                else if (r.negado()) { Prefs.licKey = null; Prefs.licBloqueio = r.reason }
                 monta()
             }
         }
@@ -154,6 +155,7 @@ private fun bloqueioTexto(motivo: String): Pair<String, String> = when (motivo) 
     "blocked", "device_limit" -> "APARELHO BLOQUEADO" to "Este aparelho foi bloqueado nessa key. Você não pode usar o app. Fale com quem te passou a key."
     "expired" -> "KEY VENCIDA" to "Sua key venceu. Você não pode mais usar o app até renovar. Fale com quem te passou a key."
     "invalid" -> "KEY INVÁLIDA" to "Essa key não existe mais. Confira se digitou certo ou fale com quem te passou a key."
+    "manutencao" -> "EM MANUTENÇÃO" to "O app está em manutenção agora. Sua key continua salva — é só esperar, ele volta sozinho quando a manutenção acabar."
     else -> "CHAVE BLOQUEADA" to "Sua chave está bloqueada. Você não poderá usar o app. Fale com quem te passou a key."
 }
 

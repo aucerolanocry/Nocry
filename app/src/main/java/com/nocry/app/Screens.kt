@@ -250,11 +250,27 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         topo.addView(info, ip)
         hero.addView(topo)
 
-        hero.addView(Ui.chips(c,
-            Ui.pilulaStatus(c, "ADB", if (adb) "ligado" else "off", adb),
-            Ui.pilulaStatus(c, "Perm.", if (perm) "ok" else "falta", perm),
-            Ui.pilulaStatus(c, "Volume", if (acc) "on" else "off", if (acc) true else if (volPreciso) false else null)
-        ), Ui.lp(top = 16, c = c))
+        val pAdb = Ui.pilulaStatus(c, "ADB", if (adb) "ligado" else "off", adb)
+        Ui.clique(pAdb) {
+            if (adb) act.irAba(1)
+            else {
+                Ui.toast(act, "reconectando o ADB...")
+                Bg.io { val ok = Adb.ensure(act); Bg.ui { Ui.toast(act, if (ok) "ADB reconectado" else "não consegui — abra a conexão"); redesenha() } }
+            }
+        }
+        val pPerm = Ui.pilulaStatus(c, "Perm.", if (perm) "ok" else "falta", perm)
+        Ui.clique(pPerm) {
+            if (perm) act.irAba(1)
+            else if (Build.VERSION.SDK_INT >= 33) act.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 11)
+        }
+        val pVol = Ui.pilulaStatus(c, "Volume", if (acc) "on" else "off", if (acc) true else if (volPreciso) false else null)
+        Ui.clique(pVol) {
+            if (acc) Ui.toast(act, "a escuta de volume já está ligada")
+            else if (Sys.ligarAcessibilidade()) Ui.toast(act, "escuta de volume ligada")
+            else Ui.toast(act, "conecte o ADB e toque de novo")
+            redesenha()
+        }
+        hero.addView(Ui.chips(c, pAdb, pPerm, pVol), Ui.lp(top = 16, c = c))
         val falta = !adb || !perm
         hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "abrir conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
         add(hero, 16)

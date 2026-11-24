@@ -275,11 +275,13 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         card.addView(cab)
 
         val filas = if (Sniper.maxFilas >= 300) "${Sniper.filasEntradas.size}" else "${Sniper.filasEntradas.size}/${Sniper.maxFilas}"
-        card.addView(Ui.chips(c,
-            numero(R.drawable.ic_chip, "filas", filas, Sniper.filasEntradas.isNotEmpty()),
-            numero(R.drawable.ic_gamepad, "salas", "${Sniper.salas.size}", Sniper.salas.isNotEmpty()),
-            numero(R.drawable.ic_crown, "apostas", "${Sniper.apostas}", Sniper.apostas > 0)
-        ), Ui.lp(top = 16, c = c))
+        val tFilas = numero(R.drawable.ic_chip, "filas", filas, Sniper.filasEntradas.isNotEmpty())
+        Ui.clique(tFilas) { if (abaAtual != 1) { abaAtual = 1; esconderTeclado(); render() } }
+        val tSalas = numero(R.drawable.ic_gamepad, "salas", "${Sniper.salas.size}", Sniper.salas.isNotEmpty())
+        Ui.clique(tSalas) { if (abaAtual != 0) { abaAtual = 0; esconderTeclado(); render() } }
+        val tApostas = numero(R.drawable.ic_crown, "apostas", "${Sniper.apostas}", Sniper.apostas > 0)
+        Ui.clique(tApostas) { if (abaAtual != 0) { abaAtual = 0; esconderTeclado(); render() } }
+        card.addView(Ui.chips(c, tFilas, tSalas, tApostas), Ui.lp(top = 16, c = c))
 
         val botao = when {
             semToken -> Ui.button(c, "colar o token", Ui.Kind.PRIMARY, R.drawable.ic_key) { abaAtual = 2; render() }

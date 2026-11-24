@@ -133,6 +133,16 @@ async function ehDono(env, key) {
   return ok !== "" && ctEq(k, ok);
 }
 
+// modo manutenção: o dono liga/desliga pelo painel. Quando ligado, todos menos o dono ficam travados.
+async function emManutencao(env) {
+  try {
+    const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'manutencao'").first();
+    return !!(r && String(r.v) === "1");
+  } catch (e) {
+    return false;
+  }
+}
+
 async function init(env) {
   if (ready) return;
   await env.DB.batch([
@@ -242,6 +252,7 @@ async function authRoute(req, env, ip, country) {
 
   if (rec.revoked) return deny("revoked");
   if (rec.exp && rec.exp < now) return deny("expired");
+  if (rec.role !== "owner" && (await emManutencao(env))) return deny("manutencao");
 
   const brand = clean(b.brand, 40);
   const model = clean(b.model, 60);
@@ -435,7 +446,17 @@ async function apiRoute(req, env, ip, op) {
   const ow = owner ? 1 : 0; // staff so ve keys de usuario
   const FILTRO = "(?2 = 1 OR k.role = 'user')";
 
-  if (op === "me") return json({ ok: true, role: me.role, label: me.label });
+  if (op === "me") return json({ ok: true, role: me.role, label: me.label, manutencao: await emManutencao(env) });
+
+  // ligar/desligar manutenção (só o dono). Trava todos menos o dono.
+  if (op === "manutencao") {
+    if (!owner) return json({ ok: false, reason: "denied" }, 403);
+    if (typeof b.ativar === "boolean") {
+      await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('manutencao', ?)").bind(b.ativar ? "1" : "0").run();
+      await addLog(env, now, "OWNER", "", ip, 1, b.ativar ? "manutencao_on" : "manutencao_off");
+    }
+    return json({ ok: true, manutencao: await emManutencao(env) });
+  }
 
   // trocar a key de dono: precisa ser o dono E ter o código de uso único (a key antiga foi passada pra outras pessoas)
   if (op === "owner_key") {
@@ -1326,10 +1347,39 @@ input[type=password]{font-family:var(--mono);text-transform:none}
   }
 
   // ---- ao vivo
+  function cardManutencao() {
+    var on = !!S.me.manutencao, lig = !on;
+    var botao = h("button", {
+      class: "btn " + (on ? "p" : "d"),
+      text: on ? "DESLIGAR" : "LIGAR MANUTENÇÃO",
+      onclick: function () {
+        confirma(
+          lig ? "LIGAR MANUTENÇÃO?" : "DESLIGAR MANUTENÇÃO?",
+          lig ? "TODOS MENOS VOCÊ FICAM TRAVADOS NO APP ATÉ VOCÊ DESLIGAR." : "TODO MUNDO VOLTA A USAR O APP NORMALMENTE.",
+          lig ? "LIGAR" : "DESLIGAR", lig,
+          function () {
+            api("manutencao", { ativar: lig }).then(function (j) {
+              S.me.manutencao = !!j.manutencao; toast(lig ? "MANUTENÇÃO LIGADA" : "MANUTENÇÃO DESLIGADA"); render();
+            }).catch(falha);
+          }
+        );
+      }
+    });
+    return h("div", { class: "card", style: "border-color:" + (on ? "var(--badln)" : "var(--line2)") }, [
+      h("div", { class: "row", style: "justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap" }, [
+        h("div", { style: "min-width:0" }, [
+          h("div", { class: "lbl", text: "MANUTENÇÃO" }),
+          h("div", { class: "lead", style: "margin-top:4px", text: on ? "LIGADA · só você consegue usar o app agora" : "desligada · todo mundo consegue usar o app" })
+        ]),
+        botao
+      ])
+    ]);
+  }
   function vivo() {
     var box = h("div");
     box.appendChild(h("div", { class: "h1", text: "AO VIVO" }));
     box.appendChild(h("div", { class: "lead row" }, [h("span", { class: "pulse" }), h("span", { text: "QUEM ESTÁ COM O APP ABERTO OU RODANDO AGORA · ATUALIZA SOZINHO A CADA 15 S" })]));
+    if (S.me.role === "owner") box.appendChild(cardManutencao());
     if (!S.live) { box.appendChild(carregando()); return box; }
     var L = S.live, on = L.online || [], st = L.stats || {};
     var fg = on.filter(function (s) { return s.fg; }).length;

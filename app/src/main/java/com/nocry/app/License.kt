@@ -43,6 +43,7 @@ object License {
             "expired" -> "Essa key venceu."
             "blocked" -> "Este aparelho foi bloqueado nessa key."
             "device_limit" -> "Essa key já está em outro celular."
+            "manutencao" -> "O app está em manutenção agora. Volta daqui a pouco."
             "limit" -> "Muitas tentativas. Espere uns minutos e tente de novo."
             "net" -> "Sem conexão com o servidor. Confira a internet."
             "nourl" -> "Este app foi gerado sem o endereço do servidor."
@@ -186,6 +187,7 @@ object License {
     /** a key atual vale agora? (confere assinatura, aparelho, vencimento, prazo sem internet e relogio) */
     fun valid(): Boolean {
         if (BuildConfig.PREVIEW) return true
+        if (Prefs.licBloqueio == "manutencao") return false   // em manutenção: trava, mas a key continua salva
         val p = Prefs.licP ?: return false
         val sig = Prefs.licSig ?: return false
         if (cacheSig != sig) {
@@ -325,9 +327,19 @@ object License {
     fun revalida(c: Context): Result {
         val k = Prefs.licKey ?: return Result(false, "invalid")
         ultimaTentativa = System.currentTimeMillis()
+        val estavaManut = Prefs.licBloqueio == "manutencao"
         val r = login(c, k, renovar = true)
-        if (r.negado()) { Prefs.licBloqueio = r.reason; sair("o servidor disse: " + r.reason) }
-        else if (!r.ok) NLog.add("key", "não consegui confirmar agora (" + r.reason + ")")
+        when {
+            // manutenção: trava sem apagar a key (a key fica salva, volta sozinho quando o dono desligar)
+            r.reason == "manutencao" -> {
+                Prefs.licBloqueio = "manutencao"
+                cacheOk = false; cacheSig = null
+                Bg.ui { Sys.app.let { NocryService.sync(it) }; saiu?.invoke() }
+            }
+            r.negado() -> { Prefs.licBloqueio = r.reason; sair("o servidor disse: " + r.reason) }
+            r.ok -> { if (estavaManut) Bg.ui { voltou?.invoke() } }   // manutenção acabou: volta pro app sozinho
+            else -> NLog.add("key", "não consegui confirmar agora (" + r.reason + ")")
+        }
         return r
     }
 
@@ -335,7 +347,8 @@ object License {
     fun tick(c: Context) {
         if (Prefs.licKey == null) return
         val agora = System.currentTimeMillis()
-        if (agora - ts() < STALE_MS) return
+        // em manutenção ignora o prazo e segue conferindo, pra voltar sozinho assim que o dono desligar
+        if (Prefs.licBloqueio != "manutencao" && agora - ts() < STALE_MS) return
         if (agora - ultimaTentativa < RETRY_MS) return
         if (revalidando) return
         revalidando = true
@@ -357,6 +370,9 @@ object License {
 
     /** a tela principal quer saber quando a key some */
     @Volatile var saiu: (() -> Unit)? = null
+
+    /** a tela principal quer saber quando a manutenção acaba (volta pro app sozinho) */
+    @Volatile var voltou: (() -> Unit)? = null
 
     private fun desfaz() {
         try { Engine.desligarModosAntigos() } catch (_: Throwable) {}
