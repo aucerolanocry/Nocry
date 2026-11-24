@@ -1,0 +1,1037 @@
+package com.nocry.app
+
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.drawable.GradientDrawable
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.text.InputType
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import java.io.File
+
+/** Faixa que mostra o degrade atual (cor 1 -> cor 2, no angulo escolhido). */
+class FaixaGrad(c: Context) : View(c) {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val r = RectF()
+    override fun onDraw(cv: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        r.set(0f, 0f, w, h)
+        p.shader = Theme.grad(w, h)
+        cv.drawRoundRect(r, h / 2.2f, h / 2.2f, p)
+    }
+}
+
+// =====================================================================================
+// TELA DA KEY (entrada) com aviso do que e enviado
+// =====================================================================================
+class KeyGate(private val act: MainActivity) {
+    private val dono = FrameLayout(act)
+    private var ocupado = false
+    private var erro = ""
+    private var keyTxt = Prefs.licKey ?: ""
+    private var concordo = Prefs.consentiu
+    private var campo: EditText? = null
+
+    fun criar(): View {
+        monta()
+        // key guardada que deixou de valer (ex.: passou do prazo sem internet): tenta confirmar sozinho
+        val salva = Prefs.licKey
+        if (salva != null && Prefs.consentiu) {
+            Bg.later(300) { tenta(salva) }
+        }
+        return dono
+    }
+
+    private fun monta() {
+        campo?.let { keyTxt = it.text.toString() }
+        dono.removeAllViews()
+        val c = act
+        val sv = ScrollView(c)
+        sv.isFillViewport = true
+        sv.isVerticalScrollBarEnabled = false
+        sv.overScrollMode = View.OVER_SCROLL_NEVER
+        val col = Ui.vbox(c)
+        col.gravity = Gravity.CENTER_VERTICAL
+        val p = Ui.dp(c, 18)
+        col.setPadding(p, Ui.dp(c, 30), p, Ui.dp(c, 28))
+
+        // ---------------- marca ----------------
+        col.addView(marca(c, "N", null, "App desenvolvido por Aucerola"))
+        col.addView(Ui.text(c, "Modo competitivo, toque e otimização direto no celular. Para entrar, use a sua key.", 10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
+
+        // ---------------- aviso de bloqueio (o servidor recusou a key de vez) ----------------
+        if (Prefs.licBloqueio.isNotEmpty()) {
+            val box = Ui.vbox(c)
+            box.background = Botao(c, "danger", 16)
+            val pp = Ui.dp(c, 14)
+            box.setPadding(pp, pp, pp, pp)
+            val (tit, corpo) = bloqueioTexto(Prefs.licBloqueio)
+            box.addView(Ui.text(c, tit, 13f, Ui.BAD, true, mono = true))
+            box.addView(Ui.text(c, corpo, 11f, Ui.TEXT), Ui.lp(top = 6, c = c))
+            col.addView(box, Ui.lp(top = 16, c = c))
+        }
+
+        // ---------------- entrar ----------------
+        val card = Ui.card(c, forte = true)
+        card.addView(Ui.labelIcone(c, R.drawable.ic_key, "entrar com a sua key"))
+        val e = Ui.field(c, "XXXX-XXXX-XXXX-XXXX", false)
+        e.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+        e.setText(keyTxt)
+        e.setSelection(e.text.length)
+        campo = e
+        card.addView(e, Ui.lp(top = 12, c = c))
+        card.addView(Ui.itemChave(c, "Li e concordo", "com o que o NOCRY envia (veja abaixo)", concordo) { v -> concordo = v }, Ui.lp(top = 6, c = c))
+        if (erro.isNotEmpty()) card.addView(Ui.dica(c, erro, Ui.Dica.AVISO), Ui.lp(top = 6, c = c))
+        card.addView(Ui.button(c, if (ocupado) "confirmando..." else "entrar", Ui.Kind.PRIMARY, R.drawable.ic_key) {
+            tenta(e.text.toString())
+        }, Ui.lp(top = 12, c = c))
+        col.addView(card, Ui.lp(top = 18, c = c))
+
+        // ---------------- privacidade ----------------
+        col.addView(Ui.grupo(c, "o que o NOCRY envia", listOf(
+            Ui.item(c, "Seu IP", "o servidor vê sozinho", R.drawable.ic_globe),
+            Ui.item(c, "Marca e modelo", "do celular", R.drawable.ic_info),
+            Ui.item(c, "Versões", "do Android e do app", R.drawable.ic_chip),
+            Ui.item(c, "Código anônimo do aparelho", "não é o IMEI nem o número do telefone", R.drawable.ic_lock),
+            Ui.item(c, "Quando o app está aberto", "e que horas você entrou", R.drawable.ic_stat),
+            Ui.item(c, "O que você usa no app", "bypass e modos ligados, com horário", R.drawable.ic_shield)
+        )), Ui.lp(top = 22, c = c))
+        col.addView(Ui.dica(c, "Não envia telefone, localização, contatos, mensagens nem a lista de apps. Serve para saber quem usa cada key, ver quem está online e poder desativar uma key.", Ui.Dica.OK), Ui.lp(top = 10, c = c))
+
+        // ---------------- rodape ----------------
+        col.addView(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_user, "regra", "1 key = 1 aparelho"),
+            Ui.infoBox(c, R.drawable.ic_chip, "aparelho", License.devId(c).take(8))
+        ), Ui.lp(top = 18, c = c))
+        val v = Ui.text(c, "versão ${License.versao(c)} · sem key? Peça a quem te passou o app.", 10f, Ui.MUTED)
+        v.gravity = Gravity.CENTER
+        col.addView(v, Ui.lp(top = 12, c = c))
+
+        sv.addView(col, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        dono.addView(sv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    private fun tenta(key: String) {
+        if (ocupado) return
+        val k = key.trim()
+        if (k.length < 4) { erro = "Digite a sua key."; monta(); return }
+        if (!concordo) { erro = "Marque \"Li e concordo\" para continuar."; monta(); return }
+        ocupado = true
+        erro = ""
+        keyTxt = k
+        monta()
+        Prefs.consentiu = true
+        Bg.run({ License.login(act.applicationContext, k) }) { r ->
+            ocupado = false
+            if (r.ok) act.entrou()
+            else {
+                erro = r.texto()
+                // se a key salva foi recusada de vez, esquece ela e guarda o motivo pro aviso de bloqueio
+                if (r.reason == "manutencao") Prefs.licBloqueio = "manutencao"   // trava sem apagar a key, volta sozinho
+                else if (r.negado()) { Prefs.licKey = null; Prefs.licBloqueio = r.reason }
+                monta()
+            }
+        }
+    }
+}
+
+/** título + corpo do aviso de bloqueio na tela da key, pelo motivo que o servidor mandou */
+private fun bloqueioTexto(motivo: String): Pair<String, String> = when (motivo) {
+    "revoked" -> "CHAVE BLOQUEADA" to "Sua chave foi bloqueada. Você não pode mais usar o app. Fale com quem te passou a key."
+    "blocked", "device_limit" -> "APARELHO BLOQUEADO" to "Este aparelho foi bloqueado nessa key. Você não pode usar o app. Fale com quem te passou a key."
+    "expired" -> "KEY VENCIDA" to "Sua key venceu. Você não pode mais usar o app até renovar. Fale com quem te passou a key."
+    "invalid" -> "KEY INVÁLIDA" to "Essa key não existe mais. Confira se digitou certo ou fale com quem te passou a key."
+    "manutencao" -> "EM MANUTENÇÃO" to "O app está em manutenção agora. Sua key continua salva — é só esperar, ele volta sozinho quando a manutenção acabar."
+    else -> "CHAVE BLOQUEADA" to "Sua chave está bloqueada. Você não poderá usar o app. Fale com quem te passou a key."
+}
+
+/** cabecalho de marca das telas de bloqueio (key e atualizacao): icone, nome em degrade e uma linha */
+private fun marca(c: Context, letra: String?, ico: Int?, sub: String): View {
+    val r = Ui.hbox(c)
+    val logo = FrameLayout(c)
+    logo.background = Botao(c, "icoOn", 18)
+    if (ico != null) {
+        logo.addView(Ui.icone(c, ico, Theme.sobreGrad(), 28), FrameLayout.LayoutParams(Ui.dp(c, 28), Ui.dp(c, 28), Gravity.CENTER))
+    } else {
+        val n = Ui.text(c, letra ?: "N", 30f, Theme.sobreGrad(), true, mono = true)
+        n.gravity = Gravity.CENTER
+        logo.addView(n, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+    val lg = LinearLayout.LayoutParams(Ui.dp(c, 60), Ui.dp(c, 60))
+    lg.rightMargin = Ui.dp(c, 14)
+    r.addView(logo, lg)
+    val col = Ui.vbox(c)
+    col.addView(Ui.gradTexto(c, "NOCRY", 30f))
+    col.addView(Ui.text(c, sub, 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 2, c = c))
+    r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+    return r
+}
+
+// =====================================================================================
+// ATUALIZACAO OBRIGATORIA (bloqueia o app ate instalar a versao nova)
+// =====================================================================================
+class AtualizarGate(private val act: MainActivity, private val info: Update.Info) {
+    private val dono = FrameLayout(act)
+    private var instalando = false
+    private var percent: Float? = null
+    private var msg = ""
+    private var falhou = false
+
+    fun criar(): View {
+        monta()
+        return dono
+    }
+
+    private fun monta() {
+        dono.removeAllViews()
+        val c = act
+        val sv = ScrollView(c)
+        sv.isFillViewport = true
+        sv.isVerticalScrollBarEnabled = false
+        sv.overScrollMode = View.OVER_SCROLL_NEVER
+        val col = Ui.vbox(c)
+        col.gravity = Gravity.CENTER_VERTICAL
+        val p = Ui.dp(c, 18)
+        col.setPadding(p, Ui.dp(c, 30), p, Ui.dp(c, 28))
+
+        val adiavel = Update.podeAdiar()
+        col.addView(marca(c, null, R.drawable.ic_download, if (adiavel) "Atualização disponível" else "Atualização obrigatória"))
+        col.addView(Ui.text(c,
+            if (adiavel) "Saiu uma versão nova. Dá pra deixar pra depois, mas em ${Update.faltaTexto()} ela vira obrigatória e o app só abre depois de instalar."
+            else "Saiu uma versão nova e essa aqui ficou pra trás. Baixa e instala pra voltar a usar o NOCRY.",
+            10.5f, Ui.MUTED), Ui.lp(top = 14, c = c))
+        col.addView(Ui.dica(c, Const.AVISO_ATUALIZACOES, Ui.Dica.INFO), Ui.lp(top = 12, c = c))
+
+        val card = Ui.card(c, forte = true)
+        card.addView(Ui.labelIcone(c, R.drawable.ic_sparkle, "versão nova"))
+        card.addView(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_info, "você tem", Update.versaoInstalada(c), Ui.WARN),
+            Ui.infoBox(c, R.drawable.ic_download, "nova", info.tag, Ui.OK)
+        ), Ui.lp(top = 12, c = c))
+        if (instalando) {
+            val bp = BarraProgresso(c)
+            bp.define(percent)
+            card.addView(bp, Ui.lp(top = 16, h = Ui.dp(c, 8), c = c))
+            val pz = percent
+            card.addView(Ui.text(c, if (pz == null) "Preparando..." else "Baixando ${(pz * 100).toInt()}%", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(top = 6, c = c))
+        }
+        if (msg.isNotEmpty() && !instalando) card.addView(Ui.dica(c, msg, if (falhou) Ui.Dica.AVISO else Ui.Dica.OK), Ui.lp(top = 12, c = c))
+        card.addView(Ui.button(c, if (instalando) "baixando..." else "baixar e instalar agora", Ui.Kind.PRIMARY, R.drawable.ic_download) {
+            if (!instalando) {
+                instalando = true; percent = null; msg = ""; falhou = false; monta()
+                Update.baixarEInstalar(c, info,
+                    onProgresso = { v -> percent = v; monta() },
+                    onPronto = { instalando = false; falhou = false; msg = "Baixado! Confirme a instalação na tela que abriu — depois volte aqui."; monta() },
+                    onErro = { e -> instalando = false; falhou = true; msg = "Falhou: $e"; monta() }
+                )
+            }
+        }, Ui.lp(top = 14, c = c))
+        card.addView(Ui.button(c, "abrir no navegador", Ui.Kind.GHOST, R.drawable.ic_globe) {
+            try { c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.pagina))) } catch (_: Exception) {}
+        }, Ui.lp(top = 8, c = c))
+        if (adiavel && !instalando) {
+            card.addView(Ui.button(c, "deixar pra depois (${Update.faltaTexto()})", Ui.Kind.GHOST, R.drawable.ic_info) {
+                // o prazo pode ter acabado com a tela aberta: ai so refaz (sem o botao)
+                if (Update.adiar()) act.fechaUpdateGate() else monta()
+            }, Ui.lp(top = 8, c = c))
+        }
+        col.addView(card, Ui.lp(top = 18, c = c))
+
+        val como = Ui.card(c)
+        como.addView(Ui.label(c, "como instalar"))
+        como.addView(Ui.lista(c, listOf(
+            "Toque em baixar e instalar agora",
+            "Confirme na tela de instalação do Android",
+            "Abra o NOCRY de novo — sua key e seus ajustes continuam"
+        )), Ui.lp(top = 12, c = c))
+        col.addView(como, Ui.lp(top = 12, c = c))
+
+        sv.addView(col, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        dono.addView(sv, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+}
+
+// =====================================================================================
+// ORGANIZAR O INICIO (ordem e quais modos aparecem)
+// =====================================================================================
+class OrganizarScreen(a: MainActivity) : Screen(a) {
+    override val titulo = "Organizar início"
+
+    override fun key(): String = Prefs.ordem + "|" + Prefs.ocultos
+
+    private fun mini(c: Context, ico: Int, ativo: Boolean, desc: String, acao: () -> Unit): View {
+        val f = FrameLayout(c)
+        f.background = Botao(c, if (ativo) "icoOn" else "ico")
+        f.addView(Ui.icone(c, ico, if (ativo) Color.WHITE else Ui.MUTED, 16), FrameLayout.LayoutParams(Ui.dp(c, 16), Ui.dp(c, 16), Gravity.CENTER))
+        f.contentDescription = desc
+        Ui.clique(f, acao)
+        return f
+    }
+
+    override fun render() {
+        limpa()
+        val c = act
+        cabecalho("Organizar início", "Escolha a ordem dos modos. O olho mostra ou esconde cada um.")
+
+        val lista = Atalhos.ordem()
+        val ocultos = lista.filter { Atalhos.escondido(it.id) }.map { it.id }
+        val visiveis = lista.size - ocultos.size
+        add(Ui.chips(c,
+            Ui.infoBox(c, R.drawable.ic_eye, "no início", visiveis.toString(), Ui.OK),
+            Ui.infoBox(c, R.drawable.ic_xcircle, "escondidos", ocultos.size.toString())
+        ), 12)
+        val linhas = ArrayList<View>()
+        for ((i, at) in lista.withIndex()) {
+            val oculto = at.id in ocultos
+            val r = Ui.hbox(c)
+            r.setPadding(0, Ui.dp(c, 10), 0, Ui.dp(c, 10))
+            val num = Ui.text(c, (i + 1).toString(), 10f, Ui.MUTED, true, mono = true)
+            num.gravity = Gravity.CENTER
+            r.addView(num, LinearLayout.LayoutParams(Ui.dp(c, 18), ViewGroup.LayoutParams.WRAP_CONTENT))
+            val ib = Ui.caixaIcone(c, at.ico, !oculto, 36)
+            val ip = LinearLayout.LayoutParams(Ui.dp(c, 36), Ui.dp(c, 36))
+            ip.leftMargin = Ui.dp(c, 6)
+            ip.rightMargin = Ui.dp(c, 12)
+            r.addView(ib, ip)
+            val tx = Ui.vbox(c)
+            tx.addView(Ui.text(c, at.nome, 13f, if (oculto) Ui.MUTED else Ui.TEXT, true))
+            tx.addView(Ui.text(c, if (oculto) "escondido" else at.desc, 10.5f, Ui.MUTED), Ui.lp(top = 1, c = c))
+            r.addView(tx, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+            fun botao(v: View) {
+                val lp = LinearLayout.LayoutParams(Ui.dp(c, 32), Ui.dp(c, 32))
+                lp.leftMargin = Ui.dp(c, 6)
+                r.addView(v, lp)
+            }
+            botao(mini(c, R.drawable.ic_up, false, "Subir") { mover(i, -1) })
+            botao(mini(c, R.drawable.ic_down, false, "Descer") { mover(i, 1) })
+            botao(mini(c, R.drawable.ic_eye, !oculto, if (oculto) "Mostrar" else "Esconder") { alterna(at.id) })
+            linhas.add(r)
+        }
+        add(Ui.grupo(c, "modos", linhas), 20)
+        add(Ui.button(c, "voltar à ordem padrão", Ui.Kind.GHOST, R.drawable.ic_sparkle) { Atalhos.padrao(); redesenha() }, 18)
+    }
+
+    private fun mover(i: Int, dir: Int) {
+        val l = Atalhos.ordem().toMutableList()
+        val j = i + dir
+        if (j < 0 || j >= l.size) return
+        val t = l[i]
+        l[i] = l[j]
+        l[j] = t
+        Atalhos.salva(l, l.filter { Atalhos.escondido(it.id) }.map { it.id })
+        redesenha()
+    }
+
+    private fun alterna(id: String) {
+        val l = Atalhos.ordem()
+        val oc = l.filter { Atalhos.escondido(it.id) }.map { it.id }.toMutableList()
+        if (id in oc) oc.remove(id) else oc.add(id)
+        Atalhos.salva(l, oc)
+        redesenha()
+    }
+}
+
+// =====================================================================================
+// ESTUDIO (temas, cores, cartoes, fundo, fontes e efeitos)
+// =====================================================================================
+class EstudioScreen(a: MainActivity) : Screen(a) {
+    override val titulo = "Estúdio"
+    override val aba = 2
+
+    private var ocupado = false
+    private var msg = ""
+    private var ocupadoMus = false
+    private var msgMus = ""
+
+    companion object {
+        private const val REQ_MIDIA = 4101
+        private const val REQ_MUSICA = 4102
+        private const val LIMITE_MB = 400
+        private const val LIMITE_MUS_MB = 40
+
+        /** fundos escuros pra escolher (o texto do app e claro, entao a base precisa ser escura) */
+        private val BASES = listOf(
+            Theme.Cor("Carvão", 0xFF0A0A0E.toInt()),
+            Theme.Cor("Vinho", 0xFF0A0506.toInt()),
+            Theme.Cor("Noite", 0xFF05060F.toInt()),
+            Theme.Cor("Floresta", 0xFF020A04.toInt()),
+            Theme.Cor("Roxo", 0xFF0D0221.toInt()),
+            Theme.Cor("Âmbar", 0xFF0B0805.toInt()),
+            Theme.Cor("Ameixa", 0xFF110A18.toInt()),
+            Theme.Cor("Grafite", 0xFF0E0F13.toInt())
+        )
+    }
+
+    override fun key(): String = listOf(
+        Prefs.bgTipo, Prefs.bgPreset, Prefs.bgArquivo, Prefs.bgEscuro, Prefs.bgBlur, Prefs.accent, Prefs.accent2, Prefs.baseCor,
+        Prefs.angulo, Prefs.tema, Prefs.cartao, Prefs.vidro, Prefs.raio, Prefs.brilho, Prefs.borda, Prefs.fonte, Prefs.escala,
+        Prefs.maiusc, Prefs.anim, Prefs.particulas, Prefs.scanner, Prefs.pulso, Prefs.vibrar, Prefs.vibrarAvisos, ocupado, msg,
+        Prefs.introModo, Prefs.introSom, Prefs.introMusica, Prefs.introInicio, ocupadoMus, msgMus,
+        Prefs.fonteTexto, Prefs.apelido, Prefs.navNomes, Prefs.somClique, Prefs.temaSalvo(1), Prefs.temaSalvo(2), Prefs.temaSalvo(3)
+    ).joinToString("|")
+
+    private fun arquivo(): File? = Prefs.bgArquivo?.let { File(act.filesDir, it) }?.takeIf { it.isFile }
+
+    private fun mb(f: File): String {
+        val m = f.length() / 1048576.0
+        return if (m >= 10) "${m.toInt()} MB" else String.format(java.util.Locale.US, "%.1f MB", m)
+    }
+
+    /** mudou algo que afeta todas as telas; a partir daqui o visual e "personalizado" */
+    private fun muda() { Prefs.tema = "custom"; act.reaplica() }
+
+    /** mudou so o fundo */
+    private fun fundo() { act.refazFundo(); redesenha() }
+
+    private fun secao(c: Context, titulo: String, forte: Boolean = false, icone: Int? = null): LinearLayout {
+        val k = Ui.card(c, forte = forte)
+        k.addView(if (icone != null) Ui.labelIcone(c, icone, titulo) else Ui.label(c, titulo))
+        return k
+    }
+
+    private fun linhaRolavel(c: Context, itens: List<View>): HorizontalScrollView {
+        val hs = HorizontalScrollView(c)
+        hs.isHorizontalScrollBarEnabled = false
+        hs.overScrollMode = View.OVER_SCROLL_NEVER
+        val l = Ui.hbox(c)
+        l.gravity = Gravity.TOP
+        for (v in itens) l.addView(v)
+        hs.addView(l, ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        return hs
+    }
+
+    /** aba aberta (fica guardada enquanto a tela existe, inclusive quando o visual e reaplicado) */
+    private var abaEst = 0
+    private val ABAS_EST = listOf(
+        R.drawable.ic_sparkle to "temas",
+        R.drawable.ic_brush to "cores",
+        R.drawable.ic_image to "cartões",
+        R.drawable.ic_video to "fundo",
+        R.drawable.ic_sliders to "texto",
+        R.drawable.ic_bolt to "efeitos",
+        R.drawable.ic_play to "intro"
+    )
+
+    override fun render() {
+        limpa()
+        val c = act
+        add(Ui.dica(c, "Deixe o NOCRY do seu jeito. Tudo muda na hora e fica salvo.", Ui.Dica.INFO), 0)
+        add(Ui.abas(c, ABAS_EST, abaEst) { i -> abaEst = i; redesenha() }, 12)
+        when (abaEst) {
+            0 -> abaTemas(c)
+            1 -> abaCores(c)
+            2 -> abaCartoes(c)
+            3 -> add(secaoFundo(c), 14)
+            4 -> abaTexto(c)
+            5 -> abaEfeitos(c)
+            else -> add(secaoIntro(c), 14)
+        }
+    }
+
+    // ---------------- temas prontos (grade de 2 colunas) ----------------
+    private fun abaTemas(c: Context) {
+        val lista = Temas.lista
+        var i = 0
+        while (i < lista.size) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.TOP
+            for (k in i until i + 2) {
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                if (k % 2 == 1) lp.leftMargin = Ui.dp(c, 12)
+                if (k < lista.size) linha.addView(cartaTema(c, lista[k]), lp) else linha.addView(View(c), lp)
+            }
+            add(linha, if (i == 0) 14 else 14)
+            i += 2
+        }
+        if (Prefs.tema == "custom") add(Ui.dica(c, "Você está com um visual personalizado. Tocar num tema troca tudo de uma vez.", Ui.Dica.INFO), 16)
+        add(meusTemas(c), 22)
+        add(Ui.grupo(c, "outros", listOf(
+            Ui.item(c, "Organizar o início", "ordem e visibilidade dos modos", R.drawable.ic_sliders) { act.abre(OrganizarScreen(act)) },
+            Ui.item(c, "Voltar ao tema Brasa", "cores, fonte, cartões, fundo e efeitos padrão", R.drawable.ic_sparkle) {
+                Ui.dialogConfirma(act, "TEMA PADRÃO", "Cores, fonte, cartões, fundo e efeitos voltam ao tema Brasa. O vídeo ou a imagem que você escolheu continua guardado.", "VOLTAR") {
+                    restaura()
+                }
+            }
+        )), 22)
+    }
+
+    // ---------------- meus temas: 3 visuais guardados + codigo pra passar pros amigos ----------------
+    private fun meusTemas(c: Context): View {
+        val itens = ArrayList<View>()
+        // o visual que a pessoa usava antes do Vidro virar o padrao (1.0.53)
+        Prefs.visualAntigo?.let { antigo ->
+            val v = Ui.item(c, "Visual de antes", "o que você usava antes do Vidro · toque pra voltar · segure pra apagar",
+                R.drawable.ic_sparkle, "usar") {
+                if (VisualSalvo.aplica(antigo)) act.reaplica() else Ui.toast(act, "Esse visual guardado estragou")
+            }
+            v.setOnLongClickListener {
+                Ui.dialogConfirma(act, "APAGAR O VISUAL DE ANTES", "Ele some daqui (o visual de agora não muda).", "APAGAR") {
+                    Prefs.visualAntigo = null
+                    redesenha()
+                }
+                true
+            }
+            itens.add(v)
+        }
+        for (i in 1..3) {
+            val salvo = Prefs.temaSalvo(i)
+            val v = Ui.item(c, "Meu tema $i",
+                if (salvo == null) "vazio · toque pra guardar o visual de agora" else "toque pra usar · segure pra guardar o de agora",
+                R.drawable.ic_sparkle, if (salvo == null) "guardar" else "usar") {
+                if (salvo == null) {
+                    Prefs.salvaTema(i, VisualSalvo.atual())
+                    Ui.toast(act, "Guardado no meu tema $i")
+                    redesenha()
+                } else if (VisualSalvo.aplica(salvo)) act.reaplica() else Ui.toast(act, "Esse tema guardado estragou. Guarde de novo.")
+            }
+            v.setOnLongClickListener {
+                Ui.dialogConfirma(act, "GUARDAR NO MEU TEMA $i", "O visual de agora fica guardado aqui (o que estava antes some).", "GUARDAR") {
+                    Prefs.salvaTema(i, VisualSalvo.atual())
+                    Ui.toast(act, "Guardado no meu tema $i")
+                    redesenha()
+                }
+                true
+            }
+            itens.add(v)
+        }
+        itens.add(Ui.item(c, "Copiar o código do visual", "mande pros amigos: eles colam e ficam com o mesmo visual", R.drawable.ic_log) {
+            val cm = act.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("NOCRY visual", VisualSalvo.codigo()))
+            Ui.toast(act, "Código copiado")
+        })
+        itens.add(Ui.item(c, "Usar um código", "cole o código que um amigo te mandou", R.drawable.ic_brush) {
+            Ui.dialogTexto(act, "USAR UM CÓDIGO", "cole aqui o código NOCRY1:...") { s ->
+                val txt = VisualSalvo.deCodigo(s)
+                if (txt != null && VisualSalvo.aplica(txt)) act.reaplica() else Ui.toast(act, "Esse código não é de um visual do NOCRY")
+            }
+        })
+        return Ui.grupo(c, "meus temas", itens)
+    }
+
+    private fun cartaTema(c: Context, t: Tema): View {
+        val sel = Prefs.tema == t.id
+        val box = Ui.vbox(c)
+        // base escura com borda fina: o nome do tema fica legivel em cima de qualquer fundo
+        box.background = if (sel) Ui.shape(c, Theme.alpha(0xFF0B0A12.toInt(), Theme.op(0xD8, 0.3f)), Ui.raioPeq(16), Theme.alpha(Theme.accent, 0x99), 1)
+            else Ui.peca(c, Ui.raioPeq(16), 0xD8)
+        val pd = Ui.dp(c, 6)
+        box.setPadding(pd, pd, pd, Ui.dp(c, 10))
+        box.addView(Miniatura.tema(c, t, sel), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 112)))
+        val nome = Ui.text(c, t.nome, 12.5f, if (sel) Ui.RED else Ui.TEXT, true, mono = true)
+        nome.setPadding(Ui.dp(c, 4), 0, Ui.dp(c, 4), 0)
+        box.addView(nome, Ui.lp(top = 9, c = c))
+        val tag = Ui.text(c, t.tag, 10.5f, Ui.MUTED).also { it.maxLines = 1; it.ellipsize = android.text.TextUtils.TruncateAt.END }
+        tag.setPadding(Ui.dp(c, 4), 0, Ui.dp(c, 4), 0)
+        box.addView(tag, Ui.lp(top = 2, c = c))
+        Ui.clique(box) { Temas.aplica(t); act.reaplica() }
+        return box
+    }
+
+    // ---------------- cores ----------------
+    private fun abaCores(c: Context) {
+        val k = secao(c, "degradê", forte = true, icone = R.drawable.ic_brush)
+        k.addView(FaixaGrad(c), Ui.lp(top = 12, h = Ui.dp(c, 18), c = c))
+        k.addView(Ui.text(c, "Degradês prontos", 12.5f, Ui.TEXT, true), Ui.lp(top = 16, c = c))
+        k.addView(gradientes(c), Ui.lp(top = 10, c = c))
+        k.addView(Ui.slider(c, "Ângulo do degradê", Prefs.angulo, 0, 360, "°") { x -> Prefs.angulo = x; muda() }, Ui.lp(top = 16, c = c))
+        add(k, 14)
+        val k1 = secao(c, "cor 1", icone = R.drawable.ic_brush)
+        k1.addView(Ui.cores(c, Theme.PALETA, Prefs.accent, { v -> Prefs.accent = v; muda() }, { corPropria(1) }), Ui.lp(top = 12, c = c))
+        add(k1, 12)
+        val k2 = secao(c, "cor 2", icone = R.drawable.ic_brush)
+        k2.addView(Ui.cores(c, Theme.PALETA, Prefs.accent2, { v -> Prefs.accent2 = v; muda() }, { corPropria(2) }), Ui.lp(top = 12, c = c))
+        add(k2, 12)
+        val k3 = secao(c, "cor do fundo do app", icone = R.drawable.ic_image)
+        k3.addView(Ui.cores(c, BASES, Prefs.baseCor, { v -> Prefs.baseCor = v; muda() }, { corPropria(3) }), Ui.lp(top = 12, c = c))
+        add(k3, 12)
+    }
+
+    /** um toque: cartoes sem fundo, fundo sem escurecer e sem desfoque. Mostra o maximo do video/foto */
+    private fun botaoTransparente(c: Context): View =
+        Ui.button(c, "ver o fundo inteiro (tudo transparente)", Ui.Kind.GHOST, R.drawable.ic_image) {
+            Prefs.vidro = 0
+            Prefs.bgEscuro = 0
+            Prefs.bgBlur = 0
+            Ui.toast(act, "TUDO TRANSPARENTE · AJUSTE NOS CONTROLES SE QUISER UM POUCO MAIS ESCURO")
+            act.ajustaFundo()
+            muda()
+        }
+
+    // ---------------- cartoes e botoes ----------------
+    private fun abaCartoes(c: Context) {
+        val v = secao(c, "estilo dos cartões", forte = true, icone = R.drawable.ic_image)
+        val estilos = listOf("vidro", "contorno", "solido", "hud")
+        v.addView(Ui.segmento(c, listOf("Vidro", "Contorno", "Sólido", "HUD"), estilos.indexOf(Prefs.cartao).coerceAtLeast(0)) { i ->
+            Prefs.cartao = estilos[i]
+            muda()
+        }, Ui.lp(top = 12, c = c))
+        v.addView(Ui.text(c, when (Prefs.cartao) {
+            "vidro" -> "Translúcido, com brilho no topo."
+            "contorno" -> "Só a borda neon, bem leve."
+            "solido" -> "Cor cheia, visual de luxo."
+            else -> "Cantos cortados, estilo painel de jogo."
+        }, 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
+        add(v, 14)
+        val a = secao(c, "ajustes finos", icone = R.drawable.ic_sliders)
+        a.addView(Ui.slider(c, "Brilho neon", Prefs.brilho, 0, 100, "%") { x -> Prefs.brilho = x; muda() }, Ui.lp(top = 14, c = c))
+        a.addView(Ui.slider(c, "Opacidade dos cartões", Prefs.vidro, 0, 95, "%") { x -> Prefs.vidro = x; muda() }, Ui.lp(top = 12, c = c))
+        a.addView(Ui.text(c, "Mais baixo = mais transparente, aparece mais o fundo. Em 0 fica só a borda. Vale pra todos os estilos. Pra ver ainda mais, baixe também \"Escurecer o fundo\" na aba FUNDO, ou use o botão abaixo.", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+        a.addView(botaoTransparente(c), Ui.lp(top = 10, c = c))
+        a.addView(Ui.slider(c, "Arredondamento", Prefs.raio, 2, 30, " dp") { x -> Prefs.raio = x; muda() }, Ui.lp(top = 12, c = c))
+        a.addView(Ui.slider(c, "Espessura da borda", Prefs.borda, 1, 4, " dp") { x -> Prefs.borda = x; muda() }, Ui.lp(top = 12, c = c))
+        add(a, 12)
+    }
+
+    // ---------------- texto ----------------
+    private fun abaTexto(c: Context) {
+        val t = secao(c, "letra dos títulos", forte = true, icone = R.drawable.ic_sliders)
+        t.addView(fontes(c), Ui.lp(top = 12, c = c))
+        add(t, 14)
+        val tc = secao(c, "letra do texto", icone = R.drawable.ic_sliders)
+        tc.addView(Ui.text(c, "A letra das explicações. \"Igual ao título\" usa a que vem junto com a letra dos títulos.", 11f, Ui.MUTED), Ui.lp(top = 8, c = c))
+        tc.addView(fontesTexto(c), Ui.lp(top = 12, c = c))
+        add(tc, 12)
+        add(Ui.grupo(c, "texto", listOf(
+            Ui.itemChave(c, "Tudo em maiúsculo", "todos os textos do app em caixa alta (desligado: só as primeiras letras)", Prefs.maiusc, R.drawable.ic_brush) { x -> Prefs.maiusc = x; muda() },
+            Ui.item(c, "Seu nome no início", "aparece na saudação (vazio = o nome da key)", R.drawable.ic_brush, Prefs.apelido.ifEmpty { "da key" }) {
+                Ui.dialogTexto(act, "SEU NOME", "como você quer ser chamado") { v -> Prefs.apelido = v; redesenha() }
+            }
+        )), 18)
+        val s = Ui.card(c)
+        s.addView(Ui.slider(c, "Tamanho do texto", Prefs.escala, 85, 130, "%") { x -> Prefs.escala = x; muda() })
+        add(s, 10)
+    }
+
+    // ---------------- efeitos ----------------
+    private fun abaEfeitos(c: Context) {
+        add(Ui.grupo(c, "efeitos visuais", listOf(
+            Ui.itemChave(c, "Animações", "fundo animado, anel e transições", Prefs.anim, R.drawable.ic_play) { x -> Prefs.anim = x; muda() },
+            Ui.itemChave(c, "Partículas", "brasas, neve, pétalas, chuva de código", Prefs.particulas, R.drawable.ic_sparkle) { x -> Prefs.particulas = x; muda() },
+            Ui.itemChave(c, "Linhas de scanner", "listras e uma faixa de luz que varre a tela", Prefs.scanner, R.drawable.ic_sliders) { x -> Prefs.scanner = x; muda() },
+            Ui.itemChave(c, "Brilho pulsando", "o anel do início respira", Prefs.pulso, R.drawable.ic_stat) { x -> Prefs.pulso = x; muda() }
+        )), 14)
+        add(Ui.grupo(c, "barra de baixo", listOf(
+            Ui.itemChave(c, "Nome em todos os botões", "mostra o nome embaixo de cada ícone (desligado: só o da aba aberta)", Prefs.navNomes, R.drawable.ic_home) { x -> Prefs.navNomes = x; act.reaplica() }
+        )), 18)
+        add(Ui.grupo(c, "toque", listOf(
+            Ui.itemChave(c, "Som de clique", "um clique curto ao tocar nos botões", Prefs.somClique, R.drawable.ic_volume) { x -> Prefs.somClique = x; redesenha() },
+            Ui.itemChave(c, "Vibrar ao tocar", "vibração curta nos botões", Prefs.vibrar, R.drawable.ic_bolt) { x -> Prefs.vibrar = x; muda() },
+            Ui.itemChave(c, "Vibrar nos avisos", "bypass e toque: 1 = aplicou · 2 = restaurou · 3 = falhou", Prefs.vibrarAvisos, R.drawable.ic_warn) { x -> Prefs.vibrarAvisos = x; muda() }
+        )), 18)
+    }
+
+    // ---------------- intro de abertura ----------------
+    private fun secaoIntro(c: Context): View {
+        val s = secao(c, "intro de abertura", icone = R.drawable.ic_play)
+        s.addView(Ui.text(c, "Abertura de cinema: a catedral na névoa, as torres e o NOCRY entrando no ritmo da música. Toca inteira (5 s) antes da tela da key.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+
+        val modos = listOf("sempre", "novo", "off")
+        s.addView(Ui.segmento(c, listOf("Sempre", "1ª vez", "Desligada"), modos.indexOf(Prefs.introModo).coerceAtLeast(0)) { i ->
+            Prefs.introModo = modos[i]
+            redesenha()
+        }, Ui.lp(top = 12, c = c))
+        s.addView(Ui.text(c, when (Prefs.introModo) {
+            "novo" -> "Só na primeira vez que o app abre depois de instalar ou atualizar."
+            "off" -> "Não toca ao abrir. Você ainda pode assistir pelo botão lá embaixo."
+            else -> "Toca sempre que o app abre do zero. Voltar de outro app não repete."
+        }, 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
+
+        s.addView(Ui.grupo(c, null, listOf(Ui.itemChave(c, "Som da intro", "música e efeitos (segue o volume de mídia)", Prefs.introSom, R.drawable.ic_volume) { x ->
+            Prefs.introSom = x
+            redesenha()
+        })), Ui.lp(top = 14, c = c))
+
+        val mus = Intro.musica(c)
+        if (mus != null) {
+            s.addView(Ui.text(c, "música: " + (Prefs.introMusicaNome ?: "escolhida") + " · " + mb(mus), 12.5f, Ui.OK, true, mono = true), Ui.lp(top = 14, c = c))
+            s.addView(Ui.grupo(c, null, listOf(Ui.item(c, "Começar em", "o trecho da música que toca na intro (0 a 600 s)", R.drawable.ic_play, "${Prefs.introInicio} s") {
+                Ui.dialogNumero(act, "COMEÇAR EM", "segundos", 0, 600, Prefs.introInicio) { v -> Prefs.introInicio = v; redesenha() }
+            })), Ui.lp(top = 8, c = c))
+            s.addView(Ui.button(c, if (ocupadoMus) "copiando..." else "trocar a música", Ui.Kind.PRIMARY, R.drawable.ic_volume) {
+                if (!ocupadoMus) escolherMusica()
+            }, Ui.lp(top = 8, c = c))
+            s.addView(Ui.button(c, "voltar à música original", Ui.Kind.GHOST, R.drawable.ic_trash) { removeMusica() }, Ui.lp(top = 8, c = c))
+        } else {
+            s.addView(Ui.text(c, "música: a original da intro", 12.5f, Ui.TEXT, true, mono = true), Ui.lp(top = 14, c = c))
+            s.addView(Ui.button(c, if (ocupadoMus) "copiando..." else "escolher uma música do celular", Ui.Kind.PRIMARY, R.drawable.ic_volume) {
+                if (!ocupadoMus) escolherMusica()
+            }, Ui.lp(top = 10, c = c))
+        }
+        if (msgMus.isNotEmpty()) s.addView(Ui.text(c, msgMus, 12.5f, Ui.WARN, true), Ui.lp(top = 8, c = c))
+        s.addView(Ui.text(c, "A música é copiada para dentro do app e nada é enviado pela internet. Só toca o tempo da intro (uns 5 segundos) e vai baixando no final.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+
+        s.addView(Ui.button(c, "assistir agora", Ui.Kind.PRIMARY, R.drawable.ic_play) { act.tocaIntro() }, Ui.lp(top = 14, c = c))
+        return s
+    }
+
+    @Suppress("DEPRECATION")
+    private fun escolherMusica() {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        i.addCategory(Intent.CATEGORY_OPENABLE)
+        i.type = "audio/*"
+        act.aoResultado = { req, res, data ->
+            val u = data?.data
+            if (req == REQ_MUSICA && res == Activity.RESULT_OK && u != null) copiaMusica(u)
+        }
+        try {
+            act.startActivityForResult(i, REQ_MUSICA)
+        } catch (_: Exception) {
+            Ui.toast(act, "Não consegui abrir os arquivos")
+        }
+    }
+
+    private class CopiaMus(val arquivo: String?, val nome: String, val erro: String)
+
+    private fun copiaMusica(uri: Uri) {
+        ocupadoMus = true
+        msgMus = ""
+        redesenha()
+        val ctx = act.applicationContext
+        Bg.run({ copiarMusica(ctx, uri) }) { r ->
+            ocupadoMus = false
+            if (r.arquivo != null) {
+                val velho = Prefs.introMusica
+                Prefs.introMusica = r.arquivo
+                Prefs.introMusicaNome = r.nome
+                Prefs.introInicio = 0
+                if (velho != null && velho != r.arquivo) try { File(ctx.filesDir, velho).delete() } catch (_: Exception) {}
+                msgMus = ""
+                NLog.add("intro", "musica nova: ${r.nome}")
+            } else msgMus = r.erro
+            redesenha()
+        }
+    }
+
+    private fun copiarMusica(c: Context, uri: Uri): CopiaMus {
+        val dest = File(c.filesDir, "intro_musica_" + System.currentTimeMillis() + ".snd")
+        return try {
+            var nome = "música escolhida"
+            try {
+                c.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { q ->
+                    if (q.moveToFirst()) q.getString(0)?.let { nome = it }
+                }
+            } catch (_: Throwable) {}
+            val ins = c.contentResolver.openInputStream(uri) ?: return CopiaMus(null, "", "Não consegui abrir esse arquivo.")
+            ins.use { i -> dest.outputStream().use { o -> i.copyTo(o) } }
+            if (dest.length() == 0L) {
+                dest.delete()
+                return CopiaMus(null, "", "O arquivo veio vazio.")
+            }
+            if (dest.length() > LIMITE_MUS_MB * 1048576L) {
+                dest.delete()
+                return CopiaMus(null, "", "Arquivo grande demais (mais de $LIMITE_MUS_MB MB). Escolha uma música menor.")
+            }
+            val mr = MediaMetadataRetriever()
+            val ok = try {
+                mr.setDataSource(dest.absolutePath)
+                mr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
+            } catch (_: Throwable) {
+                false
+            } finally {
+                try { mr.release() } catch (_: Throwable) {}
+            }
+            if (!ok) {
+                dest.delete()
+                return CopiaMus(null, "", "Esse arquivo não parece ser um áudio que o celular consegue tocar.")
+            }
+            CopiaMus(dest.name, nome, "")
+        } catch (t: Throwable) {
+            try { dest.delete() } catch (_: Exception) {}
+            CopiaMus(null, "", "Não consegui copiar: " + (t.message ?: t.javaClass.simpleName))
+        }
+    }
+
+    private fun removeMusica() {
+        Prefs.introMusica?.let { try { File(act.filesDir, it).delete() } catch (_: Exception) {} }
+        Prefs.introMusica = null
+        Prefs.introMusicaNome = null
+        Prefs.introInicio = 0
+        msgMus = ""
+        redesenha()
+    }
+
+    // ---------------- degrades prontos ----------------
+    private fun gradientes(c: Context): View {
+        val col = Ui.vbox(c)
+        val lista = Temas.GRADIENTES
+        var i = 0
+        while (i < lista.size) {
+            val linha = Ui.hbox(c)
+            for (k in i until minOf(i + 6, lista.size)) {
+                val par = lista[k]
+                val sel = (par.first and 0xFFFFFF) == (Prefs.accent and 0xFFFFFF) && (par.second and 0xFFFFFF) == (Prefs.accent2 and 0xFFFFFF)
+                val b = View(c)
+                val g = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(par.first, par.second))
+                g.shape = GradientDrawable.OVAL
+                g.setStroke(Ui.dp(c, if (sel) 3 else 1), if (sel) Color.WHITE else Theme.alpha(Color.WHITE, 0x44))
+                b.background = g
+                Ui.clique(b) { Prefs.accent = par.first; Prefs.accent2 = par.second; muda() }
+                val lp = LinearLayout.LayoutParams(Ui.dp(c, 36), Ui.dp(c, 36))
+                lp.rightMargin = Ui.dp(c, 12)
+                linha.addView(b, lp)
+            }
+            col.addView(linha, Ui.lp(top = if (i == 0) 0 else 12, c = c))
+            i += 6
+        }
+        return col
+    }
+
+    // ---------------- fontes ----------------
+    private fun fontes(c: Context): View {
+        val col = Ui.vbox(c)
+        val lista = Packs.lista
+        var i = 0
+        while (i < lista.size) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.TOP
+            for (k in i until i + 2) {
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                if (k % 2 == 1) lp.leftMargin = Ui.dp(c, 10)
+                if (k < lista.size) linha.addView(celulaFonte(c, lista[k]), lp) else linha.addView(View(c), lp)
+            }
+            col.addView(linha, Ui.lp(top = if (i == 0) 0 else 10, c = c))
+            i += 2
+        }
+        return col
+    }
+
+    /** grade da "letra do texto": a primeira opcao e "igual ao titulo" (id vazio) */
+    private fun fontesTexto(c: Context): View {
+        val col = Ui.vbox(c)
+        val ids = listOf("") + Packs.lista.map { it.id }
+        var i = 0
+        while (i < ids.size) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.TOP
+            for (k in i until i + 2) {
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                if (k % 2 == 1) lp.leftMargin = Ui.dp(c, 10)
+                if (k < ids.size) linha.addView(celulaTexto(c, ids[k]), lp) else linha.addView(View(c), lp)
+            }
+            col.addView(linha, Ui.lp(top = if (i == 0) 0 else 10, c = c))
+            i += 2
+        }
+        return col
+    }
+
+    private fun celulaTexto(c: Context, id: String): View {
+        val sel = Prefs.fonteTexto == id
+        val p = if (id.isEmpty()) Theme.pack() else Packs.get(id)
+        val b = Ui.vbox(c)
+        b.background = Ui.ripple(c, Ui.glass(c, 14, forte = false, ligado = sel), Painel(c, raioDp = 14, mascara = true))
+        val pd = Ui.dp(c, 12)
+        b.setPadding(pd, Ui.dp(c, 10), pd, Ui.dp(c, 10))
+        val amostra = android.widget.TextView(c)
+        amostra.text = "TEXTO 123"
+        amostra.setTextColor(if (sel) Ui.RED else Ui.TEXT)
+        amostra.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 15f * p.escala)
+        amostra.typeface = Theme.fonteDe(c, p, false, false)
+        amostra.includeFontPadding = false
+        amostra.maxLines = 1
+        b.addView(amostra)
+        val nome = Ui.text(c, if (id.isEmpty()) "igual ao título" else p.nome, 11f, if (sel) Ui.RED else Ui.MUTED, true, mono = true)
+        nome.maxLines = 1
+        b.addView(nome, Ui.lp(top = 6, c = c))
+        Ui.clique(b) { Prefs.fonteTexto = id; muda() }
+        return b
+    }
+
+    private fun celulaFonte(c: Context, p: Pack): View {
+        val sel = Prefs.fonte == p.id
+        val b = Ui.vbox(c)
+        b.background = Ui.ripple(c, Ui.glass(c, 14, forte = false, ligado = sel), Painel(c, raioDp = 14, mascara = true))
+        val pd = Ui.dp(c, 12)
+        b.setPadding(pd, Ui.dp(c, 10), pd, Ui.dp(c, 10))
+        val amostra = android.widget.TextView(c)
+        amostra.text = "Aa"
+        amostra.setTextColor(if (sel) Ui.RED else Ui.TEXT)
+        amostra.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 30f * p.escala)
+        amostra.typeface = Theme.fonteDe(c, p, true, true)
+        amostra.includeFontPadding = false
+        b.addView(amostra)
+        val nome = Ui.text(c, p.nome, 11f, if (sel) Ui.RED else Ui.MUTED, true, mono = true)
+        nome.maxLines = 1
+        b.addView(nome, Ui.lp(top = 6, c = c))
+        Ui.clique(b) { Prefs.fonte = p.id; muda() }
+        return b
+    }
+
+    // ---------------- fundo ----------------
+    private fun secaoFundo(c: Context): View {
+        val f = secao(c, "fundo", icone = R.drawable.ic_image)
+        val tipos = listOf("animado", "imagem", "vídeo", "liso")
+        val atual = when (Prefs.bgTipo) { "imagem" -> 1; "video" -> 2; "solido" -> 3; else -> 0 }
+        f.addView(Ui.segmento(c, tipos, atual) { i ->
+            Prefs.bgTipo = when (i) { 1 -> "imagem"; 2 -> "video"; 3 -> "solido"; else -> "animado" }
+            fundo()
+        }, Ui.lp(top = 12, c = c))
+
+        when (Prefs.bgTipo) {
+            "animado" -> {
+                f.addView(Ui.text(c, "Desenhos do próprio app. Eles seguem as cores 1 e 2.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+                val cartas = ArrayList<View>()
+                for (id in Temas.FUNDOS) {
+                    val sel = Prefs.bgPreset == id
+                    val box = Ui.vbox(c)
+                    box.addView(Miniatura.fundo(c, id, sel), LinearLayout.LayoutParams(Ui.dp(c, 82), Ui.dp(c, 108)))
+                    val tn = Ui.text(c, Temas.nomeFundo(id), 11f, if (sel) Ui.RED else Ui.MUTED, true, mono = true)
+                    tn.gravity = Gravity.CENTER
+                    tn.maxLines = 1
+                    box.addView(tn, Ui.lp(top = 6, c = c))
+                    Ui.clique(box) { Prefs.bgPreset = id; Prefs.tema = "custom"; fundo() }
+                    val lp = LinearLayout.LayoutParams(Ui.dp(c, 82), ViewGroup.LayoutParams.WRAP_CONTENT)
+                    lp.rightMargin = Ui.dp(c, 10)
+                    box.layoutParams = lp
+                    cartas.add(box)
+                }
+                f.addView(linhaRolavel(c, cartas), Ui.lp(top = 10, c = c))
+            }
+            "imagem", "video" -> {
+                val video = Prefs.bgTipo == "video"
+                val tem = arquivo() != null
+                val atualTxt = arquivo()?.let { (if (video) "vídeo escolhido" else "imagem escolhida") + " · " + mb(it) }
+                    ?: "nada escolhido ainda, por isso o fundo animado aparece"
+                f.addView(Ui.text(c, atualTxt, 12.5f, if (tem) Ui.OK else Ui.WARN, true, mono = true), Ui.lp(top = 10, c = c))
+                f.addView(Ui.button(c, if (ocupado) "copiando..." else (if (video) "escolher vídeo da galeria" else "escolher imagem da galeria"), Ui.Kind.PRIMARY, if (video) R.drawable.ic_video else R.drawable.ic_image) {
+                    if (!ocupado) escolher(video)
+                }, Ui.lp(top = 10, c = c))
+                if (tem) f.addView(Ui.button(c, "remover e voltar ao animado", Ui.Kind.GHOST, R.drawable.ic_trash) { remove() }, Ui.lp(top = 8, c = c))
+                f.addView(Ui.text(c, if (video)
+                    "O vídeo toca em loop, sem som. Vídeos curtos e leves (até 1080p) gastam menos bateria. O arquivo é copiado para dentro do app e nada é enviado pela internet."
+                else
+                    "A imagem é copiada para dentro do app e nada é enviado pela internet.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+            }
+            else -> f.addView(Ui.text(c, "Só a cor de fundo do app, sem nenhum desenho. A cor muda em CORES.", 11f, Ui.MUTED), Ui.lp(top = 10, c = c))
+        }
+        if (msg.isNotEmpty()) f.addView(Ui.text(c, msg, 12.5f, Ui.WARN, true), Ui.lp(top = 8, c = c))
+
+        f.addView(Ui.slider(c, "Escurecer o fundo", Prefs.bgEscuro, 0, 90, "%", onMove = { x ->
+            Prefs.bgEscuro = x
+            act.ajustaFundo()
+        }, onFim = { x -> Prefs.bgEscuro = x; act.ajustaFundo() }), Ui.lp(top = 16, c = c))
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            f.addView(Ui.slider(c, "Desfoque do fundo", Prefs.bgBlur, 0, 25, "", onMove = { x ->
+                Prefs.bgBlur = x
+                act.ajustaFundo()
+            }, onFim = { x -> Prefs.bgBlur = x; act.ajustaFundo() }), Ui.lp(top = 12, c = c))
+        } else {
+            f.addView(Ui.dica(c, "O desfoque do fundo precisa do Android 12 ou mais novo.", Ui.Dica.AVISO), Ui.lp(top = 12, c = c))
+        }
+        f.addView(botaoTransparente(c), Ui.lp(top = 14, c = c))
+        return f
+    }
+
+    private fun restaura() {
+        Temas.aplica(Temas.get("brasa"))
+        Prefs.bgTipo = "animado"
+        Prefs.bgEscuro = 25
+        Prefs.bgBlur = 0
+        Prefs.vidro = 0
+        Prefs.escala = 100
+        Prefs.maiusc = true
+        Prefs.anim = true
+        Prefs.particulas = true
+        Prefs.pulso = true
+        Prefs.vibrar = false
+        msg = ""
+        act.reaplica()
+    }
+
+    private fun corPropria(qual: Int) {
+        Ui.dialogTexto(act, "COR PRÓPRIA", "#RRGGBB (ex.: #FF2D55)") { s ->
+            val t = s.trim().let { if (it.startsWith("#")) it else "#$it" }
+            val cor = try { Color.parseColor(t) } catch (_: Exception) { null }
+            if (cor == null) Ui.toast(act, "Cor inválida. Use 6 letras/números, como FF2D55.")
+            else {
+                when (qual) {
+                    1 -> Prefs.accent = cor
+                    2 -> Prefs.accent2 = cor
+                    else -> Prefs.baseCor = cor
+                }
+                muda()
+            }
+        }
+    }
+
+    // ---------------- escolher video / imagem da galeria ----------------
+    @Suppress("DEPRECATION")
+    private fun escolher(video: Boolean) {
+        val i = Intent(Intent.ACTION_OPEN_DOCUMENT)
+        i.addCategory(Intent.CATEGORY_OPENABLE)
+        i.type = if (video) "video/*" else "image/*"
+        act.aoResultado = { req, res, data ->
+            val u = data?.data
+            if (req == REQ_MIDIA && res == Activity.RESULT_OK && u != null) copia(u, video)
+        }
+        try {
+            act.startActivityForResult(i, REQ_MIDIA)
+        } catch (_: Exception) {
+            Ui.toast(act, "Não consegui abrir a galeria")
+        }
+    }
+
+    private class Copia(val nome: String?, val erro: String)
+
+    private fun copia(uri: Uri, video: Boolean) {
+        ocupado = true
+        msg = ""
+        redesenha()
+        val ctx = act.applicationContext
+        Bg.run({ copiar(ctx, uri, video) }) { r ->
+            ocupado = false
+            if (r.nome != null) {
+                val velho = Prefs.bgArquivo
+                Prefs.bgArquivo = r.nome
+                Prefs.bgTipo = if (video) "video" else "imagem"
+                if (velho != null && velho != r.nome) try { File(ctx.filesDir, velho).delete() } catch (_: Exception) {}
+                msg = ""
+                NLog.add("visual", "fundo novo: ${r.nome}")
+                act.refazFundo()
+            } else msg = r.erro
+            redesenha()
+        }
+    }
+
+    private fun copiar(c: Context, uri: Uri, video: Boolean): Copia {
+        val nome = "fundo_" + System.currentTimeMillis() + (if (video) ".mp4" else ".img")
+        val dest = File(c.filesDir, nome)
+        return try {
+            val ins = c.contentResolver.openInputStream(uri) ?: return Copia(null, "Não consegui abrir esse arquivo.")
+            ins.use { i -> dest.outputStream().use { o -> i.copyTo(o) } }
+            if (dest.length() > LIMITE_MB * 1048576L) {
+                dest.delete()
+                Copia(null, "Arquivo grande demais (mais de $LIMITE_MB MB). Escolha um menor.")
+            } else if (dest.length() == 0L) {
+                dest.delete()
+                Copia(null, "O arquivo veio vazio.")
+            } else Copia(nome, "")
+        } catch (t: Throwable) {
+            try { dest.delete() } catch (_: Exception) {}
+            Copia(null, "Não consegui copiar: " + (t.message ?: t.javaClass.simpleName))
+        }
+    }
+
+    private fun remove() {
+        val a = Prefs.bgArquivo
+        if (a != null) try { File(act.filesDir, a).delete() } catch (_: Exception) {}
+        Prefs.bgArquivo = null
+        Prefs.bgTipo = "animado"
+        msg = ""
+        fundo()
+    }
+}

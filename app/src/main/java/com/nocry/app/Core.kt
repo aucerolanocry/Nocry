@@ -1,0 +1,640 @@
+package com.nocry.app
+
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.SharedPreferences
+import android.net.Uri
+import android.os.BatteryManager
+import android.os.Handler
+import android.os.Looper
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.ThreadFactory
+
+/** Constantes do app. Troque REPO se o repositorio publico tiver outro nome. */
+object Const {
+    val PKG = BuildConfig.APPLICATION_ID       // segue o applicationId real do build (nome com que o app e instalado)
+    const val REPO = "aucerolanocry/Nocry"          // repositorio PUBLICO onde o APK fica em Releases
+    const val FF_MAX = "com.dts.freefiremax"
+    const val FF_NORMAL = "com.dts.freefireth"
+    /** aviso pra todo mundo na tela de atualização e na 1ª vez que abre depois de atualizar */
+    const val AVISO_ATUALIZACOES = "Essas atualizações seguidas são pra corrigir bugs. Logo logo elas vão parar."
+    /** novidades mostradas na 1ª vez que abre depois de atualizar (pra todo mundo) */
+    val NOVIDADES = listOf(
+        "Atualização nova não trava mais na hora: dá pra deixar pra depois por até 3 horas.",
+        "Botões ADB, Perm. e Volume do início agora dá pra tocar: liga e desliga direto.",
+        "Bot de fila: a mensagem automática sempre tenta marcar o jogador da partida.",
+    )
+    /** novidades do bot de fila: só aparecem pra quem tem o bot (a key de dono). Vazio = nada novo no bot nesta versão */
+    val NOVIDADES_BOT = emptyList<String>()
+}
+
+/** Trabalho em segundo plano / volta pra tela. */
+object Bg {
+    private val main = Handler(Looper.getMainLooper())
+    private val pool: ExecutorService = Executors.newCachedThreadPool(ThreadFactory { r ->
+        Thread(r, "nocry-bg").apply { isDaemon = true }
+    })
+
+    fun io(block: () -> Unit) {
+        pool.execute {
+            try { block() } catch (t: Throwable) { NLog.add("erro", t.toString()) }
+        }
+    }
+
+    fun ui(block: () -> Unit) {
+        main.post {
+            try { block() } catch (t: Throwable) { NLog.add("erro-ui", t.toString()) }
+        }
+    }
+
+    fun <T> run(work: () -> T, done: (T) -> Unit) {
+        io {
+            val r = work()
+            ui { done(r) }
+        }
+    }
+
+    fun later(ms: Long, block: () -> Unit) {
+        main.postDelayed({ block() }, ms)
+    }
+}
+
+/** Registro de tudo que o app faz (aparece em LOGS). */
+object NLog {
+    private const val MAX = 400
+    private val fmt = SimpleDateFormat("dd/MM HH:mm:ss", Locale.US)
+    private val lines = ArrayDeque<String>()
+    private var file: File? = null
+    /** o arquivo é escrito numa thread só dele: quem chama add() (inclusive a tela) nunca espera o disco */
+    private val escrita = Executors.newSingleThreadExecutor { r -> Thread(r, "nocry-log").apply { isDaemon = true } }
+    private var desdeCompacta = 0
+
+    /** muda a cada linha nova: as telas comparam isso em vez de montar o texto todo pra ver se mudou */
+    @Volatile var versao = 0L
+        private set
+
+    @Synchronized
+    fun init(c: Context) {
+        val f = File(c.filesDir, "nocry.log")
+        file = f
+        lines.clear()
+        try {
+            if (f.exists()) f.readLines().takeLast(MAX).forEach { lines.addLast(it) }
+        } catch (_: Exception) {
+        }
+        versao++
+    }
+
+    fun add(tag: String, msg: String) {
+        synchronized(this) {
+            val line = fmt.format(Date()) + " [" + tag + "] " + msg.replace('\n', ' ')
+            lines.addLast(line)
+            while (lines.size > MAX) lines.removeFirst()
+            versao++
+            val f = file ?: return
+            // só acrescenta a linha; de 200 em 200 linhas regrava o arquivo só com as últimas (não cresce sem fim)
+            val copia = if (++desdeCompacta >= 200) { desdeCompacta = 0; lines.toList() } else null
+            try {
+                escrita.execute {
+                    try {
+                        if (copia != null) f.writeText(copia.joinToString("\n") + "\n") else f.appendText(line + "\n")
+                    } catch (_: Exception) {}
+                }
+            } catch (_: Throwable) {}
+        }
+    }
+
+    @Synchronized
+    fun text(tag: String? = null): String {
+        val l = if (tag == null) lines.toList() else lines.filter { it.contains("[$tag]") }
+        return if (l.isEmpty()) "(sem registros ainda)" else l.takeLast(120).joinToString("\n")
+    }
+
+    /** só a última linha (a tela inicial mostra ela), sem montar o texto todo */
+    @Synchronized
+    fun ultima(): String = lines.lastOrNull() ?: ""
+
+    @Synchronized
+    fun clear() {
+        lines.clear()
+        versao++
+        val f = file ?: return
+        try { escrita.execute { try { f.writeText("") } catch (_: Exception) {} } } catch (_: Throwable) {}
+    }
+}
+
+/** Preferencias do app. Valores sempre validados (nunca devolve algo fora do limite). */
+object Prefs {
+    private lateinit var sp: SharedPreferences
+    // ---- Bypass ----
+var bypassAtivo: Boolean
+    get() = gb("bypass_ativo")
+    set(v) = pb("bypass_ativo", v)
+var bypassGatilho: String
+    get() = gs("bypass_gatilho") ?: "dnd"
+    set(v) = ps("bypass_gatilho", v)
+var bypassFf: String
+    get() = gs("bypass_ff") ?: "normal"
+    set(v) = ps("bypass_ff", v)
+/** qual Free Fire o JOGAR do Início abre: "normal" ou "max" (sem escolha, segue o do bypass) */
+var jogarFf: String
+    get() = gs("jogar_ff") ?: bypassFf
+    set(v) = ps("jogar_ff", if (v == "max") "max" else "normal")
+var bypassTipo: String
+    get() = gs("bypass_tipo") ?: "completo"
+    set(v) = ps("bypass_tipo", v)
+var bypassMark: Boolean
+    get() = gb("bypass_mark")
+    set(v) = pb("bypass_mark", v)
+var bypassVolAtivo: Boolean
+    get() = gb("bypass_vol_ativo")
+    set(v) = pb("bypass_vol_ativo", v)
+    var bypassCliques: Int
+    get() = sp.getInt("bypass_cliques", 3).coerceIn(2, 5) // quem tinha 6 a 10 salvo cai pra 5
+    set(v) = pi("bypass_cliques", v.coerceIn(2, 5))
+
+    fun init(c: Context) {
+        sp = c.applicationContext.getSharedPreferences("nocry", Context.MODE_PRIVATE)
+    }
+
+    private fun gi(k: String, d: Int, lo: Int, hi: Int): Int {
+        val v = sp.getInt(k, d)
+        return if (v in lo..hi) v else d
+    }
+
+    private fun pi(k: String, v: Int) { sp.edit().putInt(k, v).apply() }
+    private fun gb(k: String) = sp.getBoolean(k, false)
+    private fun pb(k: String, v: Boolean) { sp.edit().putBoolean(k, v).apply() }
+    private fun gs(k: String): String? = sp.getString(k, null)
+    private fun ps(k: String, v: String?) {
+        if (v == null) sp.edit().remove(k).apply() else sp.edit().putString(k, v).apply()
+    }
+
+    // ---- valores do toque (1 a 600) ----
+    var longOn: Int
+        get() = gi("long_on", 1, 1, 600)
+        set(v) = pi("long_on", v.coerceIn(1, 600))
+    var multiOn: Int
+        get() = gi("multi_on", 0, 0, 600)      // padrão 0: o mesmo que o modo competitivo sempre usou
+        set(v) = pi("multi_on", v.coerceIn(0, 600))
+    var normal: Int
+        get() = gi("normal", 100, 1, 600)
+        set(v) = pi("normal", v.coerceIn(1, 600))
+
+    // ---- quantos apertos de volume (2 a 9) ----
+    var clicksUp: Int
+        get() = gi("clicks_up", 2, 2, 9)
+        set(v) = pi("clicks_up", v.coerceIn(2, 9))
+    var clicksDown: Int
+        get() = gi("clicks_down", 2, 2, 9)
+        set(v) = pi("clicks_down", v.coerceIn(2, 9))
+
+    // ---- toque via volume ----
+    var volAtivo: Boolean
+        get() = gb("vol_ativo")
+        set(v) = pb("vol_ativo", v)
+    var markVol: Boolean
+        get() = gb("mark_vol")
+        set(v) = pb("mark_vol", v)
+
+    // ---- toque via carregador ----
+    var cargaAtivo: Boolean
+        get() = gb("carga_ativo")
+        set(v) = pb("carga_ativo", v)
+    var markCarga: Boolean
+        get() = gb("mark_carga")
+        set(v) = pb("mark_carga", v)
+    /** "tirou" = tirar o carregador liga o toque rapido; "colocou" = o contrario */
+    var cargaGatilho: String
+        get() = if (gs("carga_gatilho") == "colocou") "colocou" else "tirou"
+        set(v) = ps("carga_gatilho", if (v == "colocou") "colocou" else "tirou")
+    var cargaRepTotal: Int
+        get() = gi("carga_rep_total", 1, 1, 3)
+        set(v) = pi("carga_rep_total", v.coerceIn(1, 3))
+    var cargaRep: Int
+        get() = gi("carga_rep", 0, 0, 3)
+        set(v) = pi("carga_rep", v.coerceIn(0, 3))
+
+    // ---- modo competitivo (toque rapido simples) ----
+    var compFlag: Boolean
+        get() = gb("comp_flag")
+        set(v) = pb("comp_flag", v)
+    /** valores de ANTES: "long|multi" (cada um pode ser "null") */
+    var compOrig: String?
+        get() = gs("comp_orig")
+        set(v) = ps("comp_orig", v)
+
+    // ---- modo carregador (density + abre o FF) ----
+    var mcAtivo: Boolean
+        get() = gb("mc_ativo")
+        set(v) = pb("mc_ativo", v)
+    var mcFf: String
+        get() = if (gs("mc_ff") == "normal") "normal" else "max"
+        set(v) = ps("mc_ff", if (v == "normal") "normal" else "max")
+    var mcDens: Int
+        get() = gi("mc_dens", 3500, 200, 9999)
+        set(v) = pi("mc_dens", v.coerceIn(200, 9999))
+    var mcCycles: Int
+        get() = gi("mc_cycles", 0, 0, 3)
+        set(v) = pi("mc_cycles", v.coerceIn(0, 3))
+    var mcCyclesTotal: Int
+        get() = gi("mc_cycles_total", 1, 1, 3)
+        set(v) = pi("mc_cycles_total", v.coerceIn(1, 3))
+    /** density de ANTES do modo carregador: numero ou "reset". null = o modo nao esta aplicado */
+    var densOrig: String?
+        get() = gs("dens_orig")
+        set(v) = ps("dens_orig", v)
+
+    // ---- otimizacao ----
+    var otmAuto: Boolean
+        get() = gb("otm_auto")
+        set(v) = pb("otm_auto", v)
+    var otmAutoMarca: Boolean
+        get() = gb("otm_auto_marca")
+        set(v) = pb("otm_auto_marca", v)
+    /** "fechar" (padrao) ou "proteger" */
+    var otmMsg: String
+        get() = if (gs("otm_msg") == "proteger") "proteger" else "fechar"
+        set(v) = ps("otm_msg", if (v == "proteger") "proteger" else "fechar")
+    var otmPerf: Boolean
+        get() = gb("otm_perf")
+        set(v) = pb("otm_perf", v)
+    /** "normal" ou "full" (foco máximo no FF: fecha tudo, vigia o FF, toque rápido, rede) */
+    var otmNivel: String
+        get() = if (gs("otm_nivel") == "full") "full" else "normal"
+        set(v) = ps("otm_nivel", if (v == "full") "full" else "normal")
+    /** a otimização FULL está ativa agora (o serviço vigia o FF e fecha o que voltar) */
+    var otmVigia: Boolean
+        get() = gb("otm_vigia")
+        set(v) = pb("otm_vigia", v)
+    /** o modo competitivo foi ligado pela otimização FULL (o desativar devolve) */
+    var otmComp: Boolean
+        get() = gb("otm_comp")
+        set(v) = pb("otm_comp", v)
+
+    // ---- geral ----
+    var onboardingFeito: Boolean
+        get() = gb("onboarding")
+        set(v) = pb("onboarding", v)
+
+    // ---- intro de abertura ----
+    /** "sempre" (toda vez que o app abre do zero) | "novo" (so na 1a abertura depois de instalar/atualizar) | "off" */
+    var introModo: String
+        get() = gs("intro_modo").let { if (it == "novo" || it == "off") it else "sempre" }
+        set(v) = ps("intro_modo", if (v == "novo" || v == "off") v else "sempre")
+    var introSom: Boolean
+        get() = sp.getBoolean("intro_som", true)
+        set(v) = pb("intro_som", v)
+    /** nome do arquivo de musica copiado pra dentro do app (null = usa a musica original da intro) */
+    var introMusica: String?
+        get() = gs("intro_musica")
+        set(v) = ps("intro_musica", v)
+    /** nome bonito da musica escolhida (so pra mostrar) */
+    var introMusicaNome: String?
+        get() = gs("intro_musica_nome")
+        set(v) = ps("intro_musica_nome", v)
+    /** em que segundo da musica a intro comeca (0 a 600) */
+    var introInicio: Int
+        get() = gi("intro_inicio", 0, 0, 600)
+        set(v) = pi("intro_inicio", v.coerceIn(0, 600))
+    /** carimbo da instalacao/atualizacao em que a intro ja tocou (modo "novo") */
+    var introVisto: Long
+        get() = sp.getLong("intro_visto", 0L)
+        set(v) { sp.edit().putLong("intro_visto", v).apply() }
+
+    // ---- visual (tela PERSONALIZAR) ----
+    /** "animado" (desenho do app) | "solido" | "imagem" | "video" */
+    var bgTipo: String
+        get() = gs("bg_tipo").let { if (it == "solido" || it == "imagem" || it == "video") it else "animado" }
+        set(v) = ps("bg_tipo", v)
+    /** brasas | aurora | grade | noite | sol | chuva | petalas | neve | ouro */
+    var bgPreset: String
+        get() = gs("bg_preset").let { if (it != null && it in Temas.FUNDOS) it else "chuva" }
+        set(v) = ps("bg_preset", v)
+    /** nome do arquivo copiado pra dentro do app (imagem ou video escolhidos da galeria) */
+    var bgArquivo: String?
+        get() = gs("bg_arquivo")
+        set(v) = ps("bg_arquivo", v)
+    var bgEscuro: Int
+        get() = gi("bg_escuro", 48, 0, 90)
+        set(v) = pi("bg_escuro", v.coerceIn(0, 90))
+    var bgBlur: Int
+        get() = gi("bg_blur", 0, 0, 25)
+        set(v) = pi("bg_blur", v.coerceIn(0, 25))
+    /** cor 1 do degrade (a "cor de destaque" de antes) */
+    var accent: Int
+        get() = sp.getInt("accent", 0xFFFFFFFF.toInt())
+        set(v) = pi("accent", v or 0xFF000000.toInt())
+    /** cor 2 do degrade */
+    var accent2: Int
+        get() = sp.getInt("accent2", 0xFFB8B8C4.toInt())
+        set(v) = pi("accent2", v or 0xFF000000.toInt())
+    /** cor lisa de fundo do app */
+    var baseCor: Int
+        get() = sp.getInt("base_cor", 0xFF020A04.toInt())
+        set(v) = pi("base_cor", v or 0xFF000000.toInt())
+    /** angulo do degrade em graus */
+    var angulo: Int
+        get() = gi("angulo", 135, 0, 360)
+        set(v) = pi("angulo", v.coerceIn(0, 360))
+    /** id do tema pronto escolhido por ultimo (so informativo; o visual vem dos valores abaixo) */
+    var tema: String
+        get() = gs("tema") ?: "matrix"
+        set(v) = ps("tema", v)
+    /** vidro | contorno | solido | hud */
+    var cartao: String
+        get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido") it else "contorno" }
+        set(v) = ps("cartao", v)
+    /** quanto os cartoes (de qualquer estilo) tampam o fundo: 0 = so a borda (o padrao), 95 = quase cheio */
+    var vidro: Int
+        get() = gi("vidro", 0, 0, 95)
+        set(v) = pi("vidro", v.coerceIn(0, 95))
+    var raio: Int
+        get() = gi("raio", 2, 2, 30)
+        set(v) = pi("raio", v.coerceIn(2, 30))
+    /** intensidade do brilho neon (0 = sem brilho) */
+    var brilho: Int
+        get() = gi("brilho", 60, 0, 100)
+        set(v) = pi("brilho", v.coerceIn(0, 100))
+    /** espessura da borda dos cartoes, em dp */
+    var borda: Int
+        get() = gi("borda", 1, 1, 4)
+        set(v) = pi("borda", v.coerceIn(1, 4))
+    /** id do pacote de fonte (ver Packs) */
+    var fonte: String
+        get() = gs("fonte").let { if (it != null && Packs.existe(it)) it else "pixelify" }
+        set(v) = ps("fonte", v)
+    var escala: Int
+        get() = gi("escala", 100, 85, 130)
+        set(v) = pi("escala", v.coerceIn(85, 130))
+    /** pacote de onde vem a fonte do TEXTO corrido ("" = a do mesmo pacote dos titulos) */
+    var fonteTexto: String
+        get() = gs("fonte_texto").let { if (it != null && Packs.existe(it)) it else "" }
+        set(v) = ps("fonte_texto", v)
+    /** todo o texto em maiusculo */
+    var maiusc: Boolean
+        get() = sp.getBoolean("maiusc", true)
+        set(v) = pb("maiusc", v)
+    /** nome da saudacao no inicio ("" = o nome da key) */
+    var apelido: String
+        get() = gs("apelido") ?: ""
+        set(v) = ps("apelido", v.trim().take(24))
+    /** barra de baixo com o nome de todos os botoes (desligado = so o da aba aberta) */
+    var navNomes: Boolean
+        get() = sp.getBoolean("nav_nomes", false)
+        set(v) = pb("nav_nomes", v)
+    /** som de clique nos botoes */
+    var somClique: Boolean
+        get() = sp.getBoolean("som_clique", false)
+        set(v) = pb("som_clique", v)
+    /** os 3 visuais guardados pelo usuario no ESTUDIO (texto com os valores; null = vazio) */
+    fun temaSalvo(i: Int): String? = gs("tema_salvo_$i")
+    fun salvaTema(i: Int, v: String?) = ps("tema_salvo_$i", v)
+    /** os cartoes ja foram deixados transparentes (opacidade 0) uma vez pra todo mundo (1.0.62) */
+    var cartaoZero: Boolean
+        get() = sp.getBoolean("cartao_zero", false)
+        set(v) = pb("cartao_zero", v)
+    /** o visual Vidro ja foi aplicado uma vez (1.0.53) */
+    var visualVidro: Boolean
+        get() = sp.getBoolean("visual_vidro", false)
+        set(v) = pb("visual_vidro", v)
+    /** o visual que a pessoa usava antes do Vidro (null = nao tinha nada mudado, ou ja apagou) */
+    var visualAntigo: String?
+        get() = gs("visual_antigo")
+        set(v) = ps("visual_antigo", v)
+    /** a pessoa ja mexeu em alguma coisa do visual (cor, cartao, letra ou tema) */
+    fun mexeuNoVisual(): Boolean = listOf("tema", "cartao", "accent", "accent2", "fonte", "raio").any { sp.contains(it) }
+    val neon: Boolean get() = brilho > 0
+    var anim: Boolean
+        get() = sp.getBoolean("anim", true)
+        set(v) = pb("anim", v)
+    var particulas: Boolean
+        get() = sp.getBoolean("particulas", true)
+        set(v) = pb("particulas", v)
+    var scanner: Boolean
+        get() = sp.getBoolean("scanner", true)
+        set(v) = pb("scanner", v)
+    var pulso: Boolean
+        get() = sp.getBoolean("pulso", true)
+        set(v) = pb("pulso", v)
+    var vibrar: Boolean
+        get() = sp.getBoolean("vibrar", false)
+        set(v) = pb("vibrar", v)
+    /** vibra quando o bypass/toque aplica ou restaura (dá pra sentir no meio da partida, sem olhar a tela) */
+    var vibrarAvisos: Boolean
+        get() = sp.getBoolean("vibrar_avisos", true)
+        set(v) = pb("vibrar_avisos", v)
+    /** ja tentou copiar o video de fundo padrao (dos assets) pra pasta interna; evita repetir toda vez */
+    var bgPadraoAplicado: Boolean
+        get() = sp.getBoolean("bg_padrao_aplicado", false)
+        set(v) = pb("bg_padrao_aplicado", v)
+    /** quando foi a ultima vez que o app checou se ha versao nova no github */
+    var updateUltimaChecagem: Long
+        get() = sp.getLong("update_ultima_checagem", 0L)
+        set(v) { sp.edit().putLong("update_ultima_checagem", v).apply() }
+    /** desde quando o app sabe que esta desatualizado (0 = em dia). Dali conta o prazo de 3h pra poder adiar */
+    var updatePendenteDesde: Long
+        get() = sp.getLong("update_pendente_desde", 0L)
+        set(v) { sp.edit().putLong("update_pendente_desde", v).apply() }
+    /** a pessoa tocou "deixar pra depois": o aviso nao bloqueia ate esse horario (nunca passa do prazo de 3h) */
+    var updateAdiadoAte: Long
+        get() = sp.getLong("update_adiado_ate", 0L)
+        set(v) { sp.edit().putLong("update_adiado_ate", v).apply() }
+    /** tag da versao nova sobre a qual ja avisamos (evita avisar de novo toda hora) */
+    var updateAvisada: String
+        get() = gs("update_avisada") ?: ""
+        set(v) = ps("update_avisada", v)
+    /** cache local (sem precisar de internet) da ultima versao que o app conhece no github */
+    var updateTagConhecida: String
+        get() = gs("update_tag_conhecida") ?: ""
+        set(v) = ps("update_tag_conhecida", v)
+    var updatePaginaConhecida: String
+        get() = gs("update_pagina_conhecida") ?: ""
+        set(v) = ps("update_pagina_conhecida", v)
+    var updateApkConhecida: String
+        get() = gs("update_apk_conhecida") ?: ""
+        set(v) = ps("update_apk_conhecida", v)
+    /** ordem dos atalhos do inicio (ids separados por virgula) e os escondidos */
+    var ordem: String
+        get() = gs("ordem") ?: ""
+        set(v) = ps("ordem", v)
+    var ocultos: String
+        get() = gs("ocultos") ?: ""
+        set(v) = ps("ocultos", v)
+
+    // ---- Key (licenca) ----
+    var consentiu: Boolean
+        get() = gb("consent")
+        set(v) = pb("consent", v)
+    /** ja viu (e aceitou) que o app manda a atividade (online, bypass e modos) pro painel da staff */
+    var avisoAtividade: Boolean
+        get() = gb("aviso_atividade")
+        set(v) = pb("aviso_atividade", v)
+    /** última versão em que o app já abriu (pra avisar uma vez depois de cada atualização) */
+    var versaoVista: String
+        get() = gs("versao_vista") ?: ""
+        set(v) = ps("versao_vista", v)
+    /** pastas esperando pra instalar ("normal:suja,max:limpa"); fica salva se o Android fechar o app no meio */
+    var instalaFila: String?
+        get() = gs("instala_fila")
+        set(v) = ps("instala_fila", v)
+    /** eventos esperando pra ir pro servidor (JSON) */
+    var presencaFila: String?
+        get() = gs("presenca_fila")
+        set(v) = ps("presenca_fila", v)
+    var licKey: String?
+        get() = gs("lic_key")
+        set(v) = ps("lic_key", v)
+    var licLabel: String
+        get() = gs("lic_label") ?: ""
+        set(v) = ps("lic_label", v)
+    /** motivo do último "não" do servidor (blocked/revoked/...); mostra o aviso na tela da key. "" = nenhum */
+    var licBloqueio: String
+        get() = gs("lic_bloqueio") ?: ""
+        set(v) = ps("lic_bloqueio", v)
+    var licVisto: Long
+        get() = sp.getLong("lic_visto", 0L)
+        set(v) { sp.edit().putLong("lic_visto", v).apply() }
+    var licP: String?
+        get() = gs("lic_p")
+        set(v) = ps("lic_p", v)
+    var licSig: String?
+        get() = gs("lic_sig")
+        set(v) = ps("lic_sig", v)
+
+    /** precisa do servico em primeiro plano? */
+    fun precisaServico(): Boolean = otmAuto || bypassAtivo || bypassVolAtivo || Sniper.ligadoPref || (otmNivel == "full" && otmVigia)
+}
+
+/** Estado do carregador (sem ADB). */
+object Power {
+    fun plugged(c: Context): Boolean {
+        val i = c.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return false
+        return i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+    }
+}
+
+/** Notificacoes. */
+object Notif {
+    const val CH_SVC = "nocry_svc"
+    const val CH_ALERT = "nocry_alert"
+    const val CH_PAIR = "nocry_pair"
+    const val CH_INST = "nocry_inst"
+    /** avisos de bypass/toque: só na barra de notificações (não pula na tela nem faz barulho) */
+    const val CH_EVENTO = "nocry_eventos_barra"
+    private const val CH_EVENTO_ANTIGO = "nocry_eventos"
+    const val ID_EVENTO = 6001
+    const val ID_SVC = 1001
+    const val ID_ALERT = 2001
+    const val ID_PAIR = 3001
+    const val ID_UPDATE = 4001
+
+    fun init(c: Context) {
+        val nm = c.getSystemService(NotificationManager::class.java) ?: return
+        nm.createNotificationChannel(NotificationChannel(CH_SVC, "NOCRY em segundo plano", NotificationManager.IMPORTANCE_LOW))
+        nm.createNotificationChannel(NotificationChannel(CH_ALERT, "Avisos do NOCRY", NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CH_PAIR, "Pareamento", NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CH_INST, "Instalação das pastas", NotificationManager.IMPORTANCE_LOW))
+        // o canal antigo pulava na tela; a importância de um canal não muda depois de criado, então troca por um novo
+        try { nm.deleteNotificationChannel(CH_EVENTO_ANTIGO) } catch (_: Throwable) {}
+        val ev = NotificationChannel(CH_EVENTO, "Bypass e toque (aplicou / removeu)", NotificationManager.IMPORTANCE_LOW)
+        ev.description = "Fica na barra de notificações quando o bypass ou o toque liga, aplica, remove ou desliga. Não aparece por cima do jogo."
+        ev.enableVibration(false)          // a vibração é do próprio app (dá pra desligar no Estúdio)
+        ev.setSound(null, null)
+        ev.lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        nm.createNotificationChannel(ev)
+    }
+
+    enum class Efeito { LIGOU, DESLIGOU, FALHOU, INFO }
+
+    /**
+     * Aviso de bypass/toque: só na barra de notificações (não pula na tela, não faz barulho) e fica lá até o
+     * próximo aviso. Vibração curta: 1 = aplicou/ligou · 2 = removeu/desligou · 3 = falhou.
+     */
+    fun evento(c: Context, titulo: String, texto: String, efeito: Efeito = Efeito.INFO) {
+        val app = c.applicationContext
+        try {
+            val nm = app.getSystemService(NotificationManager::class.java)
+            if (nm != null) {
+                val abre = PendingIntent.getActivity(app, 6, Intent(app, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+                val n = Notification.Builder(app, CH_EVENTO)
+                    .setSmallIcon(R.drawable.ic_stat)
+                    .setContentTitle(titulo)
+                    .setContentText(texto)
+                    .setStyle(Notification.BigTextStyle().bigText(texto))
+                    .setContentIntent(abre)
+                    .setAutoCancel(true)
+                    .setShowWhen(true)
+                    .setWhen(System.currentTimeMillis())
+                    .setCategory(Notification.CATEGORY_STATUS)
+                    .setVisibility(Notification.VISIBILITY_PUBLIC)
+                    .setColor(Theme.accent)
+                    .setOnlyAlertOnce(true)
+                    .build()
+                nm.notify(ID_EVENTO, n)
+            }
+        } catch (_: Throwable) {}
+        if (Prefs.vibrarAvisos && efeito != Efeito.INFO) vibra(app, efeito)
+    }
+
+    private fun vibra(c: Context, efeito: Efeito) {
+        try {
+            val v: android.os.Vibrator? = if (android.os.Build.VERSION.SDK_INT >= 31)
+                c.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+            else c.getSystemService(android.os.Vibrator::class.java)
+            if (v == null || !v.hasVibrator()) return
+            val padrao = when (efeito) {
+                Efeito.LIGOU -> longArrayOf(0, 90)
+                Efeito.DESLIGOU -> longArrayOf(0, 70, 110, 70)
+                else -> longArrayOf(0, 50, 80, 50, 80, 50)
+            }
+            v.vibrate(android.os.VibrationEffect.createWaveform(padrao, -1))
+        } catch (_: Throwable) {}
+    }
+
+    /** aviso rapido na tela (some sozinho) */
+    fun say(c: Context, text: String) {
+        try {
+            val nm = c.getSystemService(NotificationManager::class.java) ?: return
+            val n = Notification.Builder(c, CH_ALERT)
+                .setSmallIcon(R.drawable.ic_stat)
+                .setContentTitle("NOCRY")
+                .setContentText(text)
+                .setAutoCancel(true)
+                .setTimeoutAfter(60_000)
+                .build()
+            nm.notify(ID_ALERT, n)
+        } catch (_: Exception) {
+        }
+    }
+
+    /** avisa que tem versao nova, com toque abrindo o link de download */
+    fun atualizacaoDisponivel(c: Context, tag: String, url: String) {
+        try {
+            val nm = c.getSystemService(NotificationManager::class.java) ?: return
+            // abre o app (la a tela de atualizacao obrigatoria ja aparece e baixa/instala); 'url' fica de reserva
+            val abre = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            val pi = PendingIntent.getActivity(c, 3, abre, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            val n = Notification.Builder(c, CH_ALERT)
+                .setSmallIcon(R.drawable.ic_stat)
+                .setContentTitle("NOCRY $tag disponível")
+                .setContentText("Toque para instalar. Dá pra deixar pra depois por até 3h.")
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .build()
+            nm.notify(ID_UPDATE, n)
+        } catch (_: Exception) {
+        }
+    }
+}
