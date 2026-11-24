@@ -76,7 +76,9 @@ class SChat(val id: String, val hora: String, val tipo: String, val nome: String
             /** botões da mensagem (só pra mostrar) */
             val botoes: List<String> = emptyList(),
             /** arquivos que não são imagem */
-            val arquivos: List<String> = emptyList())
+            val arquivos: List<String> = emptyList(),
+            /** id de quem mandou (pra mostrar o papel adm/jogador na mensagem) */
+            val autorId: String = "")
 
 /** um campo do formulário (modal) que a org abre: texto ou lista de opções */
 class SCampo(val chave: String, val rotulo: String, val dica: String, val tipo: Int, val customId: String,
@@ -93,7 +95,10 @@ class SForm(val nonce: String, val modalId: String, val customId: String, val ap
 }
 
 /** alguém da sala que dá pra marcar: papel "jogador", "adm" ou "?" (não deu pra saber) */
-class SPessoa(val id: String, @Volatile var nome: String, @Volatile var papel: String)
+class SPessoa(val id: String, @Volatile var nome: String, @Volatile var papel: String) {
+    /** veio do card/anúncio da partida (participante exato) e não só alguém que falou no chat */
+    @Volatile var doCard = false
+}
 
 class SSala(val id: String, val nome: String, val org: String, val guildId: String?, val thread: Boolean) {
     val aberta = System.currentTimeMillis()
@@ -1333,14 +1338,11 @@ object Sniper {
         return if (vars.size > 1) vars.random() else base.trim()
     }
 
-    /** marcação do adm e do(s) jogador(es) já identificados na sala, pra pôr na frente da mensagem automática.
-     *  Só marca quem já dá pra saber na hora do envio; se ainda não sabe, manda sem marcar (não atrasa). */
+    /** marca na frente da mensagem automática só o jogador exato da partida (o que o card marcou),
+     *  nunca o adm. Se ainda não dá pra saber quem é, volta vazio (manda a mensagem normal). */
     private fun marcacaoAuto(s: SSala): String {
-        val ids = LinkedHashSet<String>()
-        s.pessoas.values.forEach { if (it.papel == "adm") ids.add(it.id) }
-        s.pessoas.values.forEach { if (it.papel == "jogador" && it.id != eu) ids.add(it.id) }
-        // no máximo 4 (1-2 adms + os jogadores da partida); evita ping em massa que derruba a conta
-        return if (ids.isEmpty()) "" else ids.take(4).joinToString(" ") { "<@$it>" } + " "
+        val jog = s.pessoas.values.filter { it.papel == "jogador" && it.id != eu && it.doCard }.map { it.id }.distinct()
+        return if (jog.isEmpty()) "" else jog.take(3).joinToString(" ") { "<@$it>" } + " "
     }
 
     /** a sala guarda a conversa inteira (até esse tanto, só pra não estourar a memória numa sala gigante) */
@@ -1406,6 +1408,8 @@ object Sniper {
             val p = s.pessoas.getOrPut(id) { SPessoa(id, nomes[id] ?: "", papel ?: "?") }
             nomes[id]?.let { if (p.nome.isEmpty()) p.nome = it }
             if (papel != null && (papel == "adm" || p.papel == "?")) p.papel = papel
+            // mencionado num anúncio/card da org (bot) = participante exato da partida
+            if (m.autorBot) p.doCard = true
         }
         if (m.autorId.isNotEmpty() && m.autorId != eu && !m.autorBot) {
             val novo = !s.pessoas.containsKey(m.autorId)
@@ -1436,8 +1440,11 @@ object Sniper {
     fun pessoasDaSala(papel: String? = null): List<SPessoa> {
         val s = salaAtiva?.let { salas[it] } ?: return emptyList()
         val todas = s.pessoas.values.filter { it.id != eu }
-        return if (papel == null) todas.sortedBy { if (it.papel == "jogador") 0 else if (it.papel == "adm") 1 else 2 }
-        else todas.filter { it.papel == papel }
+        if (papel == null) return todas.sortedBy { if (it.papel == "jogador") 0 else if (it.papel == "adm") 1 else 2 }
+        val doPapel = todas.filter { it.papel == papel }
+        // se o card já disse quem é o adm/jogador exato da partida, marca só esse(s) — não qualquer um que falou
+        val doCard = doPapel.filter { it.doCard }
+        return if (doCard.isNotEmpty()) doCard else doPapel
     }
 
     /** você corrige: essa pessoa é jogador/ADM */
@@ -1471,7 +1478,8 @@ object Sniper {
         return SChat(m.id, hora(Snow.ms(m.id)), tipo, nome, if (vazio) "(mensagem que o app não lê)" else texto, pequena, img?.url,
             card = trocarMencoes(m, card).replace(Regex("\\*\\*|__|~~|`"), "").replace(Regex("(?m)^#{1,3}\\s*"), "").trim(),
             botoes = m.botoes.map { it.label.uppercase() },
-            arquivos = m.anexos.filter { !it.imagem }.map { it.nome })
+            arquivos = m.anexos.filter { !it.imagem }.map { it.nome },
+            autorId = m.autorId)
     }
 
     /** troca <@123> por @nome, <#123> por #canal e emoji :nome: (pro chat ficar legível) */

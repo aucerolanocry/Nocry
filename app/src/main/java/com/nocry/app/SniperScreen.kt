@@ -1047,10 +1047,22 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         // cabeçalho: nome · hora · copiar tudo
         val cab = Ui.hbox(c)
         cab.gravity = Gravity.CENTER_VERTICAL
+        val esq = Ui.hbox(c)
+        esq.gravity = Gravity.CENTER_VERTICAL
         val nome = texto(if (eu) "você" else l.nome, 11f, if (eu) corFraca else if (bot) Theme.accent else corDoNome(l.nome), true)
         nome.maxLines = 1
         nome.ellipsize = android.text.TextUtils.TruncateAt.END
-        cab.addView(nome, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.weight = 1f })
+        esq.addView(nome, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        // selo do papel (ADM / JOGADOR) de quem já foi identificado na sala
+        val papel = if (!eu && !bot) salaAtual()?.pessoas?.get(l.autorId)?.papel else null
+        if (papel == "adm" || papel == "jogador") {
+            val corTag = if (papel == "adm") Theme.accent else Ui.OK
+            val tag = Ui.text(c, if (papel == "adm") "ADM" else "JOGADOR", 8f, corTag, true, mono = true)
+            tag.background = Ui.shape(c, Theme.alpha(corTag, 0x22), Ui.raioPeq(7))
+            tag.setPadding(Ui.dp(c, 6), Ui.dp(c, 2), Ui.dp(c, 6), Ui.dp(c, 2))
+            esq.addView(tag, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 6) })
+        }
+        cab.addView(esq, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         cab.addView(texto(l.hora, 10f, corFraca), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 8) })
         val tudo = listOf(l.texto, l.card).filter { it.isNotBlank() && it != "(mensagem que o app não lê)" }.joinToString("\n")
         if (tudo.isNotEmpty()) {
