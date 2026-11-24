@@ -1288,6 +1288,8 @@ object Sniper {
                 return
             }
         }
+        // antes de mandar, lê o começo da sala pra saber quem é o jogador (o card da org chega junto ou logo depois)
+        aprenderAntesDeMandar(d, s)
         var r = d.enviar(s.id, marcacaoAuto(s) + (msgPorOrg[s.org] ?: escolheMsg(msgAuto)), rapido = true)
         if (s.thread) Thread { try { d.entrarThread(s.id) } catch (_: Throwable) {} }.start()
         diag("mensagem automática sala ${s.nome} -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(200) else ""}")
@@ -1336,6 +1338,19 @@ object Sniper {
     private fun escolheMsg(base: String): String {
         val vars = base.split("|").map { it.trim() }.filter { it.isNotBlank() }
         return if (vars.size > 1) vars.random() else base.trim()
+    }
+
+    /** lê as mensagens que já estão na sala até achar o jogador; espera no máximo ~3s pelo card da org */
+    private fun aprenderAntesDeMandar(d: Discord, s: SSala) {
+        val ate = agora() + 3_000
+        while (true) {
+            try {
+                val (ms, _) = d.historico(s.id, 25, null, s.guildId)
+                for (m in ms.sortedBy { it.id.toLongOrNull() ?: 0L }) conhecerPessoas(s, m)
+            } catch (_: Throwable) {}
+            if (s.pessoas.values.any { it.papel == "jogador" && it.id != eu && it.doCard } || agora() >= ate) return
+            try { Thread.sleep(700) } catch (_: InterruptedException) { return }
+        }
     }
 
     /** marca na frente da mensagem automática o jogador da partida, nunca o adm. Prefere quem o
@@ -1389,9 +1404,39 @@ object Sniper {
     private val RX_MENCAO = Regex("<@!?(\\d{15,21})>")
     private val PALAVRA_ADM = Regex("(?i)(media[dç]|\\badm|admin|staff|suporte|moderador|analista|respons[aá]vel|\\bsup\\b)")
 
+    /** rótulo de jogador no card: "Jogador 1:", "Jogadores:", "Time A", "Desafiante", "@a vs @b"... */
+    private val PALAVRA_JOG = Regex("(?i)(jogador|player|participante|desafiante|desafiado|advers[aá]rio|\\btime\\b|equipe|\\bvs\\b|versus|contra)")
+    private val RX_LIMPA_ROTULO = Regex("<[@#][!&]?\\d+>|<a?:\\w+:\\d+>|:[\\w~]+:")
+
+    /**
+     * o que vem antes da menção no card, pra saber se é jogador ou ADM. Se na linha não tem texto
+     * (ex.: "> @Luis, @você" embaixo de "Jogadores:"), usa a linha de cima.
+     */
+    private fun rotulo(t: String, pos: Int): String {
+        val ini = t.lastIndexOf('\n', pos - 1).let { if (it < 0) 0 else it + 1 }
+        val cru = t.substring(ini, pos)
+        // só o texto depois da menção anterior: "Mediador: @x Jogador: @y" -> o rótulo do @y é "Jogador:"
+        val antes = RX_MENCAO.findAll(cru).lastOrNull()
+        val linha = RX_LIMPA_ROTULO.replace(if (antes != null) cru.substring(antes.range.last + 1) else cru, " ")
+        if (linha.any { it.isLetter() }) return linha
+        // "@a, @b" na mesma lista: vale o mesmo rótulo do @a
+        if (antes != null) return rotulo(t, ini + antes.range.first)
+        if (ini == 0) return ""
+        var fim = ini - 1
+        while (fim > 0) {
+            val ant = t.lastIndexOf('\n', fim - 1).let { if (it < 0) 0 else it + 1 }
+            val l = RX_LIMPA_ROTULO.replace(t.substring(ant, fim), " ")
+            if (l.any { it.isLetter() }) return l
+            if (ant == 0) break
+            fim = ant - 1
+        }
+        return ""
+    }
+
     /**
      * Aprende quem está na sala:
-     *  - quem a org marca no card (linha com "mediador/ADM/staff..." = ADM; o resto = jogador)
+     *  - quem a org marca no card: rótulo com "mediador/ADM/staff..." = ADM; com "jogador/time/vs..." = jogador.
+     *    Menção sem rótulo (ex.: "@cargo @mediador" no topo) só vira jogador se o card não disse quem é jogador.
      *  - quem fala na sala e ainda não era conhecido (o primeiro vira jogador)
      */
     private fun conhecerPessoas(s: SSala, m: DMsg) {
@@ -1402,17 +1447,29 @@ object Sniper {
             textos.add(e.titulo); textos.add(e.descricao)
             for (f in e.campos) textos.add(f.nome + ": " + f.valor)
         }
+        val semRotulo = ArrayList<String>()
+        var cardDisseJogador = false
         for (t in textos) for (r in RX_MENCAO.findAll(t)) {
             val id = r.groupValues[1]
-            if (id == eu) continue
-            val ini = t.lastIndexOf('\n', r.range.first).let { if (it < 0) 0 else it }
-            val linha = t.substring(ini, r.range.first)
-            val papel = if (PALAVRA_ADM.containsMatchIn(linha)) "adm" else if (m.autorBot) "jogador" else null
+            if (id == eu) { if (m.autorBot && PALAVRA_JOG.containsMatchIn(rotulo(t, r.range.first))) cardDisseJogador = true; continue }
+            val rot = rotulo(t, r.range.first)
+            val papel = when {
+                PALAVRA_ADM.containsMatchIn(rot) -> "adm"
+                PALAVRA_JOG.containsMatchIn(rot) -> if (m.autorBot) "jogador" else null
+                else -> null
+            }
             val p = s.pessoas.getOrPut(id) { SPessoa(id, nomes[id] ?: "", papel ?: "?") }
             nomes[id]?.let { if (p.nome.isEmpty()) p.nome = it }
-            if (papel != null && (papel == "adm" || p.papel == "?")) p.papel = papel
-            // mencionado num anúncio/card da org (bot) = participante exato da partida
-            if (m.autorBot) p.doCard = true
+            if (papel == "adm") { p.papel = "adm"; p.doCard = false; continue }
+            if (papel == "jogador") {
+                if (p.papel != "adm") { p.papel = "jogador"; p.doCard = true }
+                cardDisseJogador = true
+            } else if (m.autorBot && p.papel != "adm") semRotulo.add(id)
+        }
+        // card sem rótulo nenhum de jogador (ex.: só "@a @b"): aí quem foi marcado é o participante
+        if (m.autorBot && !cardDisseJogador) for (id in semRotulo.distinct()) {
+            val p = s.pessoas[id] ?: continue
+            if (p.papel == "?" || p.papel == "jogador") { p.papel = "jogador"; p.doCard = true }
         }
         if (m.autorId.isNotEmpty() && m.autorId != eu && !m.autorBot) {
             val novo = !s.pessoas.containsKey(m.autorId)

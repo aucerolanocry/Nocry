@@ -309,15 +309,9 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash scripts/prints.sh dist/Nocry.apk prints; bash scripts/estresse.sh prints
 
-      - name: Guardar no branch prints
-        env:
-          TOKEN: ${{ github.token }}
-        run: |
-          cd prints
-          git init -q
-          git checkout -q -b prints
-          git config user.name "prints-bot"
-          git config user.email "prints-bot@users.noreply.github.com"
-          git add -A
-          git commit -q -m "prints ${GITHUB_SHA}"
-          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" prints
+      - name: Guardar os prints
+        uses: actions/upload-artifact@v4
+        with:
+          name: prints
+          path: prints
+          retention-days: 14
