@@ -30,9 +30,8 @@ object Const {
     const val AVISO_ATUALIZACOES = "Essas atualizações seguidas são pra corrigir bugs. Logo logo elas vão parar."
     /** novidades mostradas na 1ª vez que abre depois de atualizar (pra todo mundo) */
     val NOVIDADES = listOf(
+        "Avisos do servidor (como manutenção) chegam em até 1 minuto, mesmo com o app aberto.",
         "Atualização nova não trava mais na hora: dá pra deixar pra depois por até 3 horas.",
-        "Botões ADB, Perm. e Volume do início agora dá pra tocar: liga e desliga direto.",
-        "Bot de fila: a mensagem automática sempre tenta marcar o jogador da partida.",
     )
     /** novidades do bot de fila: só aparecem pra quem tem o bot (a key de dono). Vazio = nada novo no bot nesta versão */
     val NOVIDADES_BOT = emptyList<String>()
