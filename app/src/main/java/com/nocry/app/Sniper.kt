@@ -1276,13 +1276,14 @@ object Sniper {
         // sala que já existia (o app abriu de novo, por exemplo): só manda se ainda não mandou
         if (agora() - Snow.ms(s.id) > 90_000) {
             val (antes, _) = d.historico(s.id, 25, null, s.guildId)
-            if (antes.any { it.autorId == eu && it.conteudo.trim() == msgAuto.trim() }) {
+            // já mandamos a automática nessa sala? (com variação a mensagem muda, então basta ter mandado algo)
+            if (antes.any { it.autorId == eu }) {
                 s.msgEnviada = true
                 exSalas?.execute { seguro { carregarHistorico(s) } }
                 return
             }
         }
-        var r = d.enviar(s.id, msgPorOrg[s.org] ?: msgAuto, rapido = true)
+        var r = d.enviar(s.id, marcacaoAuto(s) + (msgPorOrg[s.org] ?: escolheMsg(msgAuto)), rapido = true)
         if (s.thread) Thread { try { d.entrarThread(s.id) } catch (_: Throwable) {} }.start()
         diag("mensagem automática sala ${s.nome} -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(200) else ""}")
         if (!r.ok && r.erro() == 200000) {
@@ -1319,9 +1320,27 @@ object Sniper {
 
     /** versões mais simples da mensagem automática (pra org que bloqueia # ou alguma palavra) */
     private fun alternativasMsg(): List<String> {
-        val semTitulo = msgAuto.lines().joinToString(" ") { it.replace(Regex("^\\s*#+\\s*"), "") }.trim()
+        val base = escolheMsg(msgAuto)
+        val semTitulo = base.lines().joinToString(" ") { it.replace(Regex("^\\s*#+\\s*"), "") }.trim()
         val soLetras = semTitulo.replace(Regex("[^\\p{L}\\p{N} ]"), " ").replace(Regex("\\s+"), " ").trim().lowercase()
-        return listOf(semTitulo, soLetras, "full ump e xm8", "on").filter { it.isNotBlank() && it != msgAuto }.distinct()
+        return listOf(semTitulo, soLetras, "bora", "go", "on").filter { it.isNotBlank() && it != base }.distinct()
+    }
+
+    /** escolhe uma variação da mensagem automática: separadas por "|" (ex.: "bora | go | vamo | confirma aí").
+     *  Sem "|" manda a mensagem inteira como antes. */
+    private fun escolheMsg(base: String): String {
+        val vars = base.split("|").map { it.trim() }.filter { it.isNotBlank() }
+        return if (vars.size > 1) vars.random() else base.trim()
+    }
+
+    /** marcação do adm e do(s) jogador(es) já identificados na sala, pra pôr na frente da mensagem automática.
+     *  Só marca quem já dá pra saber na hora do envio; se ainda não sabe, manda sem marcar (não atrasa). */
+    private fun marcacaoAuto(s: SSala): String {
+        val ids = LinkedHashSet<String>()
+        s.pessoas.values.forEach { if (it.papel == "adm") ids.add(it.id) }
+        s.pessoas.values.forEach { if (it.papel == "jogador" && it.id != eu) ids.add(it.id) }
+        // no máximo 4 (1-2 adms + os jogadores da partida); evita ping em massa que derruba a conta
+        return if (ids.isEmpty()) "" else ids.take(4).joinToString(" ") { "<@$it>" } + " "
     }
 
     /** a sala guarda a conversa inteira (até esse tanto, só pra não estourar a memória numa sala gigante) */

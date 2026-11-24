@@ -622,6 +622,47 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         ct.gravity = Gravity.CENTER
         contagemTxt = ct
         b.addView(ct, Ui.lp(top = 10, c = c))
+
+        if (s != null) {
+            val acoes = Ui.hbox(c)
+            acoes.addView(botaoMarcar("copiar id e senha", R.drawable.ic_copy) {
+                val v = idESenhaDaSala(s)
+                if (v != null) copiar(v, "id e senha copiados")
+                else Ui.toast(act, "não achei id/senha no chat dessa sala")
+            }, pesoUm())
+            acoes.addView(botaoMarcar("abrir no Discord", R.drawable.ic_globe) { abrirNoDiscord(s) }, pesoUm(6))
+            b.addView(acoes, Ui.lp(top = 10, c = c))
+        }
+    }
+
+    /** acha o id e a senha mais recentes no chat da sala (pra copiar os dois juntos) */
+    private fun idESenhaDaSala(s: SSala): String? {
+        var id: String? = null
+        var senha: String? = null
+        for (m in chatLinhas(s).asReversed()) {
+            for ((rot, v) in copiaveis(m.texto)) {
+                if (senha == null && rot == "senha") senha = v
+                if (id == null && (rot == "ID" || rot == "sala" || rot == "código")) id = v
+            }
+            if (id != null && senha != null) break
+        }
+        return when {
+            id != null && senha != null -> "ID: $id\nSenha: $senha"
+            id != null -> "ID: $id"
+            senha != null -> "Senha: $senha"
+            else -> null
+        }
+    }
+
+    /** abre o Discord direto no canal exato dessa sala (na org certa) */
+    private fun abrirNoDiscord(s: SSala) {
+        val g = s.guildId ?: "@me"
+        val url = "https://discord.com/channels/$g/${s.id}"
+        try {
+            act.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+        } catch (_: Exception) {
+            Ui.toast(act, "não consegui abrir o Discord")
+        }
     }
 
     private fun estadoSala(): String {
