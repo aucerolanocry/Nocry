@@ -494,23 +494,97 @@ class CompTile : TileService() {
     }
 }
 
+// =====================================================================================
+// Google Meet: quando pedem tela no bot e mandam link do Meet
+// =====================================================================================
+object Meet {
+    val RX = Regex("""(?i)(?:https?://)?meet\.google\.com/[a-z]{3,4}-?[a-z]{4}-?[a-z]{3,4}\b[^\s]*""")
+
+    fun achar(t: String): String? = RX.findAll(t).lastOrNull()?.value?.let { if (it.startsWith("http")) it else "https://$it" }
+
+    /** o último link de Meet que apareceu no bot (vale 1 hora): o bloco do menu rápido abre ele direto */
+    fun guarda(link: String) {
+        Prefs.extraTxt("meet_link", link)
+        Prefs.gravaNum("meet_em", System.currentTimeMillis())
+    }
+
+    fun recente(): String? {
+        val l = Prefs.extraTxt("meet_link") ?: return null
+        return if (System.currentTimeMillis() - Prefs.lerNum("meet_em") < 60 * 60_000L) l else null
+    }
+
+    /** copia o link e abre no app do Meet (ou no navegador) */
+    fun abrir(c: Context, link: String?) {
+        if (link != null) {
+            guarda(link)
+            try {
+                (c.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("meet", link))
+            } catch (_: Throwable) {}
+        }
+        val it = if (link != null) Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link))
+        else c.packageManager.getLaunchIntentForPackage("com.google.android.apps.tachyon")
+            ?: c.packageManager.getLaunchIntentForPackage("com.google.android.apps.meetings")
+            ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://meet.google.com"))
+        it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try { c.startActivity(it) } catch (_: Throwable) { Ui.toast(c, "não consegui abrir o Meet") }
+    }
+}
+
+/** bloco "Meet" no menu rápido: abre o último link de Meet do bot (ou o app do Meet) */
+class MeetTile : TileService() {
+    override fun onStartListening() {
+        super.onStartListening()
+        val t = qsTile ?: return
+        t.state = Tile.STATE_INACTIVE
+        t.label = "Meet"
+        if (Build.VERSION.SDK_INT >= 29) t.subtitle = if (Meet.recente() != null) "link da sala" else "abrir"
+        t.updateTile()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun abreAntigo(it: Intent) = startActivityAndCollapse(it)
+
+    override fun onClick() {
+        super.onClick()
+        try { Prefs.init(this) } catch (_: Throwable) {}
+        val link = Meet.recente()
+        val it = (if (link != null) Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link))
+        else packageManager.getLaunchIntentForPackage("com.google.android.apps.tachyon")
+            ?: packageManager.getLaunchIntentForPackage("com.google.android.apps.meetings")
+            ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://meet.google.com"))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (link != null) try {
+            (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("meet", link))
+        } catch (_: Throwable) {}
+        try {
+            if (Build.VERSION.SDK_INT >= 34) startActivityAndCollapse(PendingIntent.getActivity(this, 2, it, PendingIntent.FLAG_IMMUTABLE))
+            else abreAntigo(it)
+        } catch (_: Throwable) {}
+    }
+}
+
 /** pede pro Android colocar o bloco NOCRY no menu rápido (Android 13+ mostra a pergunta direto); antes disso, explica */
 object MenuRapido {
-    fun adicionar(act: MainActivity, depois: () -> Unit) {
+    fun adicionar(act: MainActivity, depois: () -> Unit) = adicionar(act, false, depois)
+
+    /** meet = true: o bloco do Google Meet; false: o do modo competitivo */
+    fun adicionar(act: MainActivity, meet: Boolean, depois: () -> Unit) {
+        val chave = if (meet) "tile_dica_meet" else "tile_dica"
+        val nome = if (meet) "Meet" else "NOCRY"
         if (Build.VERSION.SDK_INT >= 33) {
             try {
                 val sb = act.getSystemService(android.app.StatusBarManager::class.java)
-                sb.requestAddTileService(android.content.ComponentName(act, CompTile::class.java), "NOCRY",
-                    android.graphics.drawable.Icon.createWithResource(act, R.drawable.ic_bolt), act.mainExecutor) { r ->
+                sb.requestAddTileService(android.content.ComponentName(act, if (meet) MeetTile::class.java else CompTile::class.java), nome,
+                    android.graphics.drawable.Icon.createWithResource(act, if (meet) R.drawable.ic_video else R.drawable.ic_bolt), act.mainExecutor) { r ->
                     // 0 = não quis, 1 = já estava, 2 = adicionou
-                    if (r == 1 || r == 2) { Prefs.gravaNum("tile_dica", 1L); Ui.toast(act, "PRONTO! DESÇA O MENU DO TOPO") }
+                    if (r == 1 || r == 2) { Prefs.gravaNum(chave, 1L); Ui.toast(act, "PRONTO! DESÇA O MENU DO TOPO") }
                     depois()
                 }
                 return
             } catch (_: Throwable) {}
         }
-        Ui.dialogAviso(act, "MENU RÁPIDO", "1. Desça o menu do topo da tela duas vezes.\n2. Toque no lápis (editar).\n3. Arraste o bloco NOCRY pra cima.\n\nPronto: um toque liga e desliga o modo competitivo.", "ENTENDI") {
-            Prefs.gravaNum("tile_dica", 1L); depois()
+        Ui.dialogAviso(act, "MENU RÁPIDO", "1. Desça o menu do topo da tela duas vezes.\n2. Toque no lápis (editar).\n3. Arraste o bloco $nome pra cima.\n\nPronto: " +
+            (if (meet) "um toque abre o Google Meet (o último link que mandaram no bot)." else "um toque liga e desliga o modo competitivo."), "ENTENDI") {
+            Prefs.gravaNum(chave, 1L); depois()
         }
     }
 }

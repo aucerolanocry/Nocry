@@ -70,7 +70,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Erros.novos(),
     Comp.ligado(), ocupadoComp,
     Update.adiada(act),
-    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica"), Perfil.versao
+    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica"), Prefs.lerNum("tile_dica_meet"), Perfil.versao
 ).joinToString("|")
 
     private class Atalho(val ico: Int, val nome: String, val alerta: Boolean, val abre: () -> Unit)
@@ -393,19 +393,20 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         }
 
         // ---------------- novidade: bloco NOCRY no menu rápido (some depois de adicionar ou dispensar) ----------------
-        if (Prefs.lerNum("tile_dica") == 0L) {
+        if (Prefs.lerNum("tile_dica") == 0L || Prefs.lerNum("tile_dica_meet") == 0L) {
             val k = Ui.card(c, ligado = true)
             val topo = Ui.hbox(c)
             topo.gravity = Gravity.CENTER_VERTICAL
             topo.addView(Ui.icone(c, R.drawable.ic_bolt, Ui.TEXT, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 8) })
             topo.addView(Ui.text(c, "NOVO · MENU RÁPIDO", 10.5f, Ui.TEXT, true, mono = true))
             k.addView(topo)
-            k.addView(Ui.text(c, "Coloque o botão NOCRY no menu que desce do topo da tela. Com 1 toque liga e desliga o modo competitivo, sem abrir o app.", 12.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+            k.addView(Ui.text(c, "Coloque os botões no menu que desce do topo da tela: NOCRY liga e desliga o competitivo, e Meet abre o link do Google Meet que mandaram no bot. Sem abrir o app.", 12.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
             val bts = Ui.hbox(c)
-            bts.addView(Ui.button(c, "adicionar", Ui.Kind.PRIMARY) { MenuRapido.adicionar(act) { redesenha() } }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            bts.addView(Ui.button(c, "agora não", Ui.Kind.GHOST) { Prefs.gravaNum("tile_dica", 1L); redesenha() },
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 8) })
+            if (Prefs.lerNum("tile_dica") == 0L) bts.addView(Ui.button(c, "nocry", Ui.Kind.PRIMARY, R.drawable.ic_bolt) { MenuRapido.adicionar(act, false) { redesenha() } }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (Prefs.lerNum("tile_dica_meet") == 0L) bts.addView(Ui.button(c, "meet", Ui.Kind.PRIMARY, R.drawable.ic_video) { MenuRapido.adicionar(act, true) { redesenha() } },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (bts.childCount > 0) it.leftMargin = Ui.dp(c, 8) })
             k.addView(bts, Ui.lp(top = 12, c = c))
+            k.addView(Ui.button(c, "agora não", Ui.Kind.GHOST) { Prefs.gravaNum("tile_dica", 1L); Prefs.gravaNum("tile_dica_meet", 1L); redesenha() }, Ui.lp(top = 8, c = c))
             add(k, 12)
         }
 

@@ -659,6 +659,12 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             if (v != null) copiar(v, "id e senha copiados") else Ui.toast(act, "não achei id/senha no chat dessa sala")
         }, pesoUm(6))
         at.addView(atalho("discord", R.drawable.ic_globe, false) { abrirNoDiscord(sa) }, pesoUm(6))
+        // pediram tela: o link do Google Meet que mandaram na sala (acende quando tem)
+        val meet = sa.chat.toList().asReversed().firstNotNullOfOrNull { m -> Meet.achar(m.texto + "\n" + m.card) }
+        at.addView(atalho("meet", R.drawable.ic_video, meet != null) {
+            if (meet == null) Ui.toast(act, "ninguém mandou link do Meet nessa sala")
+            else { Ui.toast(act, "link do meet copiado"); Meet.abrir(act, meet) }
+        }, pesoUm(6))
         b.addView(at, Ui.lp(top = 8, c = c))
     }
 
@@ -673,9 +679,9 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         b.setPadding(Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 9))
         b.addView(Ui.icone(c, ico, if (ligado) Theme.accent else Ui.TEXT, 19), LinearLayout.LayoutParams(Ui.dp(c, 19), Ui.dp(c, 19)))
         val t = Ui.text(c, rot, 10.5f, Ui.TEXT, true, mono = true)
-        t.maxLines = 1
         t.gravity = Gravity.CENTER
-        b.addView(t, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 5, c = c))
+        Ui.umaLinha(t, 8)
+        b.addView(t, Ui.lp(top = 5, c = c))
         b.contentDescription = rot
         Ui.clique(b) { acao() }
         return b
@@ -844,7 +850,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     private fun assinaturaAcoes(): String {
         val s = salaAtual()
-        return "${s?.id}|${s?.protegida}|${s?.encerrada}|${Sniper.salas.size}|${s?.goAuto}|${s?.temGo}"
+        return "${s?.id}|${s?.protegida}|${s?.encerrada}|${Sniper.salas.size}|${s?.goAuto}|${s?.temGo}|${s?.chat?.size}"
     }
 
     private fun acoes(b: LinearLayout) {

@@ -1656,6 +1656,8 @@ object Sniper {
         s.ultimoId = maior(s.ultimoId, m.id)
         s.ultima = agora()
         conhecerPessoas(s, m)
+        // link do Google Meet (pediram tela): guarda pro botão "meet" e pro bloco do menu rápido
+        try { Meet.achar(m.conteudo + " " + m.embeds.joinToString(" ") { it.descricao })?.let { Meet.guarda(it) } } catch (_: Throwable) {}
         if (m.autorBot && m.botoes.any { ehBotaoGo(it.label) }) {
             s.temGo = true
             marcaOrgGo(s.org)
