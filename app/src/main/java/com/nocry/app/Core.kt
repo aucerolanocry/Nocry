@@ -249,6 +249,10 @@ var bypassVolAtivo: Boolean
     var mcCyclesTotal: Int
         get() = gi("mc_cycles_total", 1, 1, 3)
         set(v) = pi("mc_cycles_total", v.coerceIn(1, 3))
+    /** ja conectou o ADB pelo menos uma vez (ai da pra religar a depuracao sem fio sozinho) */
+    var adbJaConectou: Boolean
+        get() = sp.getBoolean("adb_ja_conectou", false)
+        set(v) { sp.edit().putBoolean("adb_ja_conectou", v).apply() }
     /** density de ANTES do modo carregador: numero ou "reset". null = o modo nao esta aplicado */
     var densOrig: String?
         get() = gs("dens_orig")

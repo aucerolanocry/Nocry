@@ -22,6 +22,7 @@ class App : Application() {
         NLog.init(this)
         Notif.init(this)
         Sniper.init(this)
+        try { AdbAuto.ouvir(this) } catch (_: Throwable) {}
         NLog.add("app", "iniciou")
         // toque via volume/carregador e modo carregador saíram: quem tinha algum ligado volta ao normal sozinho
         if (Engine.temModoAntigo()) Bg.io { Engine.desligarModosAntigos() }

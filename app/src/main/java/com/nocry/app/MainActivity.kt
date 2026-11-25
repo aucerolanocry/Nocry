@@ -590,7 +590,8 @@ class MainActivity : Activity() {
         if (!gate) {
             Bg.io { License.tick(applicationContext) }
             // tenta conectar sozinho (depuracao sem fio ja pareada)
-            if (!Adb.connected && conectando.compareAndSet(false, true)) {
+            if (!Adb.connected && AdbAuto.pode()) AdbAuto.religar(this, "abriu o app")
+            else if (!Adb.connected && conectando.compareAndSet(false, true)) {
                 Bg.io {
                     try { Adb.connect(applicationContext, 5000) } finally { conectando.set(false) }
                     Bg.ui { atual()?.tick() }

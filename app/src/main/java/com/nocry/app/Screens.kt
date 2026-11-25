@@ -574,7 +574,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
                         if (Adb.connect(act.applicationContext, 9000)) "CONECTADO" else "Não conectou: " + Adb.lastError
                     }
                 }, Ui.lp(top = 12, c = c))
-                v.addView(Ui.dica(c, "Trocou de Wi-Fi ou reiniciou o celular? Ligue a depuração sem fio de novo e toque aqui. Não precisa parear de novo.", Ui.Dica.INFO), Ui.lp(top = 12, c = c))
+                v.addView(Ui.dica(c, "Trocou de Wi-Fi ou reiniciou o celular? O app religa a depuração e conecta sozinho. Em rede nova, o Android pergunta se pode: marque \"sempre permitir\". Se não voltar, toque aqui.", Ui.Dica.INFO), Ui.lp(top = 12, c = c))
             }
             3 -> {
                 v.addView(Ui.text(c, "O app se dá a permissão de mudar o toque e se tira da economia de bateria.", 10.5f, Ui.TEXT))

@@ -366,6 +366,8 @@ class BootReceiver : BroadcastReceiver() {
             NLog.add("boot", "recebi " + intent.action)
             if (Prefs.precisaServico() && License.valid()) NocryService.sync(context)
             InstalaService.retoma(context)
+            // depois de reiniciar a depuracao sem fio volta desligada: religa sozinho
+            if (intent.action == Intent.ACTION_BOOT_COMPLETED) AdbAuto.religar(context, "celular ligou")
         } catch (t: Throwable) {
             NLog.add("boot", "erro: $t")
         }

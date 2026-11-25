@@ -1,6 +1,11 @@
 package com.nocry.app
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.provider.Settings
 import android.os.Build
 import android.os.Looper
 import android.sun.security.x509.AlgorithmId
@@ -19,6 +24,7 @@ import android.sun.security.x509.X500Name
 import android.sun.security.x509.X509CertImpl
 import android.sun.security.x509.X509CertInfo
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
+import io.github.muntashirakon.adb.AdbConnection
 import io.github.muntashirakon.adb.AdbPairingRequiredException
 import io.github.muntashirakon.adb.AdbStream
 import io.github.muntashirakon.adb.android.AndroidUtils
@@ -157,14 +163,41 @@ object Adb {
             return conectadoCache
         }
 
+    /**
+     * Joga fora uma conexao morta. Quando a depuracao sem fio cai (troca de Wi-Fi, celular dormiu), o socket
+     * fica "meio aberto": a biblioteca ainda acha que esta conectada e o proximo comando espera a resposta
+     * PRA SEMPRE segurando a trava dela. Ai nenhum "conectar" funcionava ate a pessoa desligar e ligar a
+     * depuracao (o que matava o socket velho). Aqui fecha o socket por fora da trava (destrava quem estava
+     * esperando) e cria um gerenciador novo na proxima conexao (mesmas chaves, nao precisa parear de novo).
+     */
+    private fun descarta(motivo: String) {
+        val m = synchronized(lock) { val x = mgr; mgr = null; x }
+        guarda(false)
+        if (m == null) return
+        NLog.add("adb", "conexão travada descartada ($motivo)")
+        val t = Thread {
+            try {
+                val f = AbsAdbConnectionManager::class.java.getDeclaredField("mAdbConnection")
+                f.isAccessible = true
+                (f.get(m) as? AdbConnection)?.close()
+            } catch (_: Throwable) {}
+        }
+        t.isDaemon = true
+        t.start()
+    }
+
     /** conecta (descobre a porta sozinho pelo mDNS). false = nao deu; o motivo fica em lastError */
     fun connect(ctx: Context, timeoutMs: Long = 7000): Boolean {
-        if (connected) return true
+        if (connected) {
+            // a biblioteca diz "conectado", mas pode ser a conexao velha morta: confere de verdade antes de confiar
+            if (ocupado() || execAgora("echo ok", 4000).out.trim() == "ok") return true
+            descarta("não respondeu ao conectar")
+        }
         return try {
             val m = manager(ctx)
             needsPairing = false
             val ok = if (Build.VERSION.SDK_INT >= 30) m.autoConnect(ctx.applicationContext, timeoutMs) else m.connect(5555)
-            if (ok) lastError = ""
+            if (ok) { lastError = ""; Prefs.adbJaConectou = true }
             guarda(ok)
             ok
         } catch (e: AdbPairingRequiredException) {
@@ -190,17 +223,30 @@ object Adb {
         }
     }
 
-    fun disconnect() {
-        try { mgr?.disconnect() } catch (_: Throwable) {}
-        guarda(false)
-    }
+    /** desliga. Nunca espera a trava da biblioteca (se a conexao travou, ia congelar quem chamou) */
+    fun disconnect() = descarta("desligado")
 
-    private fun open(cmd: String): AdbStream? {
+    /**
+     * abre um comando. A biblioteca espera a resposta do celular SEM limite de tempo; com a conexao morta isso
+     * nunca voltava. Agora espera no maximo [limite]: passou disso, a conexao esta morta e e descartada.
+     */
+    private fun open(cmd: String, limite: Long = 8000): AdbStream? {
         val m = mgr ?: return null
-        return try { m.openStream("shell:" + soAscii(cmd)) } catch (t: Throwable) {
-            lastError = (t.message ?: t.javaClass.simpleName).take(120)
-            null
+        val res = java.util.concurrent.atomic.AtomicReference<AdbStream?>(null)
+        val t = Thread {
+            try { res.set(m.openStream("shell:" + soAscii(cmd))) } catch (e: Throwable) {
+                lastError = (e.message ?: e.javaClass.simpleName).take(120)
+            }
         }
+        t.isDaemon = true
+        t.start()
+        t.join(limite)
+        if (t.isAlive) {
+            lastError = "o ADB parou de responder"
+            descarta("comando sem resposta")
+            return null
+        }
+        return res.get()
     }
 
     /** roda um comando no shell do aparelho e devolve tudo que ele escreveu. ok=false se estourou o tempo ou nao conectou */
@@ -322,5 +368,85 @@ object Adb {
         if (connected && (ocupado() || execAgora("echo ok", 9000).out.trim() == "ok")) return true
         try { disconnect() } catch (_: Throwable) {}
         return connect(ctx) && alive()
+    }
+}
+
+/**
+ * Religa a depuracao sem fio sozinho (Android 11+). Ela desliga quando troca de Wi-Fi ou reinicia o celular,
+ * e antes a pessoa tinha que ir nas configuracoes ligar de novo. Com a permissao de "configuracoes seguras"
+ * que o app ja se deu, ele mesmo liga e reconecta (as chaves do pareamento continuam valendo).
+ * Rede que nunca foi autorizada: o Android pergunta "permitir depuracao nesta rede?" — marcando "sempre",
+ * nas proximas vezes e automatico.
+ */
+object AdbAuto {
+    private const val CHAVE = "adb_wifi_enabled"
+    private val rodando = java.util.concurrent.atomic.AtomicBoolean(false)
+    @Volatile private var ouvindo = false
+
+    /** da pra fazer sozinho: Android 11+, ja conectou antes e tem a permissao */
+    fun pode(): Boolean = Build.VERSION.SDK_INT >= 30 && Prefs.adbJaConectou && Sys.hasWriteSecure()
+
+    private fun noWifi(c: Context): Boolean {
+        return try {
+            val cm = c.getSystemService(ConnectivityManager::class.java) ?: return false
+            val n = cm.activeNetwork ?: return false
+            cm.getNetworkCapabilities(n)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        } catch (_: Throwable) { false }
+    }
+
+    private fun ligada(c: Context): Boolean =
+        try { Settings.Global.getInt(c.contentResolver, CHAVE, 0) == 1 } catch (_: Throwable) { false }
+
+    /** liga a depuracao sem fio (se estiver desligada) e reconecta. Segundo plano, uma vez por vez */
+    fun religar(c: Context, motivo: String) {
+        val app = c.applicationContext
+        if (!pode() || !rodando.compareAndSet(false, true)) return
+        Bg.io {
+            try {
+                // o Android desliga a depuracao logo depois de trocar de rede: espera ele terminar antes de religar
+                Thread.sleep(2000)
+                if (!noWifi(app)) return@io
+                if (!ligada(app)) {
+                    try {
+                        Settings.Global.putInt(app.contentResolver, CHAVE, 1)
+                    } catch (t: Throwable) {
+                        NLog.add("adb", "não deu pra religar a depuração: " + (t.message ?: "").take(80))
+                        return@io
+                    }
+                    NLog.add("adb", "religuei a depuração sem fio ($motivo)")
+                    Thread.sleep(2500)
+                }
+                for (i in 1..3) {
+                    if (Adb.connect(app, 6000)) {
+                        NLog.add("adb", "conectou sozinho ($motivo)")
+                        Bg.ui { Engine.onChange?.invoke() }
+                        return@io
+                    }
+                    // o Android voltou pra desligado: rede nova, esta esperando a pessoa tocar em "permitir"
+                    if (!ligada(app)) {
+                        NLog.add("adb", "rede nova: o Android pediu pra permitir a depuração nesta rede")
+                        return@io
+                    }
+                    Thread.sleep(3000)
+                }
+            } catch (_: Throwable) {
+            } finally {
+                rodando.set(false)
+            }
+        }
+    }
+
+    /** fica de olho no Wi-Fi: conectou numa rede, religa e reconecta */
+    fun ouvir(c: Context) {
+        if (ouvindo || Build.VERSION.SDK_INT < 30) return
+        val app = c.applicationContext
+        val cm = app.getSystemService(ConnectivityManager::class.java) ?: return
+        try {
+            val pedido = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build()
+            cm.registerNetworkCallback(pedido, object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) = religar(app, "Wi-Fi conectou")
+            })
+            ouvindo = true
+        } catch (_: Throwable) {}
     }
 }
