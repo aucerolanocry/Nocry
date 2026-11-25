@@ -555,27 +555,19 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val rapidas = Ui.hbox(c)
         val frases = listOf("Go", "Bora", "Full UMP e XM8?", "Sem mobilador", "Regras ok ✅", "Cria a sala", "Manda o ID", "Pronto")
         for ((i, f) in frases.withIndex()) {
-            val t = texto(f, 13f, Ui.TEXT, true)
+            val t = texto(f, 11.5f, Ui.TEXT, true)
             t.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(Theme.accent, 0x14), Ui.raioPeq(20), Theme.alpha(Theme.accent, 0x5A), 1),
                 Ui.shape(c, android.graphics.Color.WHITE, Ui.raioPeq(20)))
-            t.setPadding(Ui.dp(c, 15), Ui.dp(c, 9), Ui.dp(c, 15), Ui.dp(c, 9))
+            t.setPadding(Ui.dp(c, 12), Ui.dp(c, 6), Ui.dp(c, 12), Ui.dp(c, 6))
             Ui.clique(t) { mandar(f) }
             val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             if (i > 0) lp.leftMargin = Ui.dp(c, 6)
             rapidas.addView(t, lp)
         }
         hs.addView(rapidas)
-        card.addView(hs, Ui.lp(top = 10, c = c))
+        card.addView(hs, Ui.lp(top = 8, c = c))
 
-        // marcar jogador / ADM (põe @nome no campo; na hora de mandar vira a marcação de verdade)
-        val marcar = Ui.hbox(c)
-        marcar.gravity = Gravity.CENTER_VERTICAL
-        marcar.addView(botaoMarcar("@ jogador", R.drawable.ic_gamepad) { marcarPapel("jogador") }, pesoUm())
-        marcar.addView(botaoMarcar("@ ADM", R.drawable.ic_shield) { marcarPapel("adm") }, pesoUm(6))
-        marcar.addView(botaoMarcar("@ outro", R.drawable.ic_user) { escolherPessoa(null) }, pesoUm(6))
-        card.addView(marcar, Ui.lp(top = 10, c = c))
-
-        // escrever
+        // escrever: uma linha só com [imagem] [@] [mensagem] [enviar]. O @ abre: jogador, ADM ou outra pessoa
         val linha = Ui.hbox(c)
         linha.gravity = Gravity.CENTER_VERTICAL
         val e = campoMsg ?: Ui.field(c, "mensagem", false).also {
@@ -585,16 +577,25 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             campoMsg = it
         }
         solta(e)
-        val foto = android.widget.FrameLayout(c)
-        foto.background = Botao(c, "ghost", Ui.raioPeq(12))
-        foto.addView(Ui.icone(c, R.drawable.ic_image, Ui.TEXT, 20), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 20), Ui.dp(c, 20), Gravity.CENTER))
-        foto.contentDescription = "enviar imagem"
-        Ui.clique(foto) { escolherImagem() }
-        linha.addView(foto, LinearLayout.LayoutParams(Ui.dp(c, 50), Ui.dp(c, 50)).also { it.rightMargin = Ui.dp(c, 8) })
+        e.setPadding(Ui.dp(c, 14), Ui.dp(c, 10), Ui.dp(c, 14), Ui.dp(c, 10))
+        val tam = Ui.dp(c, 44)
+        fun redondo(ico: Int, desc: String, forte: Boolean, acao: () -> Unit): View {
+            val f = android.widget.FrameLayout(c)
+            f.background = if (forte) Botao(c, "grad", 99) else Botao(c, "ghost", 99)
+            f.addView(Ui.icone(c, ico, if (forte) Theme.sobreGrad() else Ui.TEXT, 19), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 19), Ui.dp(c, 19), Gravity.CENTER))
+            f.contentDescription = desc
+            Ui.clique(f) { acao() }
+            return f
+        }
+        linha.addView(redondo(R.drawable.ic_image, "enviar imagem", false) { escolherImagem() }, LinearLayout.LayoutParams(tam, tam).also { it.rightMargin = Ui.dp(c, 6) })
+        linha.addView(redondo(R.drawable.ic_user, "marcar alguém", false) {
+            Ui.dialogEscolha(act, "MARCAR", listOf("@ jogador", "@ ADM", "@ outra pessoa")) { i ->
+                when (i) { 0 -> marcarPapel("jogador"); 1 -> marcarPapel("adm"); else -> escolherPessoa(null) }
+            }
+        }, LinearLayout.LayoutParams(tam, tam).also { it.rightMargin = Ui.dp(c, 6) })
         linha.addView(e, pesoUm())
-        val enviar = Ui.button(c, "enviar", Ui.Kind.PRIMARY) { enviarCampo() }
-        linha.addView(enviar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 8) })
-        card.addView(linha, Ui.lp(top = 10, c = c))
+        linha.addView(redondo(R.drawable.ic_up, "enviar", true) { enviarCampo() }, LinearLayout.LayoutParams(tam, tam).also { it.leftMargin = Ui.dp(c, 6) })
+        card.addView(linha, Ui.lp(top = 8, c = c))
 
         card.addView(pedaco({ assinaturaAcoes() }) { acoes(it) }, Ui.lp(top = 12, c = c))
         chatCard = card
@@ -692,15 +693,36 @@ class SniperScreen(a: MainActivity) : Screen(a) {
      * Se nenhum ADM mandou chave ainda, abre pra colar/digitar.
      */
     private fun pixDaSala(sa: SSala) {
-        val valor = Caderno.valorDe(sa.fila)
-        val doAdm = sa.chat.toList().asReversed().firstNotNullOfOrNull { m ->
+        // quem pode ter mandado a chave: ADM primeiro, depois o bot da org, depois quem ainda não se sabe (mediador
+        // que não foi marcado). Nunca jogador nem você. Qualquer tipo de chave vale (e-mail, CPF, CNPJ, telefone, aleatória)
+        val tipos = setOf("chave pix", "e-mail", "CPF", "CNPJ", "telefone")
+        fun prioridade(m: SChat): Int {
             val papel = sa.pessoas[m.autorId]?.papel
-            if (m.tipo != "bot" && papel != "adm") null
-            else copiaveis(m.texto + "\n" + m.card).firstOrNull { it.first == "chave pix" }?.second
+            return when {
+                m.tipo == "voce" || papel == "jogador" -> -1
+                papel == "adm" -> 3
+                m.tipo == "bot" -> 2
+                else -> 1
+            }
         }
-        if (doAdm != null) {
-            copiar(Pix.normaliza(doAdm), "chave pix do ADM copiada")
-            Pix.mostrar(act, doAdm, valor)
+        val msgs = sa.chat.toList().asReversed()
+        var melhor: String? = null
+        var nota = 0
+        for (m in msgs) {
+            val p = prioridade(m)
+            if (p <= nota) continue
+            val k = copiaveis(m.texto + "\n" + m.card).firstOrNull { it.first in tipos }?.second ?: continue
+            melhor = k; nota = p
+            if (p == 3) break
+        }
+        // valor: o que o ADM escreveu ("Valor a ser pago: R$ 3,50"); se não tiver, o da fila
+        val valorMsg = msgs.filter { prioridade(it) > 0 }.firstNotNullOfOrNull { m ->
+            Caderno.valorDe(m.texto + " " + m.card).takeIf { it > 0 }
+        }
+        val valor = valorMsg ?: Caderno.valorDe(sa.fila)
+        if (melhor != null) {
+            copiar(Pix.normaliza(melhor), "chave pix do ADM copiada")
+            Pix.mostrar(act, melhor, valor)
         } else {
             Ui.toast(act, "o ADM ainda não mandou chave pix")
             Pix.abrir(act, null, valor)
