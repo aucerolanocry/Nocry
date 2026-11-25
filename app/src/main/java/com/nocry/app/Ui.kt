@@ -329,8 +329,9 @@ object Ui {
         // clicável ganha borda de destaque + ripple pra ficar claro que dá pra tocar
         val cor = when (ok) { true -> OK; false -> BAD; null -> WARN }
         // clicável: fundo e borda na cor do estado (verde ligado, vermelho desligado, amarelo atenção)
+        // a pílula fica neutra; só o botãozinho redondo da ponta muda de cor (verde ligado, vermelho desligado)
         r.background = if (clicavel)
-            ripple(c, shape(c, Theme.alpha(cor, 0x24), raioPilula(), Theme.alpha(cor, 0xC8), 2))
+            ripple(c, shape(c, Theme.alpha(Color.WHITE, 0x12), raioPilula(), Theme.alpha(Color.WHITE, 0x40), 1))
         else peca(c, raioPilula(), 0x8C)
         val dot = View(c)
         dot.background = shape(c, cor, 4)

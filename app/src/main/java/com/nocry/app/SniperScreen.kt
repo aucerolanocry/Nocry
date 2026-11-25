@@ -310,12 +310,12 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         col.gravity = Gravity.CENTER_HORIZONTAL
         // ripple pra dar o toque e deixar claro que é clicável
         // cara de botão: tem coisa = verde aceso; vazio = cinza
-        col.background = Ui.ripple(c, Ui.shape(c, if (aceso) Theme.alpha(Ui.OK, 0x22) else Theme.alpha(android.graphics.Color.WHITE, 0x10), Ui.raioPeq(14),
-            if (aceso) Theme.alpha(Ui.OK, 0xC0) else Theme.alpha(android.graphics.Color.WHITE, 0x55), 2))
+        col.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, if (aceso) 0x10 else 0x08), Ui.raioPeq(14),
+            if (aceso) Theme.alpha(Theme.accent, 0x77) else Theme.alpha(android.graphics.Color.WHITE, 0x1C), 1))
         col.setPadding(Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 12))
         val cab = Ui.hbox(c)
         cab.gravity = Gravity.CENTER
-        cab.addView(Ui.icone(c, ico, if (aceso) Ui.OK else Ui.MUTED, 12))
+        cab.addView(Ui.icone(c, ico, if (aceso) Theme.accent else Ui.MUTED, 12))
         val r = Ui.text(c, rotulo, 9f, Ui.MUTED, true, mono = true)
         r.letterSpacing = 0.08f
         cab.addView(r, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 5) })
