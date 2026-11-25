@@ -322,8 +322,8 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         // setinha: avisa que dá pra tocar e abrir
         val seta = android.widget.FrameLayout(c)
         seta.background = Ui.shape(c, if (aceso) Ui.OK else Theme.alpha(android.graphics.Color.WHITE, 0x66), 99)
-        seta.addView(Ui.icone(c, R.drawable.ic_chevron, 0xFF0D0F14.toInt(), 9), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 9), Ui.dp(c, 9), Gravity.CENTER))
-        cab.addView(seta, LinearLayout.LayoutParams(Ui.dp(c, 15), Ui.dp(c, 15)).also { it.leftMargin = Ui.dp(c, 5) })
+        seta.addView(Ui.icone(c, R.drawable.ic_chevron, 0xFF0D0F14.toInt(), 7), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 7), Ui.dp(c, 7), Gravity.CENTER))
+        cab.addView(seta, LinearLayout.LayoutParams(Ui.dp(c, 12), Ui.dp(c, 12)).also { it.leftMargin = Ui.dp(c, 5) })
         col.addView(cab, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val v = if (aceso) Ui.gradTexto(c, valor, 22f) else Ui.text(c, valor, 22f, Ui.TEXT, true)
         v.gravity = Gravity.CENTER

@@ -337,7 +337,7 @@ object Ui {
         dot.background = shape(c, cor, 4)
         val dp2 = LinearLayout.LayoutParams(dp(c, 7), dp(c, 7))
         dp2.rightMargin = dp(c, 6)
-        r.addView(dot, dp2)
+        if (!(clicavel && ico != 0)) r.addView(dot, dp2)
         // maiusculo feito aqui mesmo: o "tudo maiusculo" do TextView apagava as cores do texto em Android antigo
         val n = up(nome)
         val s = android.text.SpannableString(n + " " + up(valor))
@@ -358,8 +358,8 @@ object Ui {
             // botãozinho redondo na ponta, com o ícone na cor de contraste do tema: deixa claro que dá pra tocar
             val bola = FrameLayout(c)
             bola.background = shape(c, cor, 99)
-            bola.addView(icone(c, ico, 0xFF0D0F14.toInt(), 10), FrameLayout.LayoutParams(dp(c, 10), dp(c, 10), Gravity.CENTER))
-            r.addView(bola, LinearLayout.LayoutParams(dp(c, 18), dp(c, 18)).also { it.leftMargin = dp(c, 4) })
+            bola.addView(icone(c, ico, 0xFF0D0F14.toInt(), 8), FrameLayout.LayoutParams(dp(c, 8), dp(c, 8), Gravity.CENTER))
+            r.addView(bola, LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)).also { it.leftMargin = dp(c, 5) })
         } else r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val pv = if (compacto) 6 else 9
         if (compacto) r.background = if (clicavel) ripple(c, solido(c, raioPilula())) else solido(c, raioPilula())
