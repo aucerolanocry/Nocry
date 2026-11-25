@@ -311,18 +311,20 @@ object Ui {
         // largura do proprio texto (fica centralizado com a bolinha); se nao couber, corta com "..."
         t.maxLines = 1
         t.ellipsize = android.text.TextUtils.TruncateAt.END
-        r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        // ícone de ação na ponta (ex.: liga/desliga) só quando dá pra tocar
+        // o texto encolhe (com "...") e a bolinha da ponta nunca fica cortada
         if (clicavel && ico != 0) {
-            // botãozinho redondo cheio na ponta: deixa claro que dá pra tocar
+            r.gravity = Gravity.CENTER_VERTICAL
+            r.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            umaLinha(t, 7)
+            // botãozinho redondo na ponta, com o ícone na cor de contraste do tema: deixa claro que dá pra tocar
             val bola = FrameLayout(c)
-            bola.background = shape(c, Theme.accent, 99)
-            bola.addView(icone(c, ico, Color.WHITE, 11), FrameLayout.LayoutParams(dp(c, 11), dp(c, 11), Gravity.CENTER))
-            r.addView(bola, LinearLayout.LayoutParams(dp(c, 20), dp(c, 20)).also { it.leftMargin = dp(c, 6) })
-        }
+            bola.background = shape(c, Theme.alpha(Theme.accent, 0xE6), 99)
+            bola.addView(icone(c, ico, Theme.sobreGrad(), 10), FrameLayout.LayoutParams(dp(c, 10), dp(c, 10), Gravity.CENTER))
+            r.addView(bola, LinearLayout.LayoutParams(dp(c, 18), dp(c, 18)).also { it.leftMargin = dp(c, 4) })
+        } else r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val pv = if (compacto) 6 else 9
         if (compacto) r.background = if (clicavel) ripple(c, solido(c, raioPilula())) else solido(c, raioPilula())
-        r.setPadding(dp(c, if (clicavel && ico != 0) 10 else 7), dp(c, pv), dp(c, if (clicavel && ico != 0) 8 else 7), dp(c, pv))
+        r.setPadding(dp(c, if (clicavel && ico != 0) 9 else 7), dp(c, pv), dp(c, if (clicavel && ico != 0) 5 else 7), dp(c, pv))
         r.contentDescription = "$nome $valor"
         return r
     }

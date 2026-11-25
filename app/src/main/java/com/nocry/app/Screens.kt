@@ -450,13 +450,15 @@ class HomeScreen(a: MainActivity) : Screen(a) {
 
         val pAdb = Ui.pilulaStatus(c, "ADB", if (adb) "ligado" else "off", adb, clicavel = true, ico = R.drawable.ic_power)
         Ui.clique(pAdb) {
+            val desliga = { Bg.io { AdbAuto.desligarManual(act); Bg.ui { Ui.toast(act, "ADB desligado"); redesenha() } } }
             if (adb) {
-                // ligado: desliga. Mas se o bypass/otimização está usando o ADB, ele religaria sozinho — então avisa.
-                if (Prefs.precisaServico()) Ui.toast(act, "o ADB está em uso — desligue o bypass antes")
-                else Bg.io { Adb.disconnect(); Bg.ui { Ui.toast(act, "ADB desligado"); redesenha() } }
+                // em uso (bypass, otimização automática, bot): pergunta antes, porque eles param até ligar de novo
+                if (Prefs.precisaServico()) Ui.dialogConfirma(act, "DESLIGAR O ADB?",
+                    "O bypass, a otimização automática e o bot usam o ADB. Eles param até você ligar de novo (é só tocar aqui).", "DESLIGAR") { desliga() }
+                else desliga()
             } else {
-                Ui.toast(act, "reconectando o ADB...")
-                Bg.io { val ok = Adb.ensure(act); Bg.ui { Ui.toast(act, if (ok) "ADB reconectado" else "não consegui — abra a conexão"); redesenha() } }
+                Ui.toast(act, "ligando o ADB...")
+                Bg.io { val ok = AdbAuto.ligarManual(act); Bg.ui { Ui.toast(act, if (ok) "ADB ligado" else "não consegui — abra a conexão"); redesenha() } }
             }
         }
         val pPerm = Ui.pilulaStatus(c, "Perm.", if (perm) "ok" else "falta", perm, clicavel = true, ico = R.drawable.ic_chevron)

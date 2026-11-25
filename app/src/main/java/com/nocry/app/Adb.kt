@@ -197,7 +197,7 @@ object Adb {
             val m = manager(ctx)
             needsPairing = false
             val ok = if (Build.VERSION.SDK_INT >= 30) m.autoConnect(ctx.applicationContext, timeoutMs) else m.connect(5555)
-            if (ok) { lastError = ""; Prefs.adbJaConectou = true }
+            if (ok) { lastError = ""; Prefs.adbJaConectou = true; Prefs.gravaNum("adb_off_manual", 0L) }
             guarda(ok)
             ok
         } catch (e: AdbPairingRequiredException) {
@@ -385,7 +385,7 @@ object AdbAuto {
 
     /** da pra fazer sozinho: Android 11+, ja conectou antes e tem a permissao */
     fun pode(): Boolean = Build.VERSION.SDK_INT >= 30 && !BuildConfig.PREVIEW && Prefs.lerNum("adb_auto", 1L) == 1L &&
-        Prefs.adbJaConectou && Sys.hasWriteSecure()
+        Prefs.lerNum("adb_off_manual") == 0L && Prefs.adbJaConectou && Sys.hasWriteSecure()
 
     /** o Android perguntou "permitir nesta rede?" e a pessoa não permitiu: não pergunta de novo por 30 min */
     private fun negouRecente(): Boolean = System.currentTimeMillis() - Prefs.lerNum("adb_auto_negado") < 30 * 60_000L
@@ -441,6 +441,24 @@ object AdbAuto {
                 rodando.set(false)
             }
         }
+    }
+
+    /** botão ADB do início: desliga de verdade (a depuração sem fio também, pra nada religar sozinho) */
+    fun desligarManual(c: Context) {
+        Prefs.gravaNum("adb_off_manual", 1L)
+        try { Adb.disconnect() } catch (_: Throwable) {}
+        try { if (Sys.hasWriteSecure()) Settings.Global.putInt(c.applicationContext.contentResolver, CHAVE, 0) } catch (_: Throwable) {}
+        NLog.add("adb", "desligado pelo botão do início")
+    }
+
+    /** botão ADB do início: liga a depuração sem fio de novo e conecta */
+    fun ligarManual(c: Context): Boolean {
+        val app = c.applicationContext
+        Prefs.gravaNum("adb_off_manual", 0L)
+        if (!ligada(app) && Sys.hasWriteSecure()) {
+            try { Settings.Global.putInt(app.contentResolver, CHAVE, 1); Thread.sleep(2500) } catch (_: Throwable) {}
+        }
+        return Adb.ensure(app)
     }
 
     /** fica de olho no Wi-Fi: conectou numa rede, religa e reconecta */
