@@ -74,7 +74,6 @@ shot 28_amigos amigos
 for e in ouro sangue brasa raio toxico gelo glitch morte vazio aurora; do PERFIL=$e; shot 38_perfil_${e} rank; done; PERFIL=""
 for t in t_inferno t_sangue t_tempestade t_toxico t_gelo t_vazio t_diamante t_neon; do TEMA=$t; shot 39_${t} home; done; TEMA=""
 shot 40_estudio_temas estudio 0
-shot 41_estilos estilos
 # rank: a entrada do top 1 é animada, então tira várias fotos seguidas
 if [ -z "${TELAS:-}" ] || echo " $TELAS " | grep -q " 36_rank "; then
   # entrada 6x mais lenta (só no teste) e uma foto por segundo
@@ -92,6 +91,7 @@ for e in A B C; do ESTILO=$e; shot 5${e}_jeito_inicio home; shot 5${e}_jeito_sob
 for e in 1 2 3; do ESTILO=$e; shot 4${e}_estilo_inicio home; shot 4${e}_estilo_estudio estudio; shot 4${e}_estilo_logs log; shot 4${e}_estilo_sobre sobre; shot 4${e}_estilo_bypass bypass; done; ESTILO=""; COR=""
 INICIO=D; shot 30_inicio_d home; INICIO=""
 # 2ª passada: tela LARGA (411dp), só as principais, pra conferir que nada ficou pequeno demais
+shot 41_estilos estilos
 adb shell wm density reset
 sleep 3
 shot 31_largo_inicio home
