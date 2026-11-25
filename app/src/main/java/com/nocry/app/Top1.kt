@@ -71,7 +71,7 @@ class EfeitoCartao(c: Context, private val tipo: String) : View(c) {
     }
     override fun onDraw(cv: Canvas) {
         if (width <= 0) return
-        val mais = Efeitos.noCartao(cv, path, 0f, 0f, width.toFloat(), height.toFloat(), d, 7, tipo)
+        val mais = Efeitos.noCartao(cv, path, 0f, 0f, width.toFloat(), height.toFloat(), d, 7, tipo, 1.7f)
         if (mais && isAttachedToWindow) postInvalidateOnAnimation()
     }
 }

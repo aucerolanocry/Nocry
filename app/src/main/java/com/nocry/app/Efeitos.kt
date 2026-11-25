@@ -67,7 +67,11 @@ object Efeitos {
     private val gota = Path()
 
     /** desenha o efeito do tema dentro do cartão (o "path" já está como recorte). true = precisa de outro quadro */
-    fun noCartao(cv: Canvas, path: Path, l: Float, t: Float, r: Float, b: Float, d: Float, semente: Int, tipo: String = cartao): Boolean {
+    /** força dos efeitos (1 = cartões comuns; o perfil do rank usa mais) */
+    private var forca = 1f
+
+    fun noCartao(cv: Canvas, path: Path, l: Float, t: Float, r: Float, b: Float, d: Float, semente: Int, tipo: String = cartao, forte: Float = 1f): Boolean {
+        forca = forte
         if (tipo.isEmpty()) return false
         val w = r - l; val h = b - t
         if (w < 30f * d || h < 24f * d) return false
@@ -93,21 +97,21 @@ object Efeitos {
         val passos = (w / (6f * d)).toInt().coerceAtLeast(6)
         for (i in passos downTo 0) {
             val x = l + w * i / passos
-            val y = t + (3.5f + 2.5f * sin(i * 1.7f + sem) + 1.2f * sin(ms / 900f + i)) * d
+            val y = t + (3.5f + 2.5f * sin(i * 1.7f + sem) + 1.2f * sin(ms / 900f + i)) * d * forca
             gota.lineTo(x, y)
         }
         gota.close()
-        p.shader = LinearGradient(0f, t, 0f, t + 8f * d, vivo, escuro, Shader.TileMode.CLAMP)
+        p.shader = LinearGradient(0f, t, 0f, t + 8f * d * forca, vivo, escuro, Shader.TileMode.CLAMP)
         cv.drawPath(gota, p)
         // gotas
-        val n = (w / (34f * d)).toInt().coerceIn(2, 12)
+        val n = (w / (34f * d / forca)).toInt().coerceIn(2, 16)
         for (i in 0 until n) {
             val k = sem * 31 + i * 7
             val x = l + w * (i + 0.25f + 0.5f * ruido(k)) / n
-            val maxLen = (10f + 26f * ruido(k + 1)) * d * minOf(1f, h / (70f * d))
+            val maxLen = (10f + 26f * ruido(k + 1)) * d * minOf(1f, h / (70f * d)) * forca * forca
             val periodo = 2600f + 3400f * ruido(k + 2)
             val fase = ((ms + ruido(k + 3) * periodo) % periodo) / periodo
-            val larg = (2.6f + 2.2f * ruido(k + 4)) * d
+            val larg = (2.6f + 2.2f * ruido(k + 4)) * d * (0.5f + 0.5f * forca)
             // 0..0.7 cresce devagar · 0.7..1 a gota solta e cai
             val cresce = minOf(1f, fase / 0.7f)
             val len = maxLen * (cresce * cresce * (3f - 2f * cresce))
@@ -132,7 +136,7 @@ object Efeitos {
     /** inferno: chamas lambendo a borda de baixo e brasas subindo */
     private fun inferno(cv: Canvas, l: Float, b: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
         val tt = ms / 1000f
-        val altMax = minOf(h * 0.55f, 34f * d)
+        val altMax = minOf(h * 0.55f, 34f * d * forca)
         // brilho quente embaixo
         p.shader = LinearGradient(0f, b - altMax * 1.6f, 0f, b, Theme.alpha(0xFFFF5A00.toInt(), 0), Theme.alpha(0xFFFF3A00.toInt(), 0x70), Shader.TileMode.CLAMP)
         cv.drawRect(l, b - altMax * 1.6f, l + w, b, p)
