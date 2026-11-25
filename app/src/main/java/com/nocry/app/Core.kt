@@ -30,8 +30,9 @@ object Const {
     const val AVISO_ATUALIZACOES = "Essas atualizações seguidas são pra corrigir bugs. Logo logo elas vão parar."
     /** novidades mostradas na 1ª vez que abre depois de atualizar (pra todo mundo) */
     val NOVIDADES = listOf(
-        "Avisos do servidor (como manutenção) chegam em até 1 minuto, mesmo com o app aberto.",
-        "Atualização nova não trava mais na hora: dá pra deixar pra depois por até 3 horas.",
+        "O ADB religa sozinho quando você troca de Wi-Fi ou liga o celular, e não trava mais quando a conexão cai.",
+        "Novo no início, em MAIS: Ajuda (testar o app e falar com a staff), Amigos, Eventos, Caderninho das apostas, Partidas e Teste de toque.",
+        "Bloco NOCRY no menu rápido do celular: liga e desliga o competitivo com 1 toque (arraste ele pro menu uma vez).",
     )
     /** novidades do bot de fila: só aparecem pra quem tem o bot (a key de dono). Vazio = nada novo no bot nesta versão */
     val NOVIDADES_BOT = emptyList<String>()

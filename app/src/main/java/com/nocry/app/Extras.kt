@@ -190,7 +190,7 @@ object Diag {
 // =====================================================================================
 object Partida {
     private const val ID_NOTIF = 7201
-    private val ignorar = setOf("com.android.systemui", Const.PKG)
+    private val ignorar = setOf("com.android.systemui")
     private val main = Handler(Looper.getMainLooper())
 
     @Volatile var jogando = false
