@@ -70,8 +70,76 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Erros.novos(),
     Comp.ligado(), ocupadoComp,
     Update.adiada(act),
-    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas
+    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("atalhos_estilo")
 ).joinToString("|")
+
+    private class Atalho(val ico: Int, val nome: String, val alerta: Boolean, val abre: () -> Unit)
+
+    /** ajuda, amigos, eventos, caderninho, partidas e teste de toque: em grade de 3 ou numa fila que rola de lado */
+    private fun atalhosExtras(c: android.content.Context): View {
+        val lista = listOf(
+            Atalho(R.drawable.ic_info, "Ajuda", Comunidade.supNovas > 0) { act.abre(AjudaScreen(act)) },
+            Atalho(R.drawable.ic_user, "Amigos", false) { act.abre(AmigosScreen(act)) },
+            Atalho(R.drawable.ic_sparkle, "Eventos", false) { act.abre(EventosScreen(act)) },
+            Atalho(R.drawable.ic_log, "Caderno", false) { act.abre(CadernoScreen(act)) },
+            Atalho(R.drawable.ic_gamepad, "Partidas", Partida.jogando) { act.abre(PartidasScreen(act)) },
+            Atalho(R.drawable.ic_bolt, "Toque", false) { act.abre(TesteToqueScreen(act)) }
+        )
+        fun ponto(): View = View(c).also { it.background = Ui.shape(c, Ui.WARN, 99) }
+        if (Prefs.lerNum("atalhos_estilo") == 1L) {
+            // fila redonda que rola de lado
+            val sc = android.widget.HorizontalScrollView(c)
+            sc.isHorizontalScrollBarEnabled = false
+            sc.overScrollMode = View.OVER_SCROLL_NEVER
+            val linha = Ui.hbox(c)
+            for ((n, a) in lista.withIndex()) {
+                val col = Ui.vbox(c)
+                col.gravity = Gravity.CENTER_HORIZONTAL
+                val caixa = android.widget.FrameLayout(c)
+                val bola = android.widget.FrameLayout(c)
+                bola.background = Ui.glass(c, 99)
+                bola.addView(Ui.icone(c, a.ico, Ui.TEXT, 22), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 22), Ui.dp(c, 22), Gravity.CENTER))
+                caixa.addView(bola, android.widget.FrameLayout.LayoutParams(Ui.dp(c, 58), Ui.dp(c, 58)))
+                if (a.alerta) caixa.addView(ponto(), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 12), Ui.dp(c, 12), Gravity.TOP or Gravity.END))
+                col.addView(caixa, LinearLayout.LayoutParams(Ui.dp(c, 58), Ui.dp(c, 58)))
+                val t = Ui.text(c, a.nome, 10.5f, Ui.MUTED, true, mono = true)
+                t.maxLines = 1
+                col.addView(t, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 6, c = c))
+                Ui.clique(col) { a.abre() }
+                linha.addView(col, LinearLayout.LayoutParams(Ui.dp(c, 74), ViewGroup.LayoutParams.WRAP_CONTENT).also { if (n > 0) it.leftMargin = Ui.dp(c, 4) })
+            }
+            sc.addView(linha)
+            return sc
+        }
+        // grade de 3 por linha, botões baixinhos
+        val box = Ui.vbox(c)
+        var i = 0
+        while (i < lista.size) {
+            val linha = Ui.hbox(c)
+            for (j in 0..2) {
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                if (j > 0) lp.leftMargin = Ui.dp(c, 8)
+                val a = lista.getOrNull(i + j)
+                if (a == null) { linha.addView(View(c), lp); continue }
+                val cel = android.widget.FrameLayout(c)
+                val col = Ui.vbox(c)
+                col.gravity = Gravity.CENTER
+                col.background = Ui.ripple(c, Ui.glass(c))
+                col.setPadding(Ui.dp(c, 6), Ui.dp(c, 12), Ui.dp(c, 6), Ui.dp(c, 11))
+                col.addView(Ui.icone(c, a.ico, Ui.TEXT, 22), LinearLayout.LayoutParams(Ui.dp(c, 22), Ui.dp(c, 22)))
+                val t = Ui.text(c, a.nome, 10.5f, Ui.TEXT, true, mono = true)
+                t.maxLines = 1
+                col.addView(t, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 7, c = c))
+                Ui.clique(col) { a.abre() }
+                cel.addView(col, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                if (a.alerta) cel.addView(ponto(), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 10), Ui.dp(c, 10), Gravity.TOP or Gravity.END).also { it.topMargin = Ui.dp(c, 8); it.rightMargin = Ui.dp(c, 8) })
+                linha.addView(cel, lp)
+            }
+            box.addView(linha, Ui.lp(top = if (i == 0) 0 else 8, c = c))
+            i += 3
+        }
+        return box
+    }
     private fun ultimaLinha(): String = NLog.ultima()
 
     // textos que mudam toda hora: trocados no lugar (leve), sem refazer a tela inteira
@@ -347,6 +415,9 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             add(linhaBot, 12)
         }
 
+        // ---------------- atalhos dos extras (pequenos, logo abaixo do bot) ----------------
+        add(atalhosExtras(c), 10)
+
         // ---------------- modos: o primeiro grande, o resto em grade de 2 ----------------
         val editar = Ui.text(c, "Editar ›", 10.5f, Ui.MUTED, true, mono = true)
         editar.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), 0, Ui.dp(c, 6))
@@ -371,36 +442,6 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             else linha.addView(View(c), l2)
             add(linha, 10)
             i += 2
-        }
-
-        // ---------------- extras: ajuda, amigos, eventos, caderninho, partidas, teste de toque ----------------
-        add(Ui.secao(c, "mais"), 22)
-        val hoje = Caderno.resumo(Caderno.inicioDoDia())
-        val toque = Prefs.lerNum("toque_melhor_media", 0L)
-        val extras = listOf(
-            Ui.tile(c, R.drawable.ic_info, "Ajuda", "Testar o app e falar com a staff",
-                if (Comunidade.supNovas > 0) "${Comunidade.supNovas} resposta(s)" else "suporte", if (Comunidade.supNovas > 0) true else null) { act.abre(AjudaScreen(act)) },
-            Ui.tile(c, R.drawable.ic_user, "Amigos", "Quem está online e bora jogar",
-                if (Prefs.extraTxt("am_codigo") != null) "ligado" else "desligado", Prefs.extraTxt("am_codigo") != null) { act.abre(AmigosScreen(act)) },
-            Ui.tile(c, R.drawable.ic_sparkle, "Eventos", "Campeonatos e eventos do NOCRY", "ver eventos", null) { act.abre(EventosScreen(act)) },
-            Ui.tile(c, R.drawable.ic_stat, "Caderninho", "Suas apostas e o saldo",
-                if (hoje.salas > 0) "hoje " + Caderno.dinheiro(hoje.saldo) else "nada hoje", if (hoje.saldo > 0) true else if (hoje.saldo < 0) false else null) { act.abre(CadernoScreen(act)) },
-            Ui.tile(c, R.drawable.ic_gamepad, "Partidas", "Relatório quando fecha o jogo",
-                if (Partida.jogando) "jogando agora" else "${Partida.lista().length()} salvas", if (Partida.jogando) true else null) { act.abre(PartidasScreen(act)) },
-            Ui.tile(c, R.drawable.ic_bolt, "Teste de toque", "Mede seu tempo de reação",
-                if (toque > 0) "melhor $toque ms" else "testar", null) { act.abre(TesteToqueScreen(act)) }
-        )
-        var e = 0
-        while (e < extras.size) {
-            val linha = Ui.hbox(c)
-            linha.gravity = Gravity.TOP
-            val l1 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-            val l2 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
-            l2.leftMargin = Ui.dp(c, 10)
-            linha.addView(extras[e], l1)
-            if (e + 1 < extras.size) linha.addView(extras[e + 1], l2) else linha.addView(View(c), l2)
-            add(linha, 10)
-            e += 2
         }
 
         // ---------------- ultima coisa que o app fez ----------------

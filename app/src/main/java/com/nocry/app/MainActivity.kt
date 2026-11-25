@@ -438,6 +438,7 @@ class MainActivity : Activity() {
         if (!BuildConfig.PREVIEW || i == null) return
         if (i.getBooleanExtra("demo", false)) Sniper.demo()
         // telas que tem aba propria na barra de baixo: abre pela aba, pra barra marcar certo
+        if (i.getStringExtra("tela") == "home") Prefs.gravaNum("atalhos_estilo", i.getIntExtra("aba", 0).toLong())
         when (i.getStringExtra("tela") ?: "") {
             "conexao" -> { irAba(1); return }
             "estudio" -> { irAba(2); return }
