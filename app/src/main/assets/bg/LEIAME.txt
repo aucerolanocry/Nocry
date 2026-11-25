@@ -1,0 +1,11 @@
+Coloque aqui o arquivo "padrao.mp4" (o video de fundo padrao do app).
+
+Caminho esperado pelo codigo (Sys.kt -> ASSET_VIDEO_PADRAO):
+  app/src/main/assets/bg/padrao.mp4
+
+Recomendado: MP4 (H.264 + AAC ou sem audio), vertical (9:16), curto
+(10-20s, ja que fica em loop), bem comprimido pra nao pesar o APK nem
+gastar bateria à toa.
+
+Se esse arquivo nao existir, o app simplesmente continua usando o
+fundo animado normal (nao quebra o build nem trava no primeiro uso).

@@ -1,0 +1,14 @@
+name = "nocry"
+main = "worker.js"
+compatibility_date = "2026-10-28"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "nocry"
+database_id = "b32af7f2-079a-4cb5-a3d0-8351226ed928"
+
+# Os secrets (OWNER_KEY, SIGN_KEY) NAO ficam aqui.
+# Eles continuam guardados so no Cloudflare e sao definidos manualmente com:
+#   wrangler secret put OWNER_KEY --name nocry
+#   wrangler secret put SIGN_KEY --name nocry
+# Um deploy automatico nunca sobrescreve nem apaga secrets existentes.
