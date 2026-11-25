@@ -62,6 +62,12 @@ shot 19_bot_partidas bot 0 true
 shot 20_bot_busca bot 1 true
 shot 21_bot_conta bot 2 true
 shot 22_bot_vazio bot 0 false
+shot 23_ajuda ajuda
+shot 24_caderno caderno
+shot 25_partidas partidas
+shot 26_toque toque
+shot 27_eventos eventos
+shot 28_amigos amigos
 # 2ª passada: tela LARGA (411dp), só as principais, pra conferir que nada ficou pequeno demais
 adb shell wm density reset
 sleep 3

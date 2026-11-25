@@ -233,6 +233,7 @@ class MainActivity : Activity() {
             avisoAtividade()
             avisoAtualizou()
             if (intent?.getStringExtra("abrir") == "sniper") abre(SniperScreen(this))
+            else abreExtra(intent?.getStringExtra("abrir"))
         } else mostraGate()
     }
 
@@ -459,6 +460,12 @@ class MainActivity : Activity() {
             "estudio" -> EstudioScreen(this)
             "organizar" -> OrganizarScreen(this)
             "bot" -> SniperScreen(this).also { it.irPraAba(i.getIntExtra("aba", 0)) }
+            "ajuda" -> AjudaScreen(this)
+            "caderno" -> CadernoScreen(this)
+            "partidas" -> PartidasScreen(this)
+            "toque" -> TesteToqueScreen(this)
+            "eventos" -> EventosScreen(this)
+            "amigos" -> AmigosScreen(this)
             else -> return
         }
         abre(t)
@@ -468,7 +475,20 @@ class MainActivity : Activity() {
         super.onNewIntent(i)
         if (i.getStringExtra("abrir") == "sniper" && !gate && pilha.lastOrNull() !is SniperScreen) {
             abre(SniperScreen(this))
+        } else if (!gate) abreExtra(i.getStringExtra("abrir"))
+    }
+
+    /** notificação dos extras (staff respondeu, evento novo, amigo chamou, fim de partida) */
+    private fun abreExtra(nome: String?) {
+        val t: Screen = when (nome) {
+            "ajuda" -> AjudaScreen(this)
+            "eventos" -> EventosScreen(this)
+            "amigos" -> AmigosScreen(this)
+            "partidas" -> PartidasScreen(this)
+            else -> return
         }
+        if (pilha.lastOrNull()?.javaClass == t.javaClass) return
+        abre(t)
     }
 
     /** a key valeu: abre o app */
@@ -564,6 +584,7 @@ class MainActivity : Activity() {
         super.onResume()
         naFrente = true
         bg.retoma()
+        try { Conquistas.marcaDia() } catch (_: Throwable) {}
         val updPendente = Update.pendente(applicationContext)
         if (updPendente != null) mostraUpdateGate(updPendente)
         else if (intro == null && !gate && !License.valid()) mostraGate()

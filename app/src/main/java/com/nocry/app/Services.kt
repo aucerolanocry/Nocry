@@ -51,7 +51,12 @@ class KeyService : AccessibilityService() {
         return false
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // só pra saber se o Free Fire está na frente (relatório da partida). Não lê nada do que aparece na tela
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            try { Partida.janela(event.packageName?.toString()) } catch (_: Throwable) {}
+        }
+    }
     override fun onInterrupt() {}
 
     override fun onUnbind(intent: Intent?): Boolean {

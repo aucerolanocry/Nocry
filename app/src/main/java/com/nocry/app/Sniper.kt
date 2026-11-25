@@ -1675,6 +1675,7 @@ object Sniper {
         if (!s.apostaOk && PALAVRAS_APOSTA.any { it in txt }) {
             s.apostaOk = true
             apostas++
+            try { Caderno.anota(s.id, s.org, s.fila) } catch (_: Throwable) {}
             log("ganhou", "aposta confirmada · sala ${numeroSala(s.id)} · ${s.org} · a sala fica no painel até a org encerrar")
             notificar("Aposta confirmada · ${s.org}", s.nome)
         }

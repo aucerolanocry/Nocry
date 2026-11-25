@@ -69,7 +69,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     License.isOwner(),
     Erros.novos(),
     Comp.ligado(), ocupadoComp,
-    Update.adiada(act)
+    Update.adiada(act),
+    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas
 ).joinToString("|")
     private fun ultimaLinha(): String = NLog.ultima()
 
@@ -325,6 +326,19 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             }, 12)
         }
 
+        // ---------------- aviso do dono ----------------
+        Comunidade.avisoParaMostrar()?.let { av ->
+            val k = Ui.card(c, ligado = true)
+            val topo = Ui.hbox(c)
+            topo.gravity = Gravity.CENTER_VERTICAL
+            topo.addView(Ui.icone(c, R.drawable.ic_info, Ui.WARN, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 8) })
+            topo.addView(Ui.text(c, "AVISO DO NOCRY", 10.5f, Ui.WARN, true, mono = true))
+            k.addView(topo)
+            k.addView(Ui.text(c, av.second, 14f, Ui.TEXT), Ui.lp(top = 6, c = c))
+            k.addView(Ui.button(c, "ok, entendi", Ui.Kind.GHOST) { Comunidade.dispensaAviso(); redesenha() }, Ui.lp(top = 10, c = c))
+            add(k, 12)
+        }
+
         // ---------------- SNIPER (todo mundo com key vê) ----------------
         botSub = null
         run {
@@ -357,6 +371,36 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             else linha.addView(View(c), l2)
             add(linha, 10)
             i += 2
+        }
+
+        // ---------------- extras: ajuda, amigos, eventos, caderninho, partidas, teste de toque ----------------
+        add(Ui.secao(c, "mais"), 22)
+        val hoje = Caderno.resumo(Caderno.inicioDoDia())
+        val toque = Prefs.extraLong("toque_melhor_media", 0L)
+        val extras = listOf(
+            Ui.tile(c, R.drawable.ic_info, "Ajuda", "Testar o app e falar com a staff",
+                if (Comunidade.supNovas > 0) "${Comunidade.supNovas} resposta(s)" else "suporte", if (Comunidade.supNovas > 0) true else null) { act.abre(AjudaScreen(act)) },
+            Ui.tile(c, R.drawable.ic_user, "Amigos", "Quem está online e bora jogar",
+                if (Prefs.extraTxt("am_codigo") != null) "ligado" else "desligado", Prefs.extraTxt("am_codigo") != null) { act.abre(AmigosScreen(act)) },
+            Ui.tile(c, R.drawable.ic_sparkle, "Eventos", "Campeonatos e eventos do NOCRY", "ver eventos", null) { act.abre(EventosScreen(act)) },
+            Ui.tile(c, R.drawable.ic_stat, "Caderninho", "Suas apostas e o saldo",
+                if (hoje.salas > 0) "hoje " + Caderno.dinheiro(hoje.saldo) else "nada hoje", if (hoje.saldo > 0) true else if (hoje.saldo < 0) false else null) { act.abre(CadernoScreen(act)) },
+            Ui.tile(c, R.drawable.ic_gamepad, "Partidas", "Relatório quando fecha o jogo",
+                if (Partida.jogando) "jogando agora" else "${Partida.lista().length()} salvas", if (Partida.jogando) true else null) { act.abre(PartidasScreen(act)) },
+            Ui.tile(c, R.drawable.ic_bolt, "Teste de toque", "Mede seu tempo de reação",
+                if (toque > 0) "melhor $toque ms" else "testar", null) { act.abre(TesteToqueScreen(act)) }
+        )
+        var e = 0
+        while (e < extras.size) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.TOP
+            val l1 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+            val l2 = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f)
+            l2.leftMargin = Ui.dp(c, 10)
+            linha.addView(extras[e], l1)
+            if (e + 1 < extras.size) linha.addView(extras[e + 1], l2) else linha.addView(View(c), l2)
+            add(linha, 10)
+            e += 2
         }
 
         // ---------------- ultima coisa que o app fez ----------------
@@ -586,7 +630,7 @@ class SetupScreen(a: MainActivity) : Screen(a) {
             }
             4 -> {
                 v.addView(Ui.text(c, "É assim que o app percebe VOL+ e VOL−.", 10.5f, Ui.TEXT))
-                v.addView(Ui.dica(c, "O NOCRY só olha o aperto das teclas de volume e não lê sua tela.", Ui.Dica.OK), Ui.lp(top = 12, c = c))
+                v.addView(Ui.dica(c, "O NOCRY olha o aperto das teclas de volume e percebe quando o Free Fire abre e fecha (pro relatório da partida). Ele não lê o que aparece na sua tela.", Ui.Dica.OK), Ui.lp(top = 12, c = c))
                 v.addView(Ui.button(c, if (acc) "desligar" else "ligar", if (acc) Ui.Kind.GHOST else forte) {
                     if (acc) { Sys.desligarAcessibilidade(); redesenha() }
                     else if (Sys.ligarAcessibilidade()) { Ui.toast(act, "LIGADA"); redesenha() }

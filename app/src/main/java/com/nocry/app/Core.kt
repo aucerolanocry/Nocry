@@ -179,6 +179,12 @@ var bypassVolAtivo: Boolean
         if (v == null) sp.edit().remove(k).apply() else sp.edit().putString(k, v).apply()
     }
 
+    // ---- extras (aviso, suporte, eventos, amigos, caderninho, partidas, conquistas) ----
+    fun extraTxt(k: String): String? = gs("x_$k")
+    fun extraTxt(k: String, v: String?) = ps("x_$k", v)
+    fun extraLong(k: String, d: Long = 0L): Long = try { sp.getLong("x_$k", d) } catch (_: Throwable) { d }
+    fun extraLong(k: String, v: Long) { sp.edit().putLong("x_$k", v).apply() }
+
     // ---- valores do toque (1 a 600) ----
     var longOn: Int
         get() = gi("long_on", 1, 1, 600)

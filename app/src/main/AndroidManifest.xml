@@ -100,6 +100,26 @@
             android:name=".PairReceiver"
             android:exported="false" />
 
+        <!-- lembrete de evento (15 min antes e na hora) -->
+        <receiver
+            android:name=".EventoReceiver"
+            android:exported="false" />
+
+        <!-- bloco "NOCRY" no menu rápido: liga/desliga o modo competitivo -->
+        <service
+            android:name=".CompTile"
+            android:exported="true"
+            android:icon="@drawable/ic_bolt"
+            android:label="NOCRY"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.TOGGLEABLE_TILE"
+                android:value="true" />
+        </service>
+
         <!-- confere versao nova em segundo plano (a cada ~15 min) pra avisar da atualizacao obrigatoria -->
         <service
             android:name=".UpdateJob"

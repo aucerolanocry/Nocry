@@ -143,6 +143,50 @@ async function emManutencao(env) {
   }
 }
 
+// aviso do dono: aparece numa faixa no início do app de todo mundo
+async function avisoAtual(env) {
+  try {
+    const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'aviso'").first();
+    if (!r) return null;
+    const a = JSON.parse(r.v);
+    return a && a.texto ? { id: a.id, texto: a.texto } : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** confere key + aparelho de um pedido do app (igual ao ping). Devolve {rec, dev, owner} ou {erro: Response} */
+async function appAuth(env, b, ip, now) {
+  const key = normKey(b.key);
+  const dev = clean(b.dev, 128).toLowerCase();
+  if (!/^[A-Z0-9-]{4,64}$/.test(key) || !/^[a-f0-9]{16,128}$/.test(dev)) {
+    await addFail(env, ip, now);
+    return { erro: json({ ok: false, reason: "invalid" }) };
+  }
+  const isOwner = await ehDono(env, key);
+  const rec = isOwner ? OWNER_REC : await env.DB.prepare("SELECT key, role, exp, revoked FROM keys WHERE key = ?").bind(key).first();
+  if (!rec) {
+    await addFail(env, ip, now);
+    return { erro: json({ ok: false, reason: "invalid" }) };
+  }
+  if (rec.revoked) return { erro: json({ ok: false, reason: "revoked" }) };
+  if (rec.exp && rec.exp < now) return { erro: json({ ok: false, reason: "expired" }) };
+  const d = await env.DB.prepare("SELECT blocked FROM devices WHERE key = ? AND dev = ?").bind(rec.key, dev).first();
+  if (!d) return { erro: json({ ok: false, reason: "invalid" }) };
+  if (d.blocked) return { erro: json({ ok: false, reason: "blocked" }) };
+  if (!isOwner && (await emManutencao(env))) return { erro: json({ ok: false, reason: "manutencao" }) };
+  return { rec, dev, owner: isOwner };
+}
+
+const CODIGO_LETRAS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function novoCodigo() {
+  const a = new Uint8Array(6);
+  crypto.getRandomValues(a);
+  let s = "";
+  for (const x of a) s += CODIGO_LETRAS[x % CODIGO_LETRAS.length];
+  return s;
+}
+
 async function init(env) {
   if (ready) return;
   await env.DB.batch([
@@ -169,6 +213,31 @@ async function init(env) {
     ),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS events_t ON events (t)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS log_t ON log (t)"),
+    // suporte: conversa da pessoa com a staff (de = 'user' ou 'staff'; lida = a outra ponta já viu)
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS msgs (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER NOT NULL, key TEXT NOT NULL, dev TEXT NOT NULL, de TEXT NOT NULL, autor TEXT, texto TEXT NOT NULL, lida INTEGER NOT NULL DEFAULT 0)"
+    ),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS msgs_kd ON msgs (key, dev, id)"),
+    // resultado do "testar meu app"
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS diags (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER NOT NULL, key TEXT NOT NULL, dev TEXT NOT NULL, app TEXT, dados TEXT)"
+    ),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS diags_kd ON diags (key, dev, id)"),
+    // eventos e campeonatos
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS eventos (id INTEGER PRIMARY KEY AUTOINCREMENT, nome TEXT NOT NULL, quando INTEGER NOT NULL, valor TEXT, vagas INTEGER NOT NULL DEFAULT 0, info TEXT, criado INTEGER NOT NULL)"
+    ),
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS inscritos (evento INTEGER NOT NULL, key TEXT NOT NULL, dev TEXT NOT NULL, apelido TEXT, t INTEGER NOT NULL, PRIMARY KEY (evento, key, dev))"
+    ),
+    // amigos: perfil por aparelho (só existe se a pessoa ligar), pedidos/amizades e o "bora jogar?"
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS perfis (key TEXT NOT NULL, dev TEXT NOT NULL, codigo TEXT NOT NULL UNIQUE, apelido TEXT NOT NULL, ligado INTEGER NOT NULL DEFAULT 1, ativ TEXT, visto INTEGER, conq TEXT, PRIMARY KEY (key, dev))"
+    ),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS amizades (a TEXT NOT NULL, b TEXT NOT NULL, ok INTEGER NOT NULL DEFAULT 0, t INTEGER NOT NULL, PRIMARY KEY (a, b))"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS amizades_b ON amizades (b)"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS toques (id INTEGER PRIMARY KEY AUTOINCREMENT, para TEXT NOT NULL, de TEXT NOT NULL, t INTEGER NOT NULL)"),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS toques_para ON toques (para)"),
   ]);
   // migração: colunas novas de specs do aparelho (ADD COLUMN dá erro se já existe, então ignora)
   const colunasNovas = [
@@ -385,8 +454,169 @@ async function pingRoute(req, env, ip, country) {
     );
   }
   await env.DB.batch(ops);
-  // o app pergunta a cada minuto: se o dono ligou a manutenção, avisa na hora (o dono nunca é travado)
-  return json({ ok: true, ts: now, manutencao: !isOwner && (await emManutencao(env)) });
+  const resp = { ok: true, ts: now, manutencao: !isOwner && (await emManutencao(env)) };
+  // extras (versões novas do app): aviso do dono, resposta da staff, eventos novos e "bora jogar?" dos amigos
+  try {
+    resp.aviso = await avisoAtual(env);
+    const sup = await env.DB.prepare("SELECT COUNT(*) n FROM msgs WHERE key = ? AND dev = ? AND de = 'staff' AND lida = 0").bind(rec.key, dev).first();
+    resp.sup = sup ? sup.n : 0;
+    const ev = await env.DB.prepare("SELECT MAX(id) m FROM eventos").first();
+    resp.evmax = ev && ev.m ? ev.m : 0;
+    const pf = await env.DB.prepare("SELECT codigo FROM perfis WHERE key = ? AND dev = ? AND ligado = 1").bind(rec.key, dev).first();
+    if (pf) {
+      const ativ = clean(b.ativ, 20);
+      await env.DB.prepare("UPDATE perfis SET visto = ?, ativ = ? WHERE key = ? AND dev = ?").bind(now, ativ, rec.key, dev).run();
+      const tq = (await env.DB.prepare("SELECT id, de, t FROM toques WHERE para = ? ORDER BY id LIMIT 10").bind(pf.codigo).all()).results;
+      if (tq.length) {
+        await env.DB.prepare("DELETE FROM toques WHERE para = ? AND id <= ?").bind(pf.codigo, tq[tq.length - 1].id).run();
+        resp.toques = tq.filter(function (x) { return now - x.t < 30 * 60000; }).map(function (x) { return x.de; });
+      }
+    }
+  } catch (e) { /* tabela nova ainda criando: ignora nesta volta */ }
+  return json(resp);
+}
+
+// ---------------------------------------------------------------- extras do app (suporte, eventos, amigos)
+async function extrasRoute(req, env, ip) {
+  let b;
+  try {
+    b = await req.json();
+  } catch (e) {
+    return json({ ok: false, reason: "bad" }, 400);
+  }
+  const now = Date.now();
+  if (await tooMany(env, ip, now)) return json({ ok: false, reason: "limit" }, 429);
+  const a = await appAuth(env, b, ip, now);
+  if (a.erro) return a.erro;
+  const key = a.rec.key, dev = a.dev, op = String(b.op || "");
+
+  // ---- suporte
+  if (op === "sup_ler") {
+    const rows = (await env.DB.prepare("SELECT id, t, de, autor, texto FROM msgs WHERE key = ? AND dev = ? ORDER BY id DESC LIMIT 60").bind(key, dev).all()).results;
+    await env.DB.prepare("UPDATE msgs SET lida = 1 WHERE key = ? AND dev = ? AND de = 'staff' AND lida = 0").bind(key, dev).run();
+    return json({ ok: true, msgs: rows.reverse() });
+  }
+  if (op === "sup_enviar") {
+    const texto = clean(b.texto, 600).trim();
+    if (!texto) return json({ ok: false, reason: "vazio" });
+    const hoje = await env.DB.prepare("SELECT COUNT(*) n FROM msgs WHERE key = ? AND dev = ? AND de = 'user' AND t > ?").bind(key, dev, now - 86400000).first();
+    if (hoje && hoje.n >= 40) return json({ ok: false, reason: "muitas" });
+    await env.DB.prepare("INSERT INTO msgs (t, key, dev, de, autor, texto) VALUES (?, ?, ?, 'user', '', ?)").bind(now, key, dev, texto).run();
+    return json({ ok: true });
+  }
+  if (op === "diag") {
+    const dados = clean(JSON.stringify(b.dados && typeof b.dados === "object" ? b.dados : {}), 4000);
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO diags (t, key, dev, app, dados) VALUES (?, ?, ?, ?, ?)").bind(now, key, dev, clean(b.app, 20), dados),
+      env.DB.prepare("DELETE FROM diags WHERE key = ? AND dev = ? AND id NOT IN (SELECT id FROM diags WHERE key = ? AND dev = ? ORDER BY id DESC LIMIT 5)").bind(key, dev, key, dev),
+    ]);
+    return json({ ok: true });
+  }
+
+  // ---- eventos
+  if (op === "ev_lista") {
+    const evs = (await env.DB.prepare("SELECT id, nome, quando, valor, vagas, info FROM eventos WHERE quando > ? ORDER BY quando LIMIT 30").bind(now - 6 * 3600000).all()).results;
+    const n = (await env.DB.prepare("SELECT evento, COUNT(*) n FROM inscritos GROUP BY evento").all()).results;
+    const meus = (await env.DB.prepare("SELECT evento FROM inscritos WHERE key = ? AND dev = ?").bind(key, dev).all()).results;
+    const cont = {}, eu = {};
+    n.forEach(function (r) { cont[r.evento] = r.n; });
+    meus.forEach(function (r) { eu[r.evento] = 1; });
+    return json({ ok: true, eventos: evs.map(function (e) { e.inscritos = cont[e.id] || 0; e.eu = !!eu[e.id]; return e; }) });
+  }
+  if (op === "ev_entrar" || op === "ev_sair") {
+    const id = toInt(b.id, 0);
+    const e = await env.DB.prepare("SELECT id, vagas, quando FROM eventos WHERE id = ?").bind(id).first();
+    if (!e) return json({ ok: false, reason: "not_found" });
+    if (op === "ev_sair") {
+      await env.DB.prepare("DELETE FROM inscritos WHERE evento = ? AND key = ? AND dev = ?").bind(id, key, dev).run();
+      return json({ ok: true });
+    }
+    if (e.quando < now) return json({ ok: false, reason: "passou" });
+    const n = await env.DB.prepare("SELECT COUNT(*) n FROM inscritos WHERE evento = ?").bind(id).first();
+    if (e.vagas > 0 && n && n.n >= e.vagas) return json({ ok: false, reason: "lotado" });
+    await env.DB.prepare("INSERT OR IGNORE INTO inscritos (evento, key, dev, apelido, t) VALUES (?, ?, ?, ?, ?)").bind(id, key, dev, clean(b.apelido, 24), now).run();
+    return json({ ok: true });
+  }
+
+  // ---- amigos
+  const meu = await env.DB.prepare("SELECT codigo, apelido, ligado FROM perfis WHERE key = ? AND dev = ?").bind(key, dev).first();
+  if (op === "am_perfil") {
+    const apelido = clean(b.apelido, 24).trim();
+    const ligado = b.ligado ? 1 : 0;
+    const conq = clean(b.conq, 200);
+    if (!meu) {
+      if (!ligado) return json({ ok: true, perfil: null });
+      if (apelido.length < 2) return json({ ok: false, reason: "apelido" });
+      for (let i = 0; i < 6; i++) {
+        const cod = novoCodigo();
+        try {
+          await env.DB.prepare("INSERT INTO perfis (key, dev, codigo, apelido, ligado, visto, conq) VALUES (?, ?, ?, ?, 1, ?, ?)").bind(key, dev, cod, apelido, now, conq).run();
+          return json({ ok: true, perfil: { codigo: cod, apelido: apelido, ligado: 1 } });
+        } catch (e) { /* código repetido: tenta outro */ }
+      }
+      return json({ ok: false, reason: "server" });
+    }
+    await env.DB.prepare("UPDATE perfis SET apelido = ?, ligado = ?, conq = ? WHERE key = ? AND dev = ?").bind(apelido.length >= 2 ? apelido : meu.apelido, ligado, conq, key, dev).run();
+    return json({ ok: true, perfil: { codigo: meu.codigo, apelido: apelido.length >= 2 ? apelido : meu.apelido, ligado: ligado } });
+  }
+  if (!meu || !meu.ligado) return json({ ok: false, reason: "sem_perfil" });
+  const eu = meu.codigo;
+  if (op === "am_lista") {
+    const rel = (await env.DB.prepare("SELECT a, b, ok FROM amizades WHERE a = ?1 OR b = ?1 LIMIT 200").bind(eu).all()).results;
+    const outros = rel.map(function (r) { return r.a === eu ? r.b : r.a; });
+    let perfis = [];
+    if (outros.length) {
+      const ph = outros.map(function () { return "?"; }).join(",");
+      perfis = (await env.DB.prepare("SELECT codigo, apelido, ligado, ativ, visto, conq FROM perfis WHERE codigo IN (" + ph + ")").bind(...outros).all()).results;
+    }
+    const pm = {};
+    perfis.forEach(function (p) { pm[p.codigo] = p; });
+    const lista = rel.map(function (r) {
+      const o = r.a === eu ? r.b : r.a, p = pm[o] || {};
+      const vis = !!p.ligado && r.ok;
+      return {
+        codigo: o, apelido: p.apelido || "?", estado: r.ok ? "amigo" : r.a === eu ? "enviado" : "recebido",
+        online: vis && p.visto > now - ONLINE_MS, ativ: vis ? p.ativ || "" : "", visto: vis ? p.visto || 0 : 0, conq: vis ? p.conq || "" : ""
+      };
+    });
+    return json({ ok: true, eu: { codigo: eu, apelido: meu.apelido }, amigos: lista });
+  }
+  if (op === "am_add") {
+    const cod = clean(b.codigo, 6).toUpperCase();
+    if (cod === eu) return json({ ok: false, reason: "voce" });
+    const o = await env.DB.prepare("SELECT codigo FROM perfis WHERE codigo = ? AND ligado = 1").bind(cod).first();
+    if (!o) return json({ ok: false, reason: "nao_achou" });
+    const total = await env.DB.prepare("SELECT COUNT(*) n FROM amizades WHERE a = ? OR b = ?").bind(eu, eu).first();
+    if (total && total.n >= 100) return json({ ok: false, reason: "muitos" });
+    // se a outra pessoa já tinha pedido, vira amizade na hora
+    const volta = await env.DB.prepare("SELECT ok FROM amizades WHERE a = ? AND b = ?").bind(cod, eu).first();
+    if (volta) {
+      await env.DB.prepare("UPDATE amizades SET ok = 1 WHERE a = ? AND b = ?").bind(cod, eu).run();
+      return json({ ok: true, virou: "amigo" });
+    }
+    await env.DB.prepare("INSERT OR IGNORE INTO amizades (a, b, ok, t) VALUES (?, ?, 0, ?)").bind(eu, cod, now).run();
+    return json({ ok: true, virou: "enviado" });
+  }
+  if (op === "am_aceitar") {
+    const cod = clean(b.codigo, 6).toUpperCase();
+    await env.DB.prepare("UPDATE amizades SET ok = 1 WHERE a = ? AND b = ?").bind(cod, eu).run();
+    return json({ ok: true });
+  }
+  if (op === "am_remover") {
+    const cod = clean(b.codigo, 6).toUpperCase();
+    await env.DB.prepare("DELETE FROM amizades WHERE (a = ?1 AND b = ?2) OR (a = ?2 AND b = ?1)").bind(eu, cod).run();
+    return json({ ok: true });
+  }
+  if (op === "am_bora") {
+    const cod = clean(b.codigo, 6).toUpperCase();
+    const r = await env.DB.prepare("SELECT ok FROM amizades WHERE ((a = ?1 AND b = ?2) OR (a = ?2 AND b = ?1)) AND ok = 1").bind(eu, cod).first();
+    if (!r) return json({ ok: false, reason: "nao_amigo" });
+    const rec = await env.DB.prepare("SELECT COUNT(*) n FROM toques WHERE para = ? AND de = ? AND t > ?").bind(cod, meu.apelido, now - 60000).first();
+    if (rec && rec.n > 0) return json({ ok: false, reason: "espera" });
+    await env.DB.prepare("INSERT INTO toques (para, de, t) VALUES (?, ?, ?)").bind(cod, meu.apelido, now).run();
+    return json({ ok: true });
+  }
+  return json({ ok: false, reason: "not_found" }, 404);
 }
 
 // ---------------------------------------------------------------- /api (o painel)
@@ -447,7 +677,101 @@ async function apiRoute(req, env, ip, op) {
   const ow = owner ? 1 : 0; // staff so ve keys de usuario
   const FILTRO = "(?2 = 1 OR k.role = 'user')";
 
-  if (op === "me") return json({ ok: true, role: me.role, label: me.label, manutencao: await emManutencao(env) });
+  if (op === "me") return json({ ok: true, role: me.role, label: me.label, manutencao: await emManutencao(env), aviso: await avisoAtual(env) });
+
+  // aviso do dono (faixa no início do app de todo mundo)
+  if (op === "aviso") {
+    if (!owner) return json({ ok: false, reason: "denied" }, 403);
+    const texto = clean(b.texto, 300).trim();
+    if (b.apagar || !texto) await env.DB.prepare("DELETE FROM meta WHERE k = 'aviso'").run();
+    else await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('aviso', ?)").bind(JSON.stringify({ id: now, texto: texto })).run();
+    await addLog(env, now, "OWNER", "", ip, 1, b.apagar || !texto ? "aviso_off" : "aviso_on");
+    return json({ ok: true, aviso: await avisoAtual(env) });
+  }
+
+  // suporte: conversas e diagnósticos (staff só vê keys de usuário)
+  if (op === "sup_lista") {
+    const conv = (await env.DB.prepare(
+      "SELECT m.key, m.dev, MAX(m.t) t, COUNT(*) n, SUM(CASE WHEN m.de = 'user' AND m.lida = 0 THEN 1 ELSE 0 END) novas, " +
+      "(SELECT texto FROM msgs x WHERE x.key = m.key AND x.dev = m.dev ORDER BY x.id DESC LIMIT 1) ultima, k.label, k.role, d.brand, d.model " +
+      "FROM msgs m LEFT JOIN keys k ON k.key = m.key LEFT JOIN devices d ON d.key = m.key AND d.dev = m.dev " +
+      "WHERE (?1 = 1 OR k.role = 'user') GROUP BY m.key, m.dev ORDER BY t DESC LIMIT 100"
+    ).bind(ow).all()).results;
+    const dg = (await env.DB.prepare(
+      "SELECT g.key, g.dev, g.t, g.app, g.dados, k.label, k.role, d.brand, d.model FROM diags g LEFT JOIN keys k ON k.key = g.key " +
+      "LEFT JOIN devices d ON d.key = g.key AND d.dev = g.dev WHERE (?1 = 1 OR k.role = 'user') ORDER BY g.id DESC LIMIT 40"
+    ).bind(ow).all()).results;
+    return json({ ok: true, conversas: conv, diags: dg });
+  }
+  if (op === "sup_ver" || op === "sup_responder") {
+    const t = await targetOf(env, me, b.key);
+    if (!t) return json({ ok: false, reason: "denied" }, 403);
+    const dev = clean(b.dev, 128).toLowerCase();
+    if (op === "sup_responder") {
+      const texto = clean(b.texto, 600).trim();
+      if (!texto) return json({ ok: false, reason: "vazio" });
+      await env.DB.prepare("INSERT INTO msgs (t, key, dev, de, autor, texto) VALUES (?, ?, ?, 'staff', ?, ?)").bind(now, t.key, dev, me.label, texto).run();
+    }
+    const rows = (await env.DB.prepare("SELECT id, t, de, autor, texto, lida FROM msgs WHERE key = ? AND dev = ? ORDER BY id DESC LIMIT 100").bind(t.key, dev).all()).results;
+    await env.DB.prepare("UPDATE msgs SET lida = 1 WHERE key = ? AND dev = ? AND de = 'user' AND lida = 0").bind(t.key, dev).run();
+    const dg = await env.DB.prepare("SELECT t, app, dados FROM diags WHERE key = ? AND dev = ? ORDER BY id DESC LIMIT 1").bind(t.key, dev).first();
+    return json({ ok: true, msgs: rows.reverse(), diag: dg || null });
+  }
+
+  // quanta gente usa cada coisa (últimos 7 dias, um aparelho conta uma vez)
+  if (op === "uso") {
+    const desde = now - 7 * 86400000;
+    const rows = (await env.DB.prepare("SELECT key, dev, st, app FROM sessions WHERE last > ? ORDER BY last DESC LIMIT 5000").bind(desde).all()).results;
+    const visto = {}, c = { total: 0, comp: 0, otm: 0, byp: 0, bot: 0, jogo: 0 };
+    rows.forEach(function (r) {
+      const k = r.key + "|" + r.dev;
+      if (visto[k]) return;
+      visto[k] = 1;
+      c.total++;
+      let st = {};
+      try { st = JSON.parse(r.st || "{}"); } catch (e) {}
+      if (st.comp) c.comp++;
+      if (st.otm) c.otm++;
+      if (st.byp) c.byp++;
+      if (st.bot) c.bot++;
+      if (st.jogo) c.jogo++;
+    });
+    const versoes = (await env.DB.prepare("SELECT app, COUNT(*) n FROM devices WHERE last_seen > ? GROUP BY app ORDER BY n DESC LIMIT 12").bind(desde).all()).results;
+    const amigos = await env.DB.prepare("SELECT COUNT(*) n FROM perfis WHERE ligado = 1").first();
+    const insc = await env.DB.prepare("SELECT COUNT(*) n FROM inscritos").first();
+    const sup = await env.DB.prepare("SELECT COUNT(DISTINCT key || dev) n FROM msgs WHERE t > ?").bind(desde).first();
+    return json({ ok: true, uso: c, versoes: versoes, amigos: amigos ? amigos.n : 0, inscritos: insc ? insc.n : 0, suporte: sup ? sup.n : 0 });
+  }
+
+  // eventos e campeonatos
+  if (op === "ev_lista") {
+    const evs = (await env.DB.prepare("SELECT id, nome, quando, valor, vagas, info FROM eventos ORDER BY quando DESC LIMIT 40").all()).results;
+    const ins = (await env.DB.prepare(
+      "SELECT i.evento, i.key, i.apelido, i.t, k.label FROM inscritos i LEFT JOIN keys k ON k.key = i.key ORDER BY i.t LIMIT 2000"
+    ).all()).results;
+    const por = {};
+    ins.forEach(function (r) { (por[r.evento] = por[r.evento] || []).push({ nome: r.apelido || r.label || r.key, key: owner ? r.key : "", t: r.t }); });
+    return json({ ok: true, eventos: evs.map(function (e) { e.lista = por[e.id] || []; return e; }) });
+  }
+  if (op === "ev_criar") {
+    if (!owner) return json({ ok: false, reason: "denied" }, 403);
+    const nome = clean(b.nome, 60).trim();
+    const quando = toInt(b.quando, 0);
+    if (!nome || quando < now - 3600000) return json({ ok: false, reason: "dados" });
+    await env.DB.prepare("INSERT INTO eventos (nome, quando, valor, vagas, info, criado) VALUES (?, ?, ?, ?, ?, ?)").bind(
+      nome, quando, clean(b.valor, 30), clamp(toInt(b.vagas, 0), 0, 9999), clean(b.info, 300), now
+    ).run();
+    return json({ ok: true });
+  }
+  if (op === "ev_apagar") {
+    if (!owner) return json({ ok: false, reason: "denied" }, 403);
+    const id = toInt(b.id, 0);
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM inscritos WHERE evento = ?").bind(id),
+      env.DB.prepare("DELETE FROM eventos WHERE id = ?").bind(id),
+    ]);
+    return json({ ok: true });
+  }
 
   // ligar/desligar manutenção (só o dono). Trava todos menos o dono.
   if (op === "manutencao") {
@@ -728,6 +1052,7 @@ export default {
       await revogacaoGeral(env);
       if (req.method === "POST" && path === "/v1/auth") return await authRoute(req, env, ip, country);
       if (req.method === "POST" && path === "/v1/ping") return await pingRoute(req, env, ip, country);
+      if (req.method === "POST" && path === "/v1/x") return await extrasRoute(req, env, ip);
       if (req.method === "POST" && path.indexOf("/api/") === 0) return await apiRoute(req, env, ip, path.slice(5));
       return json({ ok: false, reason: "not_found" }, 404);
     } catch (e) {
@@ -1003,7 +1328,8 @@ input[type=password]{font-family:var(--mono);text-transform:none}
   var S = {
     me: null, tab: "live", list: null, live: null, log: null, made: null, off: 0, err: "",
     hist: { tipo: "tudo", key: "", nome: "", items: null, mais: false, carregando: false, q: "", seq: 0 },
-    kq: "", kf: "todas", open: {}, logf: "tudo"
+    kq: "", kf: "todas", open: {}, logf: "tudo",
+    sup: null, conv: null, uso: null, evs: null, novoEv: { nome: "", data: "", hora: "20:00", valor: "", vagas: "", info: "" }
   };
   var NOVO = { role: "user", label: "", dias: "30", outro: "", dev: 1, qtd: 1 };
   try { var t0 = sessionStorage.getItem("ntab"); if (t0) S.tab = t0; } catch (e) {}
@@ -1037,7 +1363,11 @@ input[type=password]{font-family:var(--mono);text-transform:none}
     users: "M5 8a4 4 0 1 0 8 0a4 4 0 1 0-8 0M2 21a7 7 0 0 1 14 0M16 3.1a4 4 0 0 1 0 7.8M22 21a7 7 0 0 0-5-6.7",
     more: "M4 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M10.5 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M17 12a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0",
     dot: "M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
-    clock: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 7v5l3 2"
+    clock: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 7v5l3 2",
+    chat: "M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.7A8 8 0 1 1 21 12z",
+    star: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z",
+    bell: "M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 21h4",
+    send: "M22 2L11 13M22 2l-7 20-4-9-9-4z"
   };
   function ico(n, s) {
     var v = document.createElementNS(NS, "svg");
@@ -1299,7 +1629,7 @@ input[type=password]{font-family:var(--mono);text-transform:none}
   }
 
   // ------------------------------------------------------------ telas
-  var TABS = [["live", "AO VIVO", "live"], ["hist", "HISTÓRICO", "hist"], ["keys", "KEYS", "key"], ["new", "CRIAR", "plus"], ["log", "REGISTROS", "list"]];
+  var TABS = [["live", "AO VIVO", "live"], ["hist", "HISTÓRICO", "hist"], ["keys", "KEYS", "key"], ["new", "CRIAR", "plus"], ["sup", "SUPORTE", "chat"], ["mais", "EXTRAS", "star"], ["log", "REGISTROS", "list"]];
   function irPara(t, recarregaHist) {
     if (t === "log" && S.me.role !== "owner") t = "live";
     S.tab = t;
@@ -1310,6 +1640,8 @@ input[type=password]{font-family:var(--mono);text-transform:none}
     if (t === "keys" || t === "new") carregaLista();
     if (t === "hist" && (recarregaHist || !S.hist.items)) carregaHist(false);
     if (t === "log") carregaLog();
+    if (t === "sup") carregaSup();
+    if (t === "mais") { carregaUso(); carregaEv(); }
   }
   function topo() {
     var owner = S.me.role === "owner";
@@ -1326,7 +1658,7 @@ input[type=password]{font-family:var(--mono);text-transform:none}
     var on = S.live ? (S.live.online || []).length : 0;
     navEl = h("div", { class: "nav" }, h("div", { class: "in" }, TABS.filter(function (t) { return owner || t[0] !== "log"; }).map(function (t) {
       return h("button", { class: S.tab === t[0] ? "on" : null, onclick: function () { irPara(t[0], t[0] === "hist"); } }, [
-        h("span", { class: "ni" }, [ico(t[2], 19), t[0] === "live" && on ? h("b", { class: "nb", text: String(on) }) : null]),
+        h("span", { class: "ni" }, [ico(t[2], 19), t[0] === "live" && on ? h("b", { class: "nb", text: String(on) }) : t[0] === "sup" && supNovas() ? h("b", { class: "nb", style: "background:var(--warn)", text: String(supNovas()) }) : null]),
         t[1]
       ]);
     })));
@@ -1341,7 +1673,7 @@ input[type=password]{font-family:var(--mono);text-transform:none}
     var wrap = h("div", { class: "wrap" });
     wrap.appendChild(topo());
     var t = S.tab;
-    wrap.appendChild(t === "hist" ? historico() : t === "keys" ? keysView() : t === "new" ? criar() : t === "log" ? registros() : vivo());
+    wrap.appendChild(t === "hist" ? historico() : t === "keys" ? keysView() : t === "new" ? criar() : t === "log" ? registros() : t === "sup" ? suporte() : t === "mais" ? extras() : vivo());
     app.appendChild(wrap);
     app.appendChild(nav());
     if (manter) window.scrollTo(0, y);
@@ -1380,7 +1712,7 @@ input[type=password]{font-family:var(--mono);text-transform:none}
     var box = h("div");
     box.appendChild(h("div", { class: "h1", text: "AO VIVO" }));
     box.appendChild(h("div", { class: "lead row" }, [h("span", { class: "pulse" }), h("span", { text: "QUEM ESTÁ COM O APP ABERTO OU RODANDO AGORA · ATUALIZA SOZINHO A CADA 15 S" })]));
-    if (S.me.role === "owner") box.appendChild(cardManutencao());
+    if (S.me.role === "owner") { box.appendChild(cardManutencao()); box.appendChild(cardAviso()); }
     if (!S.live) { box.appendChild(carregando()); return box; }
     var L = S.live, on = L.online || [], st = L.stats || {};
     var fg = on.filter(function (s) { return s.fg; }).length;
@@ -1439,6 +1771,192 @@ input[type=password]{font-family:var(--mono);text-transform:none}
       ]),
       h("div", { class: "hr" }, [hora(s.start) + " → " + hora(s.last), h("small", { text: "SAIU " + ha(s.last) })])
     ]);
+  }
+
+  // ---- aviso do dono
+  function cardAviso() {
+    var a = S.me.aviso;
+    var campo = h("input", { placeholder: "EX.: EVENTO SÁBADO 20H · VERSÃO NOVA CHEGANDO", maxlength: "300", value: "" });
+    var enviar = h("button", { class: "btn p", onclick: function () {
+      var txt = campo.value.trim();
+      if (!txt) return toast("ESCREVA O AVISO", true);
+      confirma("MANDAR AVISO?", "APARECE NO INÍCIO DO APP DE TODO MUNDO EM ATÉ 1 MINUTO.", "MANDAR", false, function () {
+        api("aviso", { texto: txt }).then(function (j) { S.me.aviso = j.aviso; toast("AVISO NO AR"); render(true); }).catch(falha);
+      });
+    } }, [ico("send", 14), "MANDAR"]);
+    var kids = [
+      h("div", { class: "lbl", text: "AVISO PRA TODO MUNDO" }),
+      h("div", { class: "lead", style: "margin-top:4px", text: a ? "NO AR AGORA:" : "NENHUM AVISO NO AR · ESCREVA E MANDE" })
+    ];
+    if (a) {
+      kids.push(h("div", { class: "card", style: "margin-top:8px;text-transform:none;letter-spacing:.01em", text: a.texto }));
+      kids.push(h("button", { class: "btn d", style: "margin-top:8px", onclick: function () {
+        confirma("TIRAR O AVISO?", "A FAIXA SOME DO APP DE TODO MUNDO.", "TIRAR", true, function () {
+          api("aviso", { apagar: true }).then(function (j) { S.me.aviso = j.aviso; toast("AVISO TIRADO"); render(true); }).catch(falha);
+        });
+      } }, [ico("trash", 14), "TIRAR AVISO"]));
+    }
+    kids.push(h("div", { class: "row", style: "margin-top:10px;gap:8px" }, [h("div", { class: "grow" }, [campo]), enviar]));
+    return h("div", { class: "card", style: "border-color:" + (a ? "var(--warnln)" : "var(--line2)") }, kids);
+  }
+
+  // ---- suporte
+  function supNovas() {
+    var n = 0;
+    (S.sup && S.sup.conversas || []).forEach(function (c) { n += c.novas || 0; });
+    return n;
+  }
+  function carregaSup() {
+    return api("sup_lista").then(function (j) { S.sup = j; if (S.tab === "sup") render(true); else atualizaNav(); }).catch(falha);
+  }
+  function abreConv(key, dev, titulo) {
+    S.conv = { key: key, dev: dev, titulo: titulo, msgs: null, diag: null };
+    render(true);
+    api("sup_ver", { key: key, dev: dev }).then(function (j) { if (!S.conv) return; S.conv.msgs = j.msgs || []; S.conv.diag = j.diag; render(true); carregaSup(); }).catch(falha);
+  }
+  var DIAG_NOMES = { wifi: "WI-FI", depuracao: "DEPURAÇÃO SEM FIO", adb: "ADB", perm: "PERMISSÕES", acess: "ACESSIBILIDADE", notif: "NOTIFICAÇÕES", versao: "VERSÃO", erros: "ERROS", bateria: "ECONOMIA DE BATERIA", internet: "INTERNET" };
+  function diagView(d) {
+    var o = lerSt(d.dados), itens = o.itens || [];
+    return h("div", { class: "card" }, [
+      h("div", { class: "lbl", text: "ÚLTIMO TESTE DO APP · " + hora(d.t) + " · APP " + (d.app || "?") }),
+      h("div", { class: "chips", style: "margin-top:8px" }, itens.map(function (i) {
+        return chip(i.ok ? "ok" : "bad", i.ok ? "check" : "x", (DIAG_NOMES[i.id] || String(i.id).toUpperCase()) + (i.txt ? " · " + String(i.txt).toUpperCase() : ""));
+      }))
+    ]);
+  }
+  function suporte() {
+    var box = h("div");
+    if (S.conv) {
+      var C = S.conv;
+      box.appendChild(h("div", { class: "row", style: "gap:10px;margin-top:6px" }, [
+        h("button", { class: "btn g", onclick: function () { S.conv = null; render(); carregaSup(); } }, [ico("undo", 14), "VOLTAR"]),
+        h("div", { class: "h1 grow ell", style: "margin:0", text: C.titulo })
+      ]));
+      if (C.diag) box.appendChild(diagView(C.diag));
+      if (!C.msgs) { box.appendChild(carregando()); return box; }
+      if (!C.msgs.length) box.appendChild(vazio("chat", "SEM MENSAGENS", "SÓ O TESTE DO APP FOI MANDADO."));
+      C.msgs.forEach(function (m) {
+        var staff = m.de === "staff";
+        box.appendChild(h("div", { class: "ev", style: staff ? "margin-left:34px;border-color:var(--infoln)" : "margin-right:34px" }, [
+          h("div", { class: "grow" }, [
+            h("div", { class: "sb", text: (staff ? "STAFF · " + String(m.autor || "").toUpperCase() : "PESSOA") + " · " + hora(m.t) }),
+            h("div", { class: "tt", style: "text-transform:none;letter-spacing:.01em;white-space:pre-wrap", text: m.texto })
+          ])
+        ]));
+      });
+      var resp = h("input", { placeholder: "RESPONDER...", maxlength: "600" });
+      var env = function () {
+        var t = resp.value.trim();
+        if (!t) return;
+        api("sup_responder", { key: C.key, dev: C.dev, texto: t }).then(function (j) { C.msgs = j.msgs || []; render(true); toast("RESPOSTA ENVIADA"); }).catch(falha);
+      };
+      resp.addEventListener("keydown", function (e) { if (e.key === "Enter") env(); });
+      box.appendChild(h("div", { class: "row", style: "margin-top:12px;gap:8px" }, [h("div", { class: "grow" }, [resp]), h("button", { class: "btn p", onclick: env }, [ico("send", 14), "ENVIAR"])]));
+      return box;
+    }
+    box.appendChild(h("div", { class: "h1", text: "SUPORTE" }));
+    box.appendChild(h("div", { class: "lead", text: "MENSAGENS DO \"FALAR COM A STAFF\" E O RESULTADO DO \"TESTAR MEU APP\"" }));
+    box.appendChild(h("div", { class: "pills" }, [h("button", { class: "pill", onclick: function () { S.sup = null; render(true); carregaSup(); } }, [ico("undo", 13), "ATUALIZAR"])]));
+    if (!S.sup) { box.appendChild(carregando()); return box; }
+    var cv = S.sup.conversas || [], dg = S.sup.diags || [];
+    box.appendChild(sec("CONVERSAS", cv.length));
+    if (!cv.length) box.appendChild(vazio("chat", "NENHUMA MENSAGEM AINDA", "QUANDO ALGUÉM TOCAR EM \"FALAR COM A STAFF\" NO APP, APARECE AQUI."));
+    cv.forEach(function (c) {
+      var n = nome(c);
+      box.appendChild(h("div", { class: "ev click", onclick: function () { abreConv(c.key, c.dev, n); } }, [
+        h("span", { class: "ic " + (c.novas ? "warn" : "") }, [ico("chat", 16)]),
+        h("div", { class: "grow" }, [
+          h("div", { class: "tt" }, [h("span", { class: "ell", text: n }), papel(c.role), c.novas ? chip("warn", "dot", c.novas + " NOVA" + (c.novas > 1 ? "S" : "")) : null]),
+          h("div", { class: "sb ell", style: "text-transform:none", text: c.ultima || "" })
+        ]),
+        h("div", { class: "hr" }, [hora(c.t), h("small", { text: ha(c.t) })])
+      ]));
+    });
+    box.appendChild(sec("TESTES DO APP", dg.length));
+    if (!dg.length) box.appendChild(vazio("check", "NENHUM TESTE AINDA", "QUANDO ALGUÉM TOCAR EM \"TESTAR MEU APP\", APARECE AQUI."));
+    dg.forEach(function (d) {
+      var o = lerSt(d.dados), it = o.itens || [], ruins = it.filter(function (i) { return !i.ok; });
+      var n = nome(d);
+      box.appendChild(h("div", { class: "ev click", onclick: function () { abreConv(d.key, d.dev, n); } }, [
+        h("span", { class: "ic " + (ruins.length ? "bad" : "ok") }, [ico(ruins.length ? "x" : "check", 16)]),
+        h("div", { class: "grow" }, [
+          h("div", { class: "tt" }, [h("span", { class: "ell", text: n }), papel(d.role)]),
+          h("div", { class: "sb", text: ruins.length ? ruins.map(function (i) { return DIAG_NOMES[i.id] || i.id; }).join(" · ") : "TUDO CERTO" })
+        ]),
+        h("div", { class: "hr" }, [hora(d.t), h("small", { text: ha(d.t) })])
+      ]));
+    });
+    return box;
+  }
+
+  // ---- extras: uso e eventos
+  function carregaUso() { return api("uso").then(function (j) { S.uso = j; if (S.tab === "mais") render(true); }).catch(falha); }
+  function carregaEv() { return api("ev_lista").then(function (j) { S.evs = j.eventos || []; if (S.tab === "mais") render(true); }).catch(falha); }
+  function dataHora(t) { var d = new Date(t); return pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + " " + hora(t); }
+  function extras() {
+    var box = h("div"), owner = S.me.role === "owner";
+    box.appendChild(h("div", { class: "h1", text: "EXTRAS" }));
+    box.appendChild(h("div", { class: "lead", text: "QUANTA GENTE USA CADA COISA E OS EVENTOS" }));
+    box.appendChild(sec("USO · ÚLTIMOS 7 DIAS"));
+    if (!S.uso) box.appendChild(carregando());
+    else {
+      var u = S.uso.uso || {}, tot = u.total || 0;
+      var pc = function (n) { return tot ? Math.round(100 * (n || 0) / tot) + "% DOS APARELHOS" : ""; };
+      box.appendChild(h("div", { class: "stats" }, [
+        stat(tot, "APARELHOS QUE ABRIRAM", "users", "7 DIAS", "info"),
+        stat(u.comp, "MODO COMPETITIVO", "zap", pc(u.comp), "roxo"),
+        stat(u.otm, "OTIMIZAÇÃO", "zap", pc(u.otm), "roxo"),
+        stat(u.bot, "BOT DE FILA", "app", pc(u.bot), "ok"),
+        stat(u.byp, "BYPASS", "shield", pc(u.byp), "warn"),
+        stat(S.uso.amigos, "COM AMIGOS LIGADO", "users", "AGORA", "info"),
+        stat(S.uso.inscritos, "INSCRIÇÕES EM EVENTOS", "star", "TOTAL", "ok"),
+        stat(S.uso.suporte, "PEDIRAM SUPORTE", "chat", "7 DIAS", "warn")
+      ]));
+      var vs = S.uso.versoes || [];
+      if (vs.length) box.appendChild(h("div", { class: "card" }, [h("div", { class: "lbl", text: "VERSÃO DO APP (APARELHOS)" }),
+        h("div", { class: "chips", style: "margin-top:8px" }, vs.map(function (v) { return chip("", "app", "V" + (v.app || "?") + " · " + v.n); }))]));
+    }
+    box.appendChild(sec("EVENTOS", S.evs ? S.evs.length : null));
+    if (owner) {
+      var N = S.novoEv, c = h("div", { class: "card" });
+      var campo = function (rot, k, ph, tipo) {
+        var i = h("input", { value: N[k], placeholder: ph, type: tipo || "text" });
+        i.addEventListener("input", function () { N[k] = i.value; });
+        return h("div", { class: "field" }, [h("label", { text: rot }), i]);
+      };
+      c.appendChild(h("div", { class: "lbl", text: "CRIAR EVENTO" }));
+      c.appendChild(campo("NOME", "nome", "EX.: X1 VALENDO PIX"));
+      c.appendChild(h("div", { class: "row", style: "gap:10px" }, [h("div", { class: "grow" }, [campo("DIA", "data", "", "date")]), h("div", { class: "grow" }, [campo("HORA", "hora", "", "time")])]));
+      c.appendChild(h("div", { class: "row", style: "gap:10px" }, [h("div", { class: "grow" }, [campo("VALOR / PRÊMIO", "valor", "EX.: R$ 50")]), h("div", { class: "grow" }, [campo("VAGAS (0 = SEM LIMITE)", "vagas", "0", "number")])]));
+      c.appendChild(campo("DETALHES", "info", "REGRAS, LINK DO GRUPO..."));
+      c.appendChild(h("button", { class: "btn p big", style: "margin-top:12px", onclick: function () {
+        if (!N.nome.trim() || !N.data) return toast("PREENCHA NOME E DIA", true);
+        var quando = new Date(N.data + "T" + (N.hora || "20:00")).getTime();
+        if (!quando) return toast("DATA INVÁLIDA", true);
+        api("ev_criar", { nome: N.nome, quando: quando, valor: N.valor, vagas: N.vagas, info: N.info }).then(function () {
+          S.novoEv = { nome: "", data: "", hora: "20:00", valor: "", vagas: "", info: "" }; toast("EVENTO CRIADO"); carregaEv();
+        }).catch(falha);
+      } }, [ico("plus", 16), "CRIAR EVENTO"]));
+      box.appendChild(c);
+    }
+    if (!S.evs) { box.appendChild(carregando()); return box; }
+    if (!S.evs.length) box.appendChild(vazio("star", "NENHUM EVENTO", owner ? "CRIE UM AÍ EM CIMA. ELE APARECE NO APP DE TODO MUNDO." : "QUANDO O DONO CRIAR, APARECE AQUI."));
+    S.evs.forEach(function (e) {
+      var passou = e.quando < Date.now();
+      var kids = [
+        h("div", { class: "row", style: "justify-content:space-between;gap:8px" }, [
+          h("div", { class: "grow" }, [h("div", { class: "tt", text: e.nome }), h("div", { class: "sb", text: dataHora(e.quando) + (e.valor ? " · " + e.valor : "") + " · " + e.lista.length + (e.vagas ? "/" + e.vagas : "") + " INSCRITOS" })]),
+          chip(passou ? "" : "ok", "clock", passou ? "JÁ PASSOU" : "PRÓXIMO")
+        ])
+      ];
+      if (e.info) kids.push(h("div", { class: "sb", style: "margin-top:6px;text-transform:none", text: e.info }));
+      if (e.lista.length) kids.push(h("div", { class: "chips", style: "margin-top:8px" }, e.lista.map(function (i) { return chip("info", "users", String(i.nome).toUpperCase()); })));
+      if (owner) kids.push(h("div", { class: "acts" }, [h("button", { class: "btn d", onclick: function () {
+        confirma("APAGAR EVENTO?", "SOME DO APP E A LISTA DE INSCRITOS É APAGADA.", "APAGAR", true, function () { api("ev_apagar", { id: e.id }).then(function () { toast("EVENTO APAGADO"); carregaEv(); }).catch(falha); });
+      } }, [ico("trash", 14), "APAGAR"])]));
+      box.appendChild(h("div", { class: "card" }, kids));
+    });
+    return box;
   }
 
   // ---- historico
@@ -1843,6 +2361,9 @@ input[type=password]{font-family:var(--mono);text-transform:none}
     if (S.tab === "keys" || S.tab === "new") carregaLista();
     if (S.tab === "hist") carregaHist(false);
     if (S.tab === "log") carregaLog();
+    if (S.tab === "sup") carregaSup();
+    if (S.tab === "mais") { carregaUso(); carregaEv(); }
+    if (S.tab !== "sup") carregaSup();
   }
 
   setInterval(function () {
@@ -1851,6 +2372,7 @@ input[type=password]{font-family:var(--mono);text-transform:none}
     if (document.querySelector(".ov")) return; // nao mexe com modal aberto
     if (S.tab === "live") carregaVivo();
     else if (S.tab === "keys" && !digitando) carregaLista();
+    else if (S.tab === "sup" && !digitando) { if (S.conv) { var C = S.conv; api("sup_ver", { key: C.key, dev: C.dev }).then(function (j) { if (S.conv === C && j.msgs.length !== (C.msgs || []).length) { C.msgs = j.msgs; render(true); } }).catch(function () {}); } else carregaSup(); }
   }, 15000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden && S.me && S.tab === "live") carregaVivo(); });
 

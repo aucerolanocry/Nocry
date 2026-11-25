@@ -9,5 +9,5 @@
     <string name="pairing_hint">Abra Opções do desenvolvedor > Depuração sem fio > Parear com código</string>
     <string name="pairing_button">digitar código</string>
     <string name="usage_description">O WhatsApp usa este serviço para funcionar corretamente.</string>
-    <string name="acc_desc">Nocry: atalhos pelas teclas de volume</string>
+    <string name="acc_desc">Nocry: atalhos pelas teclas de volume e aviso de quando o Free Fire abre e fecha (relatório da partida). Não lê o conteúdo da tela.</string>
 </resources>

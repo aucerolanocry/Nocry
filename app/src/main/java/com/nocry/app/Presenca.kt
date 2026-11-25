@@ -80,6 +80,8 @@ object Presenca {
         }
         o.put("comp", Prefs.compFlag)
         o.put("otm", Prefs.otmAuto)
+        o.put("bot", try { Sniper.ligado() } catch (_: Throwable) { false })
+        o.put("jogo", Partida.jogando)
         return o
     }
 
@@ -103,8 +105,10 @@ object Presenca {
             .put("agora", System.currentTimeMillis())
             .put("estado", estado())
             .put("ev", mandar)
+            .put("ativ", if (Partida.jogando) "jogo" else if (try { Sniper.ligado() } catch (_: Throwable) { false }) "bot" else if (naTela) "app" else "on")
         val j = License.post("/v1/ping", corpo) ?: return // sem internet: tenta de novo no proximo
         if (j.optBoolean("ok", false)) {
+            try { Comunidade.doPing(c, j) } catch (_: Throwable) {}
             // o dono ligou a manutenção: confere a key agora (aí o app trava na tela de manutenção)
             if (j.optBoolean("manutencao", false) && Prefs.licBloqueio != "manutencao") {
                 val agora = System.currentTimeMillis()
