@@ -291,7 +291,7 @@ object Ui {
         r.gravity = Gravity.CENTER
         // clicável ganha borda de destaque + ripple pra ficar claro que dá pra tocar
         r.background = if (clicavel)
-            ripple(c, shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x12), raioPilula(), Theme.alpha(Theme.accent, 0x70), 1))
+            ripple(c, shape(c, Theme.alpha(Theme.accent, 0x2C), raioPilula(), Theme.alpha(Theme.accent, 0xD0), 2))
         else peca(c, raioPilula(), 0x8C)
         val cor = when (ok) { true -> OK; false -> BAD; null -> WARN }
         val dot = View(c)
@@ -314,8 +314,11 @@ object Ui {
         r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         // ícone de ação na ponta (ex.: liga/desliga) só quando dá pra tocar
         if (clicavel && ico != 0) {
-            val ac = icone(c, ico, Theme.alpha(Theme.accent, 0xDD), 12)
-            r.addView(ac, LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)).also { it.leftMargin = dp(c, 6) })
+            // botãozinho redondo cheio na ponta: deixa claro que dá pra tocar
+            val bola = FrameLayout(c)
+            bola.background = shape(c, Theme.accent, 99)
+            bola.addView(icone(c, ico, Color.WHITE, 11), FrameLayout.LayoutParams(dp(c, 11), dp(c, 11), Gravity.CENTER))
+            r.addView(bola, LinearLayout.LayoutParams(dp(c, 20), dp(c, 20)).also { it.leftMargin = dp(c, 6) })
         }
         val pv = if (compacto) 6 else 9
         if (compacto) r.background = if (clicavel) ripple(c, solido(c, raioPilula())) else solido(c, raioPilula())

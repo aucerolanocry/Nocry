@@ -485,6 +485,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             fila.addView(wifi, LinearLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 34)).also { it.leftMargin = Ui.dp(c, 8) })
             hero.addView(fila, Ui.lp(top = 14, c = c))
         } else hero.addView(Ui.chips(c, pAdb, pPerm, pVol), Ui.lp(top = 16, c = c))
+        hero.addView(Ui.text(c, "toque nos botões acima pra ligar ou desligar", 9.5f, Ui.MUTED, true).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 6, c = c))
         if (jeito.isEmpty() || falta) hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "abrir conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
         add(hero, 16)
 

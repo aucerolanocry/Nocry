@@ -880,3 +880,65 @@ object OtmVigia {
         if (fechou.isNotEmpty()) NLog.add("otm-vigia", "voltaram e fechei de novo: " + fechou.joinToString(", "))
     }
 }
+
+/**
+ * Configuração automática: olha o celular e deixa tudo pronto pro Free Fire sozinho
+ * (nível da otimização, ligar sozinha ao abrir o FF, preparar o jogo, limpar o cache e conferir o toque).
+ */
+object AutoConfig {
+    fun rodar(log: (String) -> Unit): Boolean {
+        log("[1/6] CONFERINDO A CONEXÃO")
+        if (!Adb.connected && !Adb.ensure(Sys.app)) {
+            log("⚠ O ADB não está ligado. Abra a Conexão, ligue o ADB e rode de novo.")
+            return false
+        }
+        log("✓ ADB ligado")
+
+        log("")
+        log("[2/6] LENDO O SEU CELULAR")
+        val plano = Otm.lerPlano()
+        if (plano == null) {
+            log("⚠ Não consegui ler o celular agora (${Otm.motivoLeitura.ifEmpty { "tente de novo" }})")
+            return false
+        }
+        val gb = ((plano.memTotal + 1048575) / 1048576).toInt()
+        log("• ${plano.perfil()}")
+        if (plano.hz > 0) log("• TELA: ${plano.hz} Hz")
+
+        log("")
+        log("[3/6] ESCOLHENDO O NÍVEL DA OTIMIZAÇÃO")
+        val nivel = if (gb <= 8) "full" else "normal"
+        Prefs.otmNivel = nivel
+        log(if (nivel == "full") "✓ FULL (celular com $gb GB: precisa de toda a memória pro jogo)"
+            else "✓ NORMAL (celular com $gb GB: sobra memória, mensagens continuam avisando)")
+
+        log("")
+        log("[4/6] LIGAR SOZINHA AO ABRIR O FREE FIRE")
+        if (!Prefs.otmAuto) OtmAuto.ligar()
+        log("✓ Abriu o FF, a otimização liga · fechou, volta tudo")
+
+        log("")
+        log("[5/6] PREPARANDO O FREE FIRE")
+        val pm = Sys.app.packageManager
+        val jogos = listOf(Const.FF_NORMAL, Const.FF_MAX).filter { p -> try { pm.getLaunchIntentForPackage(p) != null } catch (_: Throwable) { false } }
+        if (jogos.isEmpty()) log("• Free Fire não instalado: pulei essa parte")
+        for (g in jogos) {
+            val ok = try { Otm.prepararFf(g) { } } catch (_: Throwable) { false }
+            log(if (ok) "✓ ${if (g == Const.FF_MAX) "FF MAX" else "Free Fire"}: compilado pra abrir e rodar mais rápido"
+                else "✗ ${if (g == Const.FF_MAX) "FF MAX" else "Free Fire"}: o celular não deixou preparar (não faz mal)")
+        }
+
+        log("")
+        log("[6/6] LIMPANDO O CACHE E CONFERINDO O TOQUE")
+        val limpou = try { Otm.limparCache { } } catch (_: Throwable) { false }
+        log(if (limpou) "✓ Cache dos apps limpo" else "✗ O celular não deixou limpar o cache")
+        if (Prefs.longOn !in 1..60) { Prefs.longOn = 1; Prefs.multiOn = 0; log("✓ Toque rápido ajustado pro padrão do competitivo (1 · 0)") }
+        else log("✓ Toque rápido já está bom (${Prefs.longOn} · ${Prefs.multiOn})")
+
+        log("")
+        log("[✓] TUDO CONFIGURADO!")
+        log("• Agora é só abrir o Free Fire pelo JOGAR: a otimização liga sozinha.")
+        NLog.add("autoconfig", "ok: nível $nivel, ${gb}GB, jogos ${jogos.size}")
+        return true
+    }
+}

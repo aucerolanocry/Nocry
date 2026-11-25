@@ -98,6 +98,11 @@ class OtmScreen(a: MainActivity) : Screen(a) {
         ), Ui.lp(top = 16, c = c))
         add(hero, 12)
 
+        add(Ui.button(c, "configurar tudo pra mim", Ui.Kind.PRIMARY, R.drawable.ic_bolt) {
+            act.abre(RunScreen(act, "Configurando") { log -> AutoConfig.rodar(log) })
+        }, 12)
+        add(Ui.text(c, "Olha o seu celular e deixa a otimização, o Free Fire e o toque prontos sozinho.", 10.5f, Ui.MUTED), 6)
+
         val full = Prefs.otmNivel == "full"
         add(Ui.secao(c, "nível"), 18)
         add(Ui.segmento(c, listOf("NORMAL", "FULL"), if (full) 1 else 0) { i ->
