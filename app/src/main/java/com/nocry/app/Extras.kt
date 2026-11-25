@@ -974,7 +974,11 @@ class RankScreen(a: MainActivity) : Screen(a) {
         redesenha()
         Bg.io {
             try { Rank.enviar(act, forcar = true) } catch (_: Throwable) {}
-            val l = try { Rank.lista(act, if (mes) Rank.mesAtual() else "geral", por) } catch (_: Throwable) { null }
+            val l = if (BuildConfig.PREVIEW) listOf(
+                Rank.Linha("Aucerola", 42, 7, 380.0, 120, 9, true, 900, true, "o mais brabo do NOCRY", 520.0, 49, mapOf(3.5 to 20, 10.0 to 15)),
+                Rank.Linha("Kauã", 30, 12, 210.0, 80, 5, false, 600, jog = 300.0, salas = 42),
+                Rank.Linha("Lipe", 22, 9, 150.0, 40, 3, false, 420, jog = 210.0, salas = 31))
+            else try { Rank.lista(act, if (mes) Rank.mesAtual() else "geral", por) } catch (_: Throwable) { null }
             Bg.ui { linhas = l; erro = l == null; carregando = false; versao++; redesenha() }
         }
     }

@@ -71,6 +71,16 @@ shot 24_caderno caderno
 shot 25_partidas partidas
 shot 27_eventos eventos
 shot 28_amigos amigos
+# rank: a entrada do top 1 é animada, então tira várias fotos seguidas
+if [ -z "${TELAS:-}" ] || echo " $TELAS " | grep -q " 36_rank "; then
+  adb shell am force-stop $PKG
+  adb shell am start -n $PKG/$ACT --es tela rank --es fonte "$FONTE" >/dev/null
+  sleep 2.5
+  for i in 1 2 3 4 5 6 7 8; do adb exec-out screencap -p > "$OUT/cru/36_rank_$i.png"; sleep 0.6; done
+  sleep 3; adb exec-out screencap -p > "$OUT/cru/36_rank_9.png"
+  montage "$OUT"/cru/36_rank_[1-9].png -tile 9x1 -geometry 432x960+6+0 -background '#111111' "$OUT/36_rank.jpg" 2>/dev/null
+  echo "ok 36_rank"
+fi
 shot 29_atalhos_grade home 0
 COR=8b5cf6; ESTILO=""; shot 40_estilo_inicio home; shot 40_estilo_estudio estudio; shot 40_estilo_logs log; shot 40_estilo_sobre sobre; shot 40_estilo_bypass bypass
 COR=8b5cf6; ESTILO=""; shot 50_jeito_inicio home; shot 50_jeito_sobre sobre
