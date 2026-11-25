@@ -90,6 +90,9 @@ class AnimBg(c: Context) : View(c) {
             "petalas" -> LinearGradient(0f, 0f, 0f, h, Theme.mix(base, c2, 0.14f), Theme.mix(base, c1, 0.22f), Shader.TileMode.CLAMP)
             "neve" -> LinearGradient(0f, 0f, 0f, h, Theme.mix(base, c2, 0.10f), base, Shader.TileMode.CLAMP)
             "noite" -> LinearGradient(0f, 0f, 0f, h, Theme.mix(base, preto, 0.5f), base, Shader.TileMode.CLAMP)
+            "caveiras" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF0E0F10.toInt(), 0xFF050505.toInt(), 0xFF120607.toInt()), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
+            "sangue" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF140204.toInt(), 0xFF070102.toInt(), 0xFF1E0306.toInt()), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+            "inferno" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF0A0302.toInt(), 0xFF160603.toInt(), 0xFF3A0C02.toInt()), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
             else -> null
         }
         raioMancha = max(w, h) * 0.6f
@@ -169,6 +172,9 @@ class AnimBg(c: Context) : View(c) {
             "petalas" -> desenhaPetalas(cv, w, h, t, c1, c2)
             "ouro" -> desenhaOuro(cv, w, h, t, c1)
             "noite" -> desenhaEstrelas(cv, w, h, t, 0xFFFFFFFF.toInt(), 170)
+            "caveiras" -> Efeitos.fundoCaveiras(cv, w, h, t, d)
+            "sangue" -> Efeitos.fundoSangue(cv, w, h, t, d)
+            "inferno" -> Efeitos.fundoInferno(cv, w, h, t, d)
             else -> desenhaBrasas(cv, w, h, t, c1, c2)
         }
         if (Prefs.scanner) desenhaScanner(cv, w, h, t)

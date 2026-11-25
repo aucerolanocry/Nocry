@@ -22,14 +22,14 @@ W=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); LARG=${W%x*}; ALT=${
 X=$((LARG/2)); Y1=$((ALT*78/100)); Y2=$((ALT*28/100))
 
 FONTE=bigs   # a fonte que o dono usa (condensada): o caso mais apertado
-INICIO=""; ESTILO=""; COR=""
+INICIO=""; ESTILO=""; COR=""; TEMA=""
 shot() { # nome tela [aba] [demo]
   local nome=$1 tela=$2 aba=${3:-0} demo=${4:-false}
   # TELAS="01_inicio 15_estudio": tira só essas (prévia rápida)
   if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
   adb shell am force-stop $PKG
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
-  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" ${INICIO:+--es inicio $INICIO} ${ESTILO:+--es estilo $ESTILO} ${COR:+--es cor $COR} >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" ${INICIO:+--es inicio $INICIO} ${ESTILO:+--es estilo $ESTILO} ${COR:+--es cor $COR} ${TEMA:+--es tema $TEMA} >/dev/null
   sleep 7
   adb exec-out screencap -p > "$OUT/cru/${nome}_1.png"
   for i in 2 3 4 5; do
@@ -71,6 +71,7 @@ shot 24_caderno caderno
 shot 25_partidas partidas
 shot 27_eventos eventos
 shot 28_amigos amigos
+for t in morte sangue inferno; do TEMA=$t; shot 37_tema_${t} home; done; TEMA=""
 # rank: a entrada do top 1 é animada, então tira várias fotos seguidas
 if [ -z "${TELAS:-}" ] || echo " $TELAS " | grep -q " 36_rank "; then
   # entrada 6x mais lenta (só no teste) e uma foto por segundo
