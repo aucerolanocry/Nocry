@@ -22,11 +22,14 @@ W=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); LARG=${W%x*}; ALT=${
 X=$((LARG/2)); Y1=$((ALT*78/100)); Y2=$((ALT*28/100))
 
 FONTE=bigs   # a fonte que o dono usa (condensada): o caso mais apertado
+INICIO=""
 shot() { # nome tela [aba] [demo]
   local nome=$1 tela=$2 aba=${3:-0} demo=${4:-false}
+  # TELAS="01_inicio 15_estudio": tira só essas (prévia rápida)
+  if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
   adb shell am force-stop $PKG
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
-  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" --es inicio "$INICIO" >/dev/null
   sleep 7
   adb exec-out screencap -p > "$OUT/cru/${nome}_1.png"
   for i in 2 3 4 5; do
@@ -68,10 +71,12 @@ shot 25_partidas partidas
 shot 27_eventos eventos
 shot 28_amigos amigos
 shot 29_atalhos_grade home 0
+INICIO=D; shot 30_inicio_d home; INICIO=""
 # 2ª passada: tela LARGA (411dp), só as principais, pra conferir que nada ficou pequeno demais
 adb shell wm density reset
 sleep 3
 shot 31_largo_inicio home
+INICIO=D; shot 35_largo_inicio_d home; INICIO=""
 shot 32_largo_conexao conexao
 shot 33_largo_bypass bypass
 shot 34_largo_bot bot 2 true

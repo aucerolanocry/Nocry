@@ -70,7 +70,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Erros.novos(),
     Comp.ligado(), ocupadoComp,
     Update.adiada(act),
-    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica"), Prefs.lerNum("tile_dica_meet"), Perfil.versao, Meet.recente()
+    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica"), Prefs.lerNum("tile_dica_meet"), Perfil.versao, Meet.recente(), Prefs.extraTxt("inicio_estilo")
 ).joinToString("|")
 
     private class Atalho(val ico: Int, val nome: String, val alerta: Boolean, val abre: () -> Unit)
@@ -110,6 +110,50 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         box.addView(linha)
         return box
     }
+    private fun estiloD() = Prefs.extraTxt("inicio_estilo") == "D"
+
+    /** opção D: um cartão com lista — chavinhas do menu do topo e os atalhos com seta */
+    private fun cartaoD(c: android.content.Context): View {
+        val card = Ui.vbox(c)
+        card.background = Ui.glass(c)
+        card.setPadding(Ui.dp(c, 14), Ui.dp(c, 6), Ui.dp(c, 14), Ui.dp(c, 6))
+        fun rotulo(s: String, top: Int) = card.addView(Ui.text(c, s, 9.5f, Ui.MUTED, true), Ui.lp(top = top, c = c))
+        var primeira = true
+        fun linha(ico: Int, nome: String, corIco: Int, direita: View, alerta: Boolean, acao: () -> Unit) {
+            if (!primeira) card.addView(View(c).also { it.setBackgroundColor(Theme.alpha(android.graphics.Color.WHITE, 0x1C)) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 1)))
+            primeira = false
+            val r = Ui.hbox(c)
+            r.gravity = Gravity.CENTER_VERTICAL
+            r.setPadding(0, Ui.dp(c, 9), 0, Ui.dp(c, 9))
+            val bola = android.widget.FrameLayout(c)
+            bola.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x10), 99, Theme.alpha(android.graphics.Color.WHITE, 0x55), 1)
+            bola.addView(Ui.icone(c, ico, corIco, 16), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 16), Ui.dp(c, 16), Gravity.CENTER))
+            r.addView(bola, LinearLayout.LayoutParams(Ui.dp(c, 32), Ui.dp(c, 32)).also { it.rightMargin = Ui.dp(c, 12) })
+            r.addView(Ui.text(c, nome, 11.5f, Ui.TEXT, true).also { it.maxLines = 1 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (alerta) r.addView(View(c).also { it.background = Ui.shape(c, Ui.WARN, 99) }, LinearLayout.LayoutParams(Ui.dp(c, 8), Ui.dp(c, 8)).also { it.rightMargin = Ui.dp(c, 10) })
+            r.addView(direita)
+            r.contentDescription = nome
+            Ui.clique(r) { acao() }
+            card.addView(r)
+        }
+        fun seta() = Ui.icone(c, R.drawable.ic_chevron, Ui.MUTED, 16).also { it.layoutParams = LinearLayout.LayoutParams(Ui.dp(c, 16), Ui.dp(c, 16)) }
+        rotulo("Menu do topo", 6)
+        for ((nome, meet) in listOf("Toque rápido" to false, "Meet" to true)) {
+            val ja = MenuRapido.noMenu(meet)
+            val sw = Ui.interruptor(c, ja) { MenuRapido.alternar(act, meet) { redesenha() } }
+            sw.scaleX = 0.85f; sw.scaleY = 0.85f
+            linha(if (meet) R.drawable.ic_video else R.drawable.ic_bolt, nome, if (ja) Ui.OK else Ui.TEXT, sw, false) { MenuRapido.alternar(act, meet) { redesenha() } }
+        }
+        rotulo("Atalhos", 10)
+        primeira = true
+        linha(R.drawable.ic_info, "Ajuda", Ui.TEXT, seta(), Comunidade.supNovas > 0) { act.abre(AjudaScreen(act)) }
+        linha(R.drawable.ic_user, "Amigos", Ui.TEXT, seta(), false) { act.abre(AmigosScreen(act)) }
+        linha(R.drawable.ic_sparkle, "Eventos", Ui.TEXT, seta(), false) { act.abre(EventosScreen(act)) }
+        linha(R.drawable.ic_log, "Caderno", Ui.TEXT, seta(), false) { act.abre(CadernoScreen(act)) }
+        linha(R.drawable.ic_gamepad, "Partidas", Ui.TEXT, seta(), Partida.jogando) { act.abre(PartidasScreen(act)) }
+        return card
+    }
+
     private fun ultimaLinha(): String = NLog.ultima()
 
     // textos que mudam toda hora: trocados no lugar (leve), sem refazer a tela inteira
@@ -406,18 +450,16 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                 Ui.clique(b) { MenuRapido.alternar(act, meet) { redesenha() } }
                 return b
             }
-            fun titulo(s: String) = Ui.text(c, s, 9.5f, Ui.MUTED, true)
-            add(titulo("Menu do topo"), 12)
+            if (estiloD()) { add(cartaoD(c), 12); return@run }
+            add(Ui.secao(c, "menu do topo"), 18)
             val l = Ui.hbox(c)
             l.addView(fixo("Toque rápido", R.drawable.ic_bolt, false), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.15f))
             l.addView(fixo("Meet", R.drawable.ic_video, true),
                 LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 7) })
-            add(l, 6)
-            add(titulo("Atalhos"), 12)
+            add(l, 8)
+            add(Ui.secao(c, "atalhos"), 18)
+            add(atalhosExtras(c), 8)
         }
-
-        // ---------------- atalhos dos extras (pequenos, logo abaixo do bot) ----------------
-        add(atalhosExtras(c), 6)
 
         // ---------------- modos: o primeiro grande, o resto em grade de 2 ----------------
         val editar = Ui.text(c, "Editar ›", 10.5f, Ui.MUTED, true, mono = true)

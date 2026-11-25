@@ -437,6 +437,7 @@ class MainActivity : Activity() {
     private fun abrirPrevia(i: android.content.Intent?) {
         if (!BuildConfig.PREVIEW || i == null) return
         if (i.getBooleanExtra("demo", false)) Sniper.demo()
+        Prefs.extraTxt("inicio_estilo", i.getStringExtra("inicio") ?: "")
         // telas que tem aba propria na barra de baixo: abre pela aba, pra barra marcar certo
         when (i.getStringExtra("tela") ?: "") {
             "conexao" -> { irAba(1); return }

@@ -307,7 +307,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: bash scripts/prints.sh dist/Nocry.apk prints; bash scripts/estresse.sh prints
+          script: TELAS="${{ github.event.inputs.notas }}" bash scripts/prints.sh dist/Nocry.apk prints; [ -n "${{ github.event.inputs.notas }}" ] || bash scripts/estresse.sh prints
 
       # cópia leve no próprio log (dá pra conferir as telas sem baixar o arquivo)
       - name: Resumo no log
