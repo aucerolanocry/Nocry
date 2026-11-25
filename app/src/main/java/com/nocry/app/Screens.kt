@@ -70,7 +70,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Erros.novos(),
     Comp.ligado(), ocupadoComp,
     Update.adiada(act),
-    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica"), Prefs.lerNum("tile_dica_meet"), Perfil.versao
+    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica"), Prefs.lerNum("tile_dica_meet"), Perfil.versao, Meet.recente()
 ).joinToString("|")
 
     private class Atalho(val ico: Int, val nome: String, val alerta: Boolean, val abre: () -> Unit)
@@ -390,6 +390,34 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             val linhaBot = Ui.row(c, "Bot de fila", subBot(), R.drawable.ic_crown) { act.abre(SniperScreen(act)) }
             botSub = linhaBot.findViewWithTag("sub")
             add(linhaBot, 12)
+        }
+
+        // ---------------- botões fixos: TOQUE RÁPIDO (liga/desliga o competitivo) e MEET (abre o link da sala) ----------------
+        run {
+            val l = Ui.hbox(c)
+            fun fixo(rot: String, sub: String, ico: Int, aceso: Boolean, acao: () -> Unit): View {
+                val b = Ui.hbox(c)
+                b.gravity = Gravity.CENTER_VERTICAL
+                b.background = Ui.ripple(c, Ui.glass(c, ligado = aceso))
+                b.setPadding(Ui.dp(c, 12), Ui.dp(c, 10), Ui.dp(c, 12), Ui.dp(c, 10))
+                b.addView(Ui.icone(c, ico, if (aceso) Theme.accent else Ui.TEXT, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 10) })
+                val col = Ui.vbox(c)
+                col.addView(Ui.text(c, rot, 12f, Ui.TEXT, true, mono = true).also { Ui.umaLinha(it, 9) })
+                col.addView(Ui.text(c, sub, 9.5f, if (aceso) Ui.OK else Ui.MUTED, true, mono = true).also { Ui.umaLinha(it, 8) })
+                b.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                b.contentDescription = rot
+                Ui.clique(b) { acao() }
+                return b
+            }
+            val comp = Comp.ligado()
+            l.addView(fixo("TOQUE RÁPIDO", if (ocupadoComp) "AGUARDE..." else if (comp) "LIGADO" else "DESLIGADO", R.drawable.ic_bolt, comp) { alternaComp() },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            val meet = Meet.recente()
+            l.addView(fixo("MEET", if (meet != null) "LINK DA SALA" else "ABRIR", R.drawable.ic_video, meet != null) {
+                if (meet != null) Ui.toast(act, "link do meet copiado")
+                Meet.abrir(act, meet)
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 10) })
+            add(l, 12)
         }
 
         // ---------------- menu rápido: botõezinhos pra colocar TOQUE RÁPIDO e MEET no menu do topo ----------------
