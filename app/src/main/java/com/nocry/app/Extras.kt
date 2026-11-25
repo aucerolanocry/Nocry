@@ -973,7 +973,6 @@ class RankScreen(a: MainActivity) : Screen(a) {
         carregando = true; erro = false
         redesenha()
         Bg.io {
-            try { IntroTop1.preparar() } catch (_: Throwable) {}
             if (!BuildConfig.PREVIEW) try { Rank.enviar(act, forcar = true) } catch (_: Throwable) {}
             val l = if (BuildConfig.PREVIEW) listOf(
                 Rank.Linha("Aucerola", 42, 7, 380.0, 120, 9, true, 900, true, "o mais brabo do NOCRY", 520.0, 49, mapOf(3.5 to 20, 10.0 to 15)),
@@ -1058,7 +1057,6 @@ class RankScreen(a: MainActivity) : Screen(a) {
         val ff = android.widget.FrameLayout(c)
         ff.addView(AnelGiratorio(c), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         ff.addView(foto, android.widget.FrameLayout.LayoutParams(Ui.dp(c, 62), Ui.dp(c, 62), Gravity.CENTER))
-        Ui.clique(ff) { IntroTop1.mostrar(act, fotoDono(r), r.apelido, r.frase) }
         topo.addView(ff, LinearLayout.LayoutParams(Ui.dp(c, 84), Ui.dp(c, 84)).also { it.rightMargin = Ui.dp(c, 12) })
         val col = Ui.vbox(c)
         val linha1 = Ui.hbox(c)
@@ -1085,10 +1083,6 @@ class RankScreen(a: MainActivity) : Screen(a) {
         moldura.addView(k, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         moldura.addView(BordaViva(c), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         pulsar(moldura)
-        if (!introFeita) {
-            introFeita = true
-            moldura.post { IntroTop1.mostrar(act, fotoDono(r), r.apelido, r.frase) }
-        }
         return moldura
     }
 
