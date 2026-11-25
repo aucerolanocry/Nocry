@@ -576,7 +576,7 @@ object MenuRapido {
                 sb.requestAddTileService(android.content.ComponentName(act, if (meet) MeetTile::class.java else CompTile::class.java), nome,
                     android.graphics.drawable.Icon.createWithResource(act, if (meet) R.drawable.ic_video else R.drawable.ic_bolt), act.mainExecutor) { r ->
                     // 0 = não quis, 1 = já estava, 2 = adicionou
-                    if (r == 1 || r == 2) { Prefs.gravaNum(chave, 1L); Ui.toast(act, "PRONTO! DESÇA O MENU DO TOPO") }
+                    if (r == 1 || r == 2) { Prefs.gravaNum(chave, 2L); Ui.toast(act, if (r == 1) "JÁ ESTÁ NO MENU DO TOPO" else "PRONTO! DESÇA O MENU DO TOPO") }
                     depois()
                 }
                 return

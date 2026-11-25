@@ -392,57 +392,27 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             add(linhaBot, 12)
         }
 
-        // ---------------- botões fixos: TOQUE RÁPIDO (liga/desliga o competitivo) e MEET (abre o link da sala) ----------------
+        // ---------------- botões fixos: colocam TOQUE RÁPIDO e MEET no menu do topo do celular ----------------
         run {
             val l = Ui.hbox(c)
-            fun fixo(rot: String, sub: String, ico: Int, aceso: Boolean, acao: () -> Unit): View {
+            fun fixo(rot: String, chave: String, ico: Int, meet: Boolean): View {
+                val ja = Prefs.lerNum(chave) == 2L
                 val b = Ui.hbox(c)
                 b.gravity = Gravity.CENTER_VERTICAL
-                b.background = Ui.ripple(c, Ui.glass(c, ligado = aceso))
+                b.background = Ui.ripple(c, Ui.glass(c, ligado = ja))
                 b.setPadding(Ui.dp(c, 12), Ui.dp(c, 10), Ui.dp(c, 12), Ui.dp(c, 10))
-                b.addView(Ui.icone(c, ico, if (aceso) Theme.accent else Ui.TEXT, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 10) })
+                b.addView(Ui.icone(c, ico, if (ja) Theme.accent else Ui.TEXT, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 10) })
                 val col = Ui.vbox(c)
                 col.addView(Ui.text(c, rot, 12f, Ui.TEXT, true, mono = true).also { Ui.umaLinha(it, 9) })
-                col.addView(Ui.text(c, sub, 9.5f, if (aceso) Ui.OK else Ui.MUTED, true, mono = true).also { Ui.umaLinha(it, 8) })
+                col.addView(Ui.text(c, if (ja) "NO MENU ✓" else "+ ADICIONAR AO MENU", 9.5f, if (ja) Ui.OK else Ui.MUTED, true, mono = true).also { Ui.umaLinha(it, 7) })
                 b.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                b.contentDescription = rot
-                Ui.clique(b) { acao() }
+                b.contentDescription = "colocar $rot no menu rápido"
+                Ui.clique(b) { MenuRapido.adicionar(act, meet) { redesenha() } }
                 return b
             }
-            val comp = Comp.ligado()
-            l.addView(fixo("TOQUE RÁPIDO", if (ocupadoComp) "AGUARDE..." else if (comp) "LIGADO" else "DESLIGADO", R.drawable.ic_bolt, comp) { alternaComp() },
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            val meet = Meet.recente()
-            l.addView(fixo("MEET", if (meet != null) "LINK DA SALA" else "ABRIR", R.drawable.ic_video, meet != null) {
-                if (meet != null) Ui.toast(act, "link do meet copiado")
-                Meet.abrir(act, meet)
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 10) })
-            add(l, 12)
-        }
-
-        // ---------------- menu rápido: botõezinhos pra colocar TOQUE RÁPIDO e MEET no menu do topo ----------------
-        if (Prefs.lerNum("tile_dica") == 0L || Prefs.lerNum("tile_dica_meet") == 0L) {
-            val l = Ui.hbox(c)
-            l.gravity = Gravity.CENTER_VERTICAL
-            l.addView(Ui.text(c, "MENU RÁPIDO", 10.5f, Ui.MUTED, true, mono = true), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 8) })
-            fun chip(rot: String, ico: Int, acao: () -> Unit): View {
-                val b = Ui.hbox(c)
-                b.gravity = Gravity.CENTER
-                b.background = Ui.ripple(c, Ui.peca(c, 99))
-                b.setPadding(Ui.dp(c, 10), Ui.dp(c, 7), Ui.dp(c, 12), Ui.dp(c, 7))
-                b.addView(Ui.icone(c, ico, Ui.TEXT, 14), LinearLayout.LayoutParams(Ui.dp(c, 14), Ui.dp(c, 14)).also { it.rightMargin = Ui.dp(c, 6) })
-                b.addView(Ui.text(c, rot, 10.5f, Ui.TEXT, true, mono = true).also { it.maxLines = 1 })
-                Ui.clique(b) { acao() }
-                return b
-            }
-            if (Prefs.lerNum("tile_dica") == 0L) l.addView(chip("+ TOQUE RÁPIDO", R.drawable.ic_bolt) { MenuRapido.adicionar(act, false) { redesenha() } },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 6) })
-            if (Prefs.lerNum("tile_dica_meet") == 0L) l.addView(chip("+ MEET", R.drawable.ic_video) { MenuRapido.adicionar(act, true) { redesenha() } })
-            l.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
-            val x = Ui.icone(c, R.drawable.ic_xcircle, Ui.MUTED, 18)
-            x.contentDescription = "não mostrar mais"
-            Ui.clique(x) { Prefs.gravaNum("tile_dica", 1L); Prefs.gravaNum("tile_dica_meet", 1L); redesenha() }
-            l.addView(x, LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)))
+            l.addView(fixo("TOQUE RÁPIDO", "tile_dica", R.drawable.ic_bolt, false), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            l.addView(fixo("MEET", "tile_dica_meet", R.drawable.ic_video, true),
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 10) })
             add(l, 12)
         }
 
