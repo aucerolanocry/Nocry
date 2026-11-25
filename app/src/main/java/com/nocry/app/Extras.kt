@@ -452,6 +452,8 @@ class EventoReceiver : BroadcastReceiver() {
 // Bloco "NOCRY" no menu rápido do Android: liga/desliga o modo competitivo
 // =====================================================================================
 class CompTile : TileService() {
+    override fun onTileAdded() { super.onTileAdded(); Prefs.gravaNum("tile_dica", 2L) }
+    override fun onTileRemoved() { super.onTileRemoved(); Prefs.gravaNum("tile_dica", 0L) }
     override fun onStartListening() {
         super.onStartListening()
         atualiza()
@@ -532,6 +534,8 @@ object Meet {
 
 /** bloco "Meet" no menu rápido: abre o último link de Meet do bot (ou o app do Meet) */
 class MeetTile : TileService() {
+    override fun onTileAdded() { super.onTileAdded(); Prefs.gravaNum("tile_dica_meet", 2L) }
+    override fun onTileRemoved() { super.onTileRemoved(); Prefs.gravaNum("tile_dica_meet", 0L) }
     override fun onStartListening() {
         super.onStartListening()
         val t = qsTile ?: return
@@ -566,10 +570,36 @@ class MeetTile : TileService() {
 object MenuRapido {
     fun adicionar(act: MainActivity, depois: () -> Unit) = adicionar(act, false, depois)
 
+    fun noMenu(meet: Boolean) = Prefs.lerNum(if (meet) "tile_dica_meet" else "tile_dica") == 2L
+
+    /** 1º toque coloca no menu do topo; se já estiver, tira */
+    fun alternar(act: MainActivity, meet: Boolean, depois: () -> Unit) {
+        if (noMenu(meet)) tirar(act, meet, depois) else adicionar(act, meet, depois)
+    }
+
+    private fun comp(act: MainActivity, meet: Boolean) =
+        android.content.ComponentName(act, if (meet) MeetTile::class.java else CompTile::class.java)
+
+    /** desligar o bloco faz o Android tirar ele do menu do topo */
+    fun tirar(act: MainActivity, meet: Boolean, depois: () -> Unit) {
+        try {
+            act.packageManager.setComponentEnabledSetting(comp(act, meet),
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED, android.content.pm.PackageManager.DONT_KILL_APP)
+        } catch (_: Throwable) {}
+        Prefs.gravaNum(if (meet) "tile_dica_meet" else "tile_dica", 0L)
+        Ui.toast(act, "TIRADO DO MENU DO TOPO")
+        depois()
+    }
+
     /** meet = true: o bloco do Google Meet; false: o do modo competitivo */
     fun adicionar(act: MainActivity, meet: Boolean, depois: () -> Unit) {
         val chave = if (meet) "tile_dica_meet" else "tile_dica"
         val nome = if (meet) "MEET" else "TOQUE RÁPIDO"
+        // se foi tirado antes, liga o bloco de novo
+        try {
+            act.packageManager.setComponentEnabledSetting(comp(act, meet),
+                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, android.content.pm.PackageManager.DONT_KILL_APP)
+        } catch (_: Throwable) {}
         if (Build.VERSION.SDK_INT >= 33) {
             try {
                 val sb = act.getSystemService(android.app.StatusBarManager::class.java)
