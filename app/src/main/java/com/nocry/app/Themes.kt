@@ -19,10 +19,6 @@ class Pack(
 
 object Packs {
     val lista = listOf(
-        // temas sombrios: o fundo e os cartões ganham efeito animado próprio (Efeitos.kt)
-        Tema("morte", "Morte", "Caveiras, névoa e olhos vermelhos", 0xFFE8E2D4.toInt(), 0xFFB3121F.toInt(), 0xFF050505.toInt(), "contorno", "bigs", 6, 1, 45, 80, "caveiras", blur = 0),
-        Tema("sangue", "Sangue", "Sangue escorrendo pelos cartões", 0xFFFF2337.toInt(), 0xFF8A0014.toInt(), 0xFF0A0203.toInt(), "solido", "gloock", 12, 1, 55, 82, "sangue", blur = 0),
-        Tema("inferno", "Inferno", "Fogo lambendo os cartões", 0xFFFF7A1A.toInt(), 0xFFFF2A00.toInt(), 0xFF0A0402.toInt(), "hud", "russo", 2, 2, 80, 78, "inferno", blur = 0),
         // titulos na Big Shoulders; texto corrido na Rajdhani: a Big Shoulders e estreita demais pra paragrafo
         // em caixa alta (cansava e parecia tudo espremido), a Rajdhani e mais larga e continua com cara de jogo
         Pack("bigs", "Big Shoulders", "BigShoulders-Regular.ttf", "BigShoulders-Bold.ttf", "Rajdhani-SemiBold.ttf", "Rajdhani-Bold.ttf", 1.28f, 0.06f),
@@ -104,6 +100,10 @@ object Temas {
         Tema("platina", "Platina", "Executivo, elegante", 0xFFE4E4EC.toInt(), 0xFF7B6CFF.toInt(), 0xFF08090D.toInt(), "vidro", "outfit", 20, 1, 30, 45, "grade"),
         Tema("nebulosa", "Nebulosa", "Roxo profundo, misterioso", 0xFFB388FF.toInt(), 0xFF5B2A9E.toInt(), 0xFF08050F.toInt(), "vidro", "bricolage", 26, 1, 60, 50, "noite"),
         Tema("esmeralda", "Esmeralda", "Verde elegante, sofisticado", 0xFF4FD1A5.toInt(), 0xFF1B6E52.toInt(), 0xFF04100A.toInt(), "vidro", "instrument", 22, 1, 45, 55, "grade"),
+        // temas sombrios: o fundo e os cartões ganham efeito animado próprio (Efeitos.kt)
+        Tema("morte", "Morte", "Caveiras, névoa e olhos vermelhos", 0xFFE8E2D4.toInt(), 0xFFB3121F.toInt(), 0xFF050505.toInt(), "contorno", "bigs", 6, 1, 45, 80, "caveiras", blur = 0),
+        Tema("sangue", "Sangue", "Sangue escorrendo pelos cartões", 0xFFFF2337.toInt(), 0xFF8A0014.toInt(), 0xFF0A0203.toInt(), "solido", "gloock", 12, 1, 55, 82, "sangue", blur = 0),
+        Tema("inferno", "Inferno", "Fogo lambendo os cartões", 0xFFFF7A1A.toInt(), 0xFFFF2A00.toInt(), 0xFF0A0402.toInt(), "hud", "russo", 2, 2, 80, 78, "inferno", blur = 0),
         // temas de rank: do bronze ao topo, cada um com cor, brilho e letra proprios
         Tema("bronze", "Bronze", "Rank: começo da temporada", 0xFFE0A070.toInt(), 0xFF8C4A2F.toInt(), 0xFF0D0805.toInt(), "solido", "bigs", 6, 1, 45, 80, "brasas"),
         Tema("diamante", "Diamante", "Rank: brilho de cristal", 0xFF8FE3FF.toInt(), 0xFFB388FF.toInt(), 0xFF050814.toInt(), "vidro", "russo", 16, 1, 65, 55, "neve"),
