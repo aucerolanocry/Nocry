@@ -1576,6 +1576,8 @@ object Sniper {
 
     fun fecharSala(id: String, apostaPedida: Boolean = false) {
         largadas.add(id)
+        // a partida acabou (a org encerrou): o caderno decide ganhou/perdeu se ainda não tem resultado
+        salas[id]?.let { sa -> if (sa.apostaOk && sa.encerrada) try { Caderno.fechou(id) } catch (_: Throwable) {} }
         val aposta = apostaPedida || salas[id]?.apostaOk == true
         val tinha = salas.remove(id) != null
         ordem.remove(id)
@@ -1656,6 +1658,12 @@ object Sniper {
         s.ultimoId = maior(s.ultimoId, m.id)
         s.ultima = agora()
         conhecerPessoas(s, m)
+        // caderno sozinho: seu pix depois da aposta = vai ganhar; ADM falou que pagou = ganhou
+        if (s.apostaOk) try {
+            val tudoMsg = m.conteudo + " " + m.embeds.joinToString(" ") { it.titulo + " " + it.descricao }
+            if (m.autorId == eu) { if (Caderno.temMeuPix(m.conteudo)) Caderno.pixEnviado(s.id) }
+            else if (Caderno.ehPagamento(tudoMsg)) Caderno.pago(s.id)
+        } catch (_: Throwable) {}
         // link do Google Meet (pediram tela): guarda pro botão "meet" e pro bloco do menu rápido
         try { Meet.achar(m.conteudo + " " + m.embeds.joinToString(" ") { it.descricao })?.let { Meet.guarda(it) } } catch (_: Throwable) {}
         if (m.autorBot && m.botoes.any { ehBotaoGo(it.label) }) {

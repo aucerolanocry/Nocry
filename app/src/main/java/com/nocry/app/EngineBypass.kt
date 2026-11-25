@@ -180,7 +180,7 @@ object EngineBypass {
         var restaurou = false
         val ok = if (aplicar) {
             Prefs.bypassMark || Config.aplicar(Prefs.bypassFf, Prefs.bypassTipo).also {
-                if (it) { Prefs.bypassMark = true; Notif.evento(Sys.app, "BYPASS APLICADO", "Já está no jogo · ${ffNome()} · pelo $nome", Notif.Efeito.LIGOU) }
+                if (it) { Prefs.bypassMark = true; try { Rank.contaBypass() } catch (_: Throwable) {}; Notif.evento(Sys.app, "BYPASS APLICADO", "Já está no jogo · ${ffNome()} · pelo $nome", Notif.Efeito.LIGOU) }
             }
         } else {
             !Prefs.bypassMark || Config.restaurar(Prefs.bypassFf).also {

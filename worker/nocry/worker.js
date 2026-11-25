@@ -238,6 +238,11 @@ async function init(env) {
     env.DB.prepare("CREATE INDEX IF NOT EXISTS amizades_b ON amizades (b)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS toques (id INTEGER PRIMARY KEY AUTOINCREMENT, para TEXT NOT NULL, de TEXT NOT NULL, t INTEGER NOT NULL)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS toques_para ON toques (para)"),
+    // rank: números de cada aparelho por mês ("2026-11") e o total ("geral")
+    env.DB.prepare(
+      "CREATE TABLE IF NOT EXISTS rank (key TEXT NOT NULL, dev TEXT NOT NULL, per TEXT NOT NULL, apelido TEXT NOT NULL, vit INTEGER NOT NULL DEFAULT 0, der INTEGER NOT NULL DEFAULT 0, valor REAL NOT NULL DEFAULT 0, byp INTEGER NOT NULL DEFAULT 0, seq INTEGER NOT NULL DEFAULT 0, t INTEGER NOT NULL, PRIMARY KEY (key, dev, per))"
+    ),
+    env.DB.prepare("CREATE INDEX IF NOT EXISTS rank_per ON rank (per, vit)"),
   ]);
   // migração: colunas novas de specs do aparelho (ADD COLUMN dá erro se já existe, então ignora)
   const colunasNovas = [
@@ -511,6 +516,34 @@ async function extrasRoute(req, env, ip) {
       env.DB.prepare("DELETE FROM diags WHERE key = ? AND dev = ? AND id NOT IN (SELECT id FROM diags WHERE key = ? AND dev = ? ORDER BY id DESC LIMIT 5)").bind(key, dev, key, dev),
     ]);
     return json({ ok: true });
+  }
+
+  // ---- rank (vitórias, R$, bypass) — o app manda os números dele; ninguém vê mensagens nem pix
+  if (op === "rk_enviar") {
+    const apelido = clean(b.apelido, 24).trim() || "jogador";
+    const num = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
+    const real = (v) => Math.max(0, Math.min(1e7, Math.round((Number(v) || 0) * 100) / 100));
+    const linhas = [];
+    for (const x of Array.isArray(b.pers) ? b.pers.slice(0, 2) : []) {
+      const per = String(x.per || "");
+      if (per !== "geral" && !/^20\d\d-\d\d$/.test(per)) continue;
+      linhas.push(env.DB.prepare(
+        "INSERT INTO rank (key, dev, per, apelido, vit, der, valor, byp, seq, t) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        "ON CONFLICT(key, dev, per) DO UPDATE SET apelido = excluded.apelido, vit = excluded.vit, der = excluded.der, valor = excluded.valor, byp = excluded.byp, seq = excluded.seq, t = excluded.t"
+      ).bind(key, dev, per, apelido, num(x.vit, 100000), num(x.der, 100000), real(x.valor), num(x.byp, 1000000), num(x.seq, 10000), now));
+    }
+    if (linhas.length) await env.DB.batch(linhas);
+    return json({ ok: true });
+  }
+  if (op === "rk_lista") {
+    const per = String(b.per || "geral");
+    if (per !== "geral" && !/^20\d\d-\d\d$/.test(per)) return json({ ok: false, reason: "per" });
+    const ordem = b.por === "byp" ? "byp DESC, vit DESC" : b.por === "valor" ? "valor DESC, vit DESC" : "vit DESC, valor DESC";
+    const rows = (await env.DB.prepare(
+      "SELECT key, dev, apelido, vit, der, valor, byp, seq FROM rank WHERE per = ? AND (vit > 0 OR der > 0 OR byp > 0) ORDER BY " + ordem + " LIMIT 50"
+    ).bind(per).all()).results;
+    const lista = rows.map((r) => ({ apelido: r.apelido, vit: r.vit, der: r.der, valor: r.valor, byp: r.byp, seq: r.seq, eu: r.key === key && r.dev === dev }));
+    return json({ ok: true, lista });
   }
 
   // ---- eventos

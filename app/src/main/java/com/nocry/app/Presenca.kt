@@ -109,6 +109,7 @@ object Presenca {
         val j = License.post("/v1/ping", corpo) ?: return // sem internet: tenta de novo no proximo
         if (j.optBoolean("ok", false)) {
             try { Comunidade.doPing(c, j) } catch (_: Throwable) {}
+            try { Rank.enviar(c) } catch (_: Throwable) {}
             // o dono ligou a manutenção: confere a key agora (aí o app trava na tela de manutenção)
             if (j.optBoolean("manutencao", false) && Prefs.licBloqueio != "manutencao") {
                 val agora = System.currentTimeMillis()

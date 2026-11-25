@@ -348,12 +348,75 @@ object Caderno {
             val n = JSONArray()
             for (i in 0 until a.length()) {
                 val o = a.optJSONObject(i) ?: continue
-                if (o.optString("id") == id) { if (res == "x") continue; o.put("r", res) }
+                if (o.optString("id") == id) { if (res == "x") continue; o.put("r", res); o.remove("auto") }
                 n.put(o)
             }
             Prefs.extraTxt("caderno", n.toString())
         }
         Comunidade.versao++
+        Rank.mudou()
+    }
+
+    // ---------------- resultado sozinho ----------------
+    /** a sua chave pix (fica só no celular): é por ela que o app sabe que você mandou o SEU pix na sala */
+    var minhaPix: String
+        get() = Prefs.extraTxt("minha_pix") ?: ""
+        set(v) { Prefs.extraTxt("minha_pix", v.trim()) }
+
+    private val RX_PIX = listOf(
+        Regex("[a-z0-9._%+-]+@[a-z0-9.-]+\\.[a-z]{2,}", RegexOption.IGNORE_CASE),        // e-mail
+        Regex("\\b\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}\\b"),                              // cpf
+        Regex("\\b\\d{2}\\.?\\d{3}\\.?\\d{3}/?\\d{4}-?\\d{2}\\b"),                     // cnpj
+        Regex("(\\+?55)?\\s?\\(?\\d{2}\\)?\\s?9\\s?\\d{4}[-\\s]?\\d{4}"),                  // celular
+        Regex("\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b", RegexOption.IGNORE_CASE) // chave aleatória
+    )
+    private fun soDigitos(x: String) = x.filter { it.isLetterOrDigit() }.lowercase()
+
+    /** a mensagem (sua) tem a sua chave pix? Sem chave cadastrada, vale qualquer coisa com cara de pix */
+    fun temMeuPix(texto: String): Boolean {
+        val minha = minhaPix
+        if (minha.isNotBlank()) return soDigitos(texto).contains(soDigitos(minha))
+        val t = texto.lowercase()
+        return RX_PIX.any { it.containsMatchIn(t) } || Regex("\\bpix\\b").containsMatchIn(t) && t.length > 8
+    }
+
+    private val PAGO = Regex("(pag[oa]u?|paguei|pagamento (feito|enviado|realizado)|comprovante|pix (enviado|feito|caiu)|transferi|enviei o pix|ta pago|tá pago)")
+    fun ehPagamento(texto: String): Boolean = PAGO.containsMatchIn(texto.lowercase())
+
+    private fun muda(id: String, f: (JSONObject) -> Unit): Boolean {
+        var achou = false
+        synchronized(trava) {
+            val a = ler()
+            for (i in 0 until a.length()) {
+                val o = a.optJSONObject(i) ?: continue
+                if (o.optString("id") == id) { f(o); achou = true }
+            }
+            if (achou) Prefs.extraTxt("caderno", a.toString())
+        }
+        if (achou) { Comunidade.versao++; Rank.mudou() }
+        return achou
+    }
+
+    /** você mandou o seu pix na sala (depois da aposta confirmada) */
+    fun pixEnviado(id: String) = muda(id) { o -> o.put("pix", System.currentTimeMillis()) }
+
+    /** o ADM disse que pagou depois do seu pix: vitória na hora */
+    fun pago(id: String) = muda(id) { o -> if (o.optLong("pix") > 0 && o.optString("r").isEmpty()) { o.put("r", "g"); o.put("auto", 1) } }
+
+    /** a sala saiu do painel depois de encerrada: teve seu pix = ganhou; não teve = perdeu */
+    fun fechou(id: String) = muda(id) { o ->
+        if (o.optString("r").isEmpty()) { o.put("r", if (o.optLong("pix") > 0) "g" else "p"); o.put("auto", 1) }
+    }
+
+    fun automatico(id: String): Boolean = ler().let { a -> (0 until a.length()).any { a.optJSONObject(it)?.let { o -> o.optString("id") == id && o.optInt("auto") == 1 } == true } }
+
+    /** maior sequência de vitórias seguidas */
+    fun sequencia(desde: Long): Int {
+        var m = 0; var a = 0
+        for (it in itens().filter { it.t >= desde }.sortedBy { it.t }) {
+            if (it.res == "g") { a++; m = maxOf(m, a) } else if (it.res == "p") a = 0
+        }
+        return m
     }
 
     class Resumo(val salas: Int, val ganhou: Int, val perdeu: Int, val saldo: Double, val maisJogada: String)
@@ -372,6 +435,57 @@ object Caderno {
     fun inicioDoMes(): Long = Calendar.getInstance().apply { timeInMillis = inicioDoDia(); set(Calendar.DAY_OF_MONTH, 1) }.timeInMillis
 
     fun dinheiro(v: Double): String = (if (v < 0) "−" else if (v > 0) "+" else "") + "R$ " + String.format(Locale("pt", "BR"), "%.2f", kotlin.math.abs(v))
+}
+
+// =====================================================================================
+// Rank: vitórias, R$ e bypass de todo mundo. O app manda só os números (nada de mensagem ou pix)
+// =====================================================================================
+object Rank {
+    class Linha(val apelido: String, val vit: Int, val der: Int, val valor: Double, val byp: Int, val seq: Int, val eu: Boolean)
+
+    fun mesAtual(): String = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
+
+    /** bypass aplicado: conta no total e no mês */
+    fun contaBypass() {
+        Prefs.gravaNum("byp_total", Prefs.lerNum("byp_total") + 1)
+        val m = mesAtual()
+        if (Prefs.extraTxt("byp_mes_de") != m) { Prefs.extraTxt("byp_mes_de", m); Prefs.gravaNum("byp_mes", 0) }
+        Prefs.gravaNum("byp_mes", Prefs.lerNum("byp_mes") + 1)
+        mudou()
+    }
+    private fun bypMes(): Long = if (Prefs.extraTxt("byp_mes_de") == mesAtual()) Prefs.lerNum("byp_mes") else 0L
+
+    @Volatile private var pendente = true
+    fun mudou() { pendente = true }
+
+    /** manda os números (no máximo 1x a cada 2 min, ou quando mudou algo) */
+    fun enviar(c: Context, forcar: Boolean = false) {
+        val ult = Prefs.lerNum("rank_env")
+        if (!forcar && !pendente && System.currentTimeMillis() - ult < 6 * 3600_000L) return
+        if (!forcar && System.currentTimeMillis() - ult < 120_000L) return
+        pendente = false
+        Prefs.gravaNum("rank_env", System.currentTimeMillis())
+        fun per(nome: String, desde: Long, byp: Long): JSONObject {
+            val r = Caderno.resumo(desde)
+            val ganho = Caderno.itens().filter { it.t >= desde && it.res == "g" }.sumOf { it.valor }
+            return JSONObject().put("per", nome).put("vit", r.ganhou).put("der", r.perdeu).put("valor", ganho)
+                .put("byp", byp).put("seq", Caderno.sequencia(desde))
+        }
+        val apelido = Prefs.apelido.ifEmpty { License.label() }.ifEmpty { "jogador" }
+        val corpo = JSONObject().put("apelido", apelido).put("pers", JSONArray()
+            .put(per("geral", 0L, Prefs.lerNum("byp_total")))
+            .put(per(mesAtual(), Caderno.inicioDoMes(), bypMes())))
+        if (Comunidade.x(c, "rk_enviar", corpo)?.optBoolean("ok") != true) pendente = true
+    }
+
+    fun lista(c: Context, per: String, por: String): List<Linha>? {
+        val j = Comunidade.x(c, "rk_lista", JSONObject().put("per", per).put("por", por)) ?: return null
+        if (!j.optBoolean("ok")) return null
+        val a = j.optJSONArray("lista") ?: return emptyList()
+        return (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o ->
+            Linha(o.optString("apelido"), o.optInt("vit"), o.optInt("der"), o.optDouble("valor", 0.0), o.optInt("byp"), o.optInt("seq"), o.optBoolean("eu"))
+        } }
+    }
 }
 
 // =====================================================================================
@@ -748,7 +862,17 @@ class CadernoScreen(a: MainActivity) : Screen(a) {
     override fun render() {
         limpa()
         val c = act
-        cabecalho(titulo, "Toda aposta confirmada pelo bot fica anotada aqui sozinha. Marque se ganhou ou perdeu pra ver seu saldo. Fica só no seu celular.")
+        cabecalho(titulo, "Toda aposta confirmada pelo bot fica anotada aqui. O resultado sai sozinho: mandou seu pix na sala e o ADM pagou = vitória; a sala fechou sem seu pix = derrota. Se errar, é só tocar em ganhei ou perdi.")
+        run {
+            val k = Ui.card(c)
+            k.addView(Ui.labelIcone(c, R.drawable.ic_key, "sua chave pix"))
+            val tem = Caderno.minhaPix.isNotBlank()
+            k.addView(Ui.text(c, if (tem) Caderno.minhaPix else "Cadastre pra o app saber quando é o SEU pix na sala (sem ela, vale qualquer chave que você mandar).", 11.5f, if (tem) Ui.TEXT else Ui.MUTED), Ui.lp(top = 8, c = c))
+            k.addView(Ui.button(c, if (tem) "trocar chave" else "cadastrar chave", Ui.Kind.GHOST, R.drawable.ic_key) {
+                Ui.dialogTexto(act, "SUA CHAVE PIX", "CPF, e-mail, celular ou chave aleatória") { v -> Caderno.minhaPix = v; Comunidade.versao++; redesenha() }
+            }, Ui.lp(top = 10, c = c))
+            add(k, 12)
+        }
         add(Ui.segmento(c, listOf("Hoje", "Semana", "Mês", "Tudo"), periodo) { periodo = it; redesenha() }, 14)
         val desde = when (periodo) { 0 -> Caderno.inicioDoDia(); 1 -> Caderno.inicioDaSemana(); 2 -> Caderno.inicioDoMes(); else -> 0L }
         val r = Caderno.resumo(desde)
@@ -777,7 +901,8 @@ class CadernoScreen(a: MainActivity) : Screen(a) {
             col.addView(Ui.text(c, s.org.ifBlank { "Sala" }, 14f, Ui.TEXT, true))
             col.addView(Ui.text(c, listOf(s.fila, dataCurta(s.t)).filter { x -> x.isNotBlank() }.joinToString(" · "), 11f, Ui.MUTED), Ui.lp(top = 2, c = c))
             topo.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            val est = when (s.res) { "g" -> "GANHOU"; "p" -> "PERDEU"; else -> "?" }
+            val auto = s.res.isNotEmpty() && Caderno.automatico(s.id)
+            val est = when (s.res) { "g" -> "GANHOU"; "p" -> "PERDEU"; else -> "JOGANDO" } + if (auto) " · AUTO" else ""
             topo.addView(Ui.pilulaEstado(c, est, when (s.res) { "g" -> true; "p" -> false; else -> null }))
             k.addView(topo)
             val bt = Ui.hbox(c)
@@ -793,6 +918,68 @@ class CadernoScreen(a: MainActivity) : Screen(a) {
             add(k, 8)
         }
         add(Ui.text(c, "Segure numa sala pra apagar.", 10.5f, Ui.MUTED), 8)
+    }
+}
+
+// ---------------------------------------------------------------- RANK (todo mundo)
+class RankScreen(a: MainActivity) : Screen(a) {
+    override val titulo = "Rank"
+    private var mes = true
+    private var por = "vit"
+    private var carregando = false
+    private var linhas: List<Rank.Linha>? = null
+    private var erro = false
+    private var versao = 0
+
+    override fun key(): String = "$mes|$por|$carregando|$erro|$versao|${linhas?.size}"
+
+    override fun aoMostrar() { carregar() }
+
+    private fun carregar() {
+        if (carregando) return
+        carregando = true; erro = false
+        redesenha()
+        Bg.io {
+            try { Rank.enviar(act, forcar = true) } catch (_: Throwable) {}
+            val l = try { Rank.lista(act, if (mes) Rank.mesAtual() else "geral", por) } catch (_: Throwable) { null }
+            Bg.ui { linhas = l; erro = l == null; carregando = false; versao++; redesenha() }
+        }
+    }
+
+    override fun render() {
+        limpa()
+        val c = act
+        cabecalho(titulo, "Quem mais ganhou e quem mais usou bypass entre todo mundo do Nocry. Aparece o seu apelido do Estúdio.")
+        add(Ui.segmento(c, listOf("Este mês", "Geral"), if (mes) 0 else 1) { mes = it == 0; carregar() }, 14)
+        add(Ui.segmento(c, listOf("Vitórias", "R$ ganho", "Bypass"), when (por) { "valor" -> 1; "byp" -> 2; else -> 0 }) {
+            por = when (it) { 1 -> "valor"; 2 -> "byp"; else -> "vit" }; carregar()
+        }, 8)
+        val l = linhas
+        when {
+            carregando && l == null -> { add(Ui.dica(c, "Carregando o rank...", Ui.Dica.INFO), 14); return }
+            erro -> { add(Ui.dica(c, "Sem internet agora. Toque pra tentar de novo.", Ui.Dica.AVISO).also { v -> Ui.clique(v) { carregar() } }, 14); return }
+            l.isNullOrEmpty() -> { add(Ui.dica(c, "Ninguém pontuou ainda nesse período. As vitórias entram sozinhas pelo Caderno.", Ui.Dica.INFO), 14); return }
+        }
+        l!!.forEachIndexed { i, r ->
+            val k = Ui.card(c, ligado = r.eu)
+            val h = Ui.hbox(c)
+            h.gravity = Gravity.CENTER_VERTICAL
+            val pos = Ui.text(c, if (i < 3) listOf("1º", "2º", "3º")[i] else "${i + 1}º", if (i < 3) 18f else 14f, if (i < 3) Ui.WARN else Ui.MUTED, true, mono = true)
+            h.addView(pos, LinearLayout.LayoutParams(Ui.dp(c, 40), ViewGroup.LayoutParams.WRAP_CONTENT))
+            val col = Ui.vbox(c)
+            col.addView(Ui.text(c, r.apelido + if (r.eu) " (você)" else "", 14f, Ui.TEXT, true).also { t -> Ui.umaLinha(t, 10) })
+            val sub = "${r.vit} vitórias · ${r.der} derrotas" + (if (r.seq >= 3) " · ${r.seq} seguidas" else "")
+            col.addView(Ui.text(c, sub, 10.5f, Ui.MUTED), Ui.lp(top = 2, c = c))
+            h.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            val dir = Ui.vbox(c)
+            dir.gravity = Gravity.END
+            dir.addView(Ui.text(c, "R$ " + String.format(Locale("pt", "BR"), "%.2f", r.valor), 13f, Ui.OK, true))
+            dir.addView(Ui.text(c, "${r.byp} bypass", 10f, Ui.MUTED, true, mono = true), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 2, c = c))
+            h.addView(dir)
+            k.addView(h)
+            add(k, 8)
+        }
+        add(Ui.text(c, "Atualiza sozinho quando você ganha, perde ou usa bypass.", 10.5f, Ui.MUTED), 10)
     }
 }
 

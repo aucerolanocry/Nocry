@@ -79,7 +79,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     private fun atalhosExtras(c: android.content.Context): View {
         val lista = listOf(
             Atalho(R.drawable.ic_info, "Ajuda", Comunidade.supNovas > 0) { act.abre(AjudaScreen(act)) },
-            Atalho(R.drawable.ic_user, "Amigos", false) { act.abre(AmigosScreen(act)) },
+            Atalho(R.drawable.ic_stat, "Rank", false) { act.abre(RankScreen(act)) },
             Atalho(R.drawable.ic_sparkle, "Eventos", false) { act.abre(EventosScreen(act)) },
             Atalho(R.drawable.ic_log, "Caderno", false) { act.abre(CadernoScreen(act)) },
             Atalho(R.drawable.ic_gamepad, "Partidas", Partida.jogando) { act.abre(PartidasScreen(act)) }
@@ -188,7 +188,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         rotulo("Atalhos", 10)
         primeira = true
         linha(R.drawable.ic_info, "Ajuda", Ui.TEXT, seta(), Comunidade.supNovas > 0) { act.abre(AjudaScreen(act)) }
-        linha(R.drawable.ic_user, "Amigos", Ui.TEXT, seta(), false) { act.abre(AmigosScreen(act)) }
+        linha(R.drawable.ic_stat, "Rank", Ui.TEXT, seta(), false) { act.abre(RankScreen(act)) }
         linha(R.drawable.ic_sparkle, "Eventos", Ui.TEXT, seta(), false) { act.abre(EventosScreen(act)) }
         linha(R.drawable.ic_log, "Caderno", Ui.TEXT, seta(), false) { act.abre(CadernoScreen(act)) }
         linha(R.drawable.ic_gamepad, "Partidas", Ui.TEXT, seta(), Partida.jogando) { act.abre(PartidasScreen(act)) }
@@ -242,7 +242,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                 add(l, 16)
                 val l2 = linhaIgual(c,
                     bolinha(c, R.drawable.ic_info, "Ajuda") { act.abre(AjudaScreen(act)) },
-                    bolinha(c, R.drawable.ic_user, "Amigos") { act.abre(AmigosScreen(act)) },
+                    bolinha(c, R.drawable.ic_stat, "Rank") { act.abre(RankScreen(act)) },
                     bolinha(c, R.drawable.ic_sparkle, "Eventos") { act.abre(EventosScreen(act)) },
                     bolinha(c, R.drawable.ic_log, "Caderno") { act.abre(CadernoScreen(act)) },
                     gap = 4)
@@ -256,7 +256,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                     quadro(c, R.drawable.ic_crown, "Bot", subBot().substringBefore(" ·"), acao = abrirBot),
                     quadro(c, R.drawable.ic_info, "Ajuda", null, Comunidade.supNovas > 0) { act.abre(AjudaScreen(act)) }), 8)
                 add(linhaIgual(c,
-                    quadro(c, R.drawable.ic_user, "Amigos", null) { act.abre(AmigosScreen(act)) },
+                    quadro(c, R.drawable.ic_stat, "Rank", null) { act.abre(RankScreen(act)) },
                     quadro(c, R.drawable.ic_sparkle, "Eventos", null) { act.abre(EventosScreen(act)) },
                     quadro(c, R.drawable.ic_log, "Caderno", null) { act.abre(CadernoScreen(act)) }), 8)
                 add(linhaIgual(c,

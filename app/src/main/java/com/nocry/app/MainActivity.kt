@@ -470,6 +470,7 @@ class MainActivity : Activity() {
             "partidas" -> PartidasScreen(this)
             "eventos" -> EventosScreen(this)
             "amigos" -> AmigosScreen(this)
+            "rank" -> RankScreen(this)
             else -> return
         }
         abre(t)
@@ -488,6 +489,7 @@ class MainActivity : Activity() {
             "ajuda" -> AjudaScreen(this)
             "eventos" -> EventosScreen(this)
             "amigos" -> AmigosScreen(this)
+            "rank" -> RankScreen(this)
             "partidas" -> PartidasScreen(this)
             else -> return
         }
