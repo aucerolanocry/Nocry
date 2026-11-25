@@ -252,7 +252,9 @@ class Botao(
     private val mascara: Boolean = false
 ) : Drawable() {
     private val d = c.resources.displayMetrics.density
-    private val hud = Prefs.cartao == "hud"
+    /** estilo de botão em teste: "1" neon (contorno roxo), "2" chapado (cheio), "3" gamer (cantos cortados) */
+    private val eb = Ui.estiloBt
+    private val hud = Prefs.cartao == "hud" || eb == "3"
     private val raio = minOf(raioDp, 18) * d * (if (tipo == "ico" || tipo == "icoOn") 0.8f else 1f)
     private val corte = (if (tipo == "ico" || tipo == "icoOn") 8f else 12f) * d
     private val path = Path()
@@ -309,7 +311,9 @@ class Botao(
             cv.drawPath(path, pFill)
         }
         pFill.shader = shFill
-        pFill.color = when (tipo) {
+        pFill.color = if (eb == "1" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Color.BLACK, 0x55)
+        else if ((eb == "2" || eb == "3") && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Theme.accent, if (eb == "2") 0x50 else 0x30)
+        else when (tipo) {
             "ghost" -> if (vidro) Theme.alpha(Theme.mix(0xFF10131E.toInt(), Color.WHITE, 0.13f), Theme.op(0xA8, 0.35f))
                 else Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.07f), Theme.op(0xB8, 0.35f))
             "danger" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Ui.BAD, 0.22f), 0xC8)
@@ -319,7 +323,7 @@ class Botao(
         }
         cv.drawPath(path, pFill)
         pFill.shader = null
-        if (tipo == "grad") {
+        if (tipo == "grad" && eb.isEmpty()) {
             // brilho de vidro na metade de cima
             cv.save()
             cv.clipPath(path)
@@ -331,7 +335,10 @@ class Botao(
             pFill.shader = null
             cv.restore()
         }
-        val cor = when (tipo) {
+        val cor = if (eb == "1" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Theme.accent, 0xF0)
+        else if (eb == "2" && (tipo == "ghost" || tipo == "ico")) 0
+        else if (eb == "3" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Theme.accent, 0xC0)
+        else when (tipo) {
             "ghost" -> Theme.alpha(Color.WHITE, if (vidro) 0x40 else 0x30)
             "danger" -> Theme.alpha(Ui.BAD, 0x88)
             "campo" -> Theme.alpha(Theme.accent, 0x99)
@@ -346,7 +353,7 @@ class Botao(
         } else if (cor != 0) {
             pLine.shader = null
             pLine.color = cor
-            pLine.strokeWidth = d
+            pLine.strokeWidth = if (eb == "1" || eb == "3") 1.6f * d else d
             cv.drawPath(path, pLine)
         }
     }

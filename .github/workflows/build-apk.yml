@@ -317,7 +317,7 @@ jobs:
           echo "=== RELATORIO ==="
           cat relatorio_estresse.txt 2>/dev/null | head -150 || true
           for f in *.jpg; do
-            convert "$f" -resize 45% -quality 55 "/tmp/m_$f" 2>/dev/null || continue
+            convert "$f" -resize ${{ github.event.inputs.notas != '' && '85%' || '45%' }} -quality 70 "/tmp/m_$f" 2>/dev/null || continue
             echo "=== IMG $f ==="
             base64 -w 76 "/tmp/m_$f"
             echo "=== FIM ==="

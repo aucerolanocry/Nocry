@@ -62,7 +62,11 @@ object Ui {
     @JvmStatic var estiloBt = ""
     private val compacto get() = estiloBt.isNotEmpty()
     /** fundo dos botões no estilo sólido: cor do tema clarinha, sem borda */
-    fun solido(c: Context, raio: Int): Drawable = shape(c, Theme.alpha(Theme.accent, 0x48), raio)
+    fun solido(c: Context, raio: Int): Drawable = when (estiloBt) {
+        "1" -> shape(c, Theme.alpha(Color.BLACK, 0x55), raio, Theme.alpha(Theme.accent, 0xF0), 2)
+        "2" -> shape(c, Theme.alpha(Theme.accent, 0x50), raio)
+        else -> shape(c, Theme.alpha(Theme.accent, 0x30), minOf(raio, 4), Theme.alpha(Theme.accent, 0xC0), 2)
+    }
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density * fator(c) + 0.5f).toInt()
 
@@ -314,7 +318,7 @@ object Ui {
             r.addView(ac, LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)).also { it.leftMargin = dp(c, 6) })
         }
         val pv = if (compacto) 6 else 9
-        if (estiloBt == "3") r.background = if (clicavel) ripple(c, solido(c, raioPilula())) else solido(c, raioPilula())
+        if (compacto) r.background = if (clicavel) ripple(c, solido(c, raioPilula())) else solido(c, raioPilula())
         r.setPadding(dp(c, if (clicavel && ico != 0) 10 else 7), dp(c, pv), dp(c, if (clicavel && ico != 0) 8 else 7), dp(c, pv))
         r.contentDescription = "$nome $valor"
         return r
@@ -758,7 +762,7 @@ object Ui {
         val corTxt = when (kind) {
             Kind.PRIMARY -> Theme.sobreGrad()
             Kind.DANGER -> 0xFFFF8E9E.toInt()
-            Kind.GHOST -> TEXT
+            Kind.GHOST -> if (estiloBt == "1") Theme.mix(Theme.accent, Color.WHITE, 0.45f) else TEXT
         }
         val tipo = when (kind) { Kind.PRIMARY -> "grad"; Kind.DANGER -> "danger"; Kind.GHOST -> "ghost" }
         val bg = Botao(c, tipo)
@@ -775,7 +779,7 @@ object Ui {
         val tp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         if (ico != 0) tp.leftMargin = dp(c, 8)
         l.addView(t, tp)
-        l.background = ripple(c, if (estiloBt == "3" && kind != Kind.PRIMARY) solido(c, raioPilula()) else bg, Botao(c, tipo, mascara = true))
+        l.background = ripple(c, bg, Botao(c, tipo, mascara = true))
         if (compacto) {
             t.textSize = 11.5f
             l.setPadding(ph, dp(c, 10), ph, dp(c, 10))
@@ -796,7 +800,7 @@ object Ui {
     /** linha de menu: icone, titulo, descricao curta e setinha */
     fun row(c: Context, titulo: String, sub: String, ico: Int = 0, onClick: () -> Unit): View {
         val r = hbox(c)
-        r.background = ripple(c, if (estiloBt == "3") solido(c, Prefs.raio) else glass(c), Painel(c, mascara = true))
+        r.background = ripple(c, glass(c), Painel(c, mascara = true))
         val p = dp(c, 14)
         val tamI = if (compacto) 34 else 40
         r.setPadding(p, dp(c, if (compacto) 9 else 12), p, dp(c, if (compacto) 9 else 12))
@@ -966,10 +970,10 @@ object Ui {
 
     /** quadrado da grade do inicio: icone, nome, descricao e o estado numa pilula no rodape */
     fun tile(c: Context, ico: Int, titulo: String, desc: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
-        if (estiloBt == "2") return tileLinha(c, ico, titulo, estado, ligado, onClick)
+        if (compacto) return tileLinha(c, ico, titulo, estado, ligado, onClick)
         val on = ligado == true
         val col = vbox(c)
-        col.background = ripple(c, if (estiloBt == "3" && !on) solido(c, Prefs.raio) else glass(c, ligado = on), Painel(c, mascara = true))
+        col.background = ripple(c, glass(c, ligado = on), Painel(c, mascara = true))
         val p = dp(c, if (compacto) 12 else 14)
         col.setPadding(p, p, p, p)
         col.minimumHeight = dp(c, if (compacto) 108 else 140)
@@ -996,7 +1000,7 @@ object Ui {
         val on = ligado == true
         val r = hbox(c)
         r.gravity = Gravity.CENTER_VERTICAL
-        r.background = ripple(c, glass(c, ligado = on), Painel(c, mascara = true))
+        r.background = ripple(c, if (on) glass(c, ligado = true) else Botao(c, "ghost"), Botao(c, "ghost", mascara = true))
         r.setPadding(dp(c, 10), dp(c, 10), dp(c, 10), dp(c, 10))
         r.addView(caixaIcone(c, ico, on, 30), LinearLayout.LayoutParams(dp(c, 30), dp(c, 30)).also { it.rightMargin = dp(c, 8) })
         val col = vbox(c)
