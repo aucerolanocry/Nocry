@@ -94,24 +94,26 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             val porLinha = if (lista.size - i == 2) 2 else 3
             for (j in 0 until porLinha) {
                 val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                if (j > 0) lp.leftMargin = Ui.dp(c, 8)
+                if (j > 0) lp.leftMargin = Ui.dp(c, 6)
                 val a = lista.getOrNull(i + j)
                 if (a == null) { linha.addView(View(c), lp); continue }
                 val cel = android.widget.FrameLayout(c)
                 val col = Ui.vbox(c)
                 col.gravity = Gravity.CENTER
-                col.background = Ui.ripple(c, Ui.glass(c))
-                col.setPadding(Ui.dp(c, 6), Ui.dp(c, 12), Ui.dp(c, 6), Ui.dp(c, 11))
-                col.addView(Ui.icone(c, a.ico, Ui.TEXT, 22), LinearLayout.LayoutParams(Ui.dp(c, 22), Ui.dp(c, 22)))
-                val t = Ui.text(c, a.nome, 10.5f, Ui.TEXT, true, mono = true)
-                t.maxLines = 1
-                col.addView(t, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 7, c = c))
+                col.background = Ui.ripple(c, Ui.glass(c, 99))
+                // pequeno: ícone e nome lado a lado, numa pílula baixinha
+                col.orientation = LinearLayout.HORIZONTAL
+                col.setPadding(Ui.dp(c, 6), Ui.dp(c, 8), Ui.dp(c, 6), Ui.dp(c, 8))
+                col.addView(Ui.icone(c, a.ico, Ui.TEXT, 15), LinearLayout.LayoutParams(Ui.dp(c, 15), Ui.dp(c, 15)).also { it.rightMargin = Ui.dp(c, 6) })
+                val t = Ui.text(c, a.nome, 10f, Ui.TEXT, true, mono = true)
+                Ui.umaLinha(t, 8)
+                col.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 Ui.clique(col) { a.abre() }
                 cel.addView(col, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                if (a.alerta) cel.addView(ponto(), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 10), Ui.dp(c, 10), Gravity.TOP or Gravity.END).also { it.topMargin = Ui.dp(c, 8); it.rightMargin = Ui.dp(c, 8) })
+                if (a.alerta) cel.addView(ponto(), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 10), Ui.dp(c, 10), Gravity.TOP or Gravity.END).also { it.topMargin = Ui.dp(c, 3); it.rightMargin = Ui.dp(c, 6) })
                 linha.addView(cel, lp)
             }
-            box.addView(linha, Ui.lp(top = if (i == 0) 0 else 8, c = c))
+            box.addView(linha, Ui.lp(top = if (i == 0) 0 else 6, c = c))
             i += porLinha
         }
         return box
