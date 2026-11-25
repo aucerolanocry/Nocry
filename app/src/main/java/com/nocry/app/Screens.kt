@@ -70,7 +70,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Erros.novos(),
     Comp.ligado(), ocupadoComp,
     Update.adiada(act),
-    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("atalhos_estilo")
+    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica")
 ).joinToString("|")
 
     private class Atalho(val ico: Int, val nome: String, val alerta: Boolean, val abre: () -> Unit)
@@ -82,41 +82,17 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             Atalho(R.drawable.ic_user, "Amigos", false) { act.abre(AmigosScreen(act)) },
             Atalho(R.drawable.ic_sparkle, "Eventos", false) { act.abre(EventosScreen(act)) },
             Atalho(R.drawable.ic_log, "Caderno", false) { act.abre(CadernoScreen(act)) },
-            Atalho(R.drawable.ic_gamepad, "Partidas", Partida.jogando) { act.abre(PartidasScreen(act)) },
-            Atalho(R.drawable.ic_bolt, "Toque", false) { act.abre(TesteToqueScreen(act)) }
+            Atalho(R.drawable.ic_gamepad, "Partidas", Partida.jogando) { act.abre(PartidasScreen(act)) }
         )
         fun ponto(): View = View(c).also { it.background = Ui.shape(c, Ui.WARN, 99) }
-        if (Prefs.lerNum("atalhos_estilo") == 1L) {
-            // fila redonda que rola de lado
-            val sc = android.widget.HorizontalScrollView(c)
-            sc.isHorizontalScrollBarEnabled = false
-            sc.overScrollMode = View.OVER_SCROLL_NEVER
-            val linha = Ui.hbox(c)
-            for ((n, a) in lista.withIndex()) {
-                val col = Ui.vbox(c)
-                col.gravity = Gravity.CENTER_HORIZONTAL
-                val caixa = android.widget.FrameLayout(c)
-                val bola = android.widget.FrameLayout(c)
-                bola.background = Ui.glass(c, 99)
-                bola.addView(Ui.icone(c, a.ico, Ui.TEXT, 22), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 22), Ui.dp(c, 22), Gravity.CENTER))
-                caixa.addView(bola, android.widget.FrameLayout.LayoutParams(Ui.dp(c, 58), Ui.dp(c, 58)))
-                if (a.alerta) caixa.addView(ponto(), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 12), Ui.dp(c, 12), Gravity.TOP or Gravity.END))
-                col.addView(caixa, LinearLayout.LayoutParams(Ui.dp(c, 58), Ui.dp(c, 58)))
-                val t = Ui.text(c, a.nome, 10.5f, Ui.MUTED, true, mono = true)
-                t.maxLines = 1
-                col.addView(t, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 6, c = c))
-                Ui.clique(col) { a.abre() }
-                linha.addView(col, LinearLayout.LayoutParams(Ui.dp(c, 74), ViewGroup.LayoutParams.WRAP_CONTENT).also { if (n > 0) it.leftMargin = Ui.dp(c, 4) })
-            }
-            sc.addView(linha)
-            return sc
-        }
         // grade de 3 por linha, botões baixinhos
         val box = Ui.vbox(c)
         var i = 0
         while (i < lista.size) {
             val linha = Ui.hbox(c)
-            for (j in 0..2) {
+            // 5 botões: 3 em cima e 2 embaixo, cada um com metade da largura (sem buraco vazio)
+            val porLinha = if (lista.size - i == 2) 2 else 3
+            for (j in 0 until porLinha) {
                 val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 if (j > 0) lp.leftMargin = Ui.dp(c, 8)
                 val a = lista.getOrNull(i + j)
@@ -136,7 +112,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                 linha.addView(cel, lp)
             }
             box.addView(linha, Ui.lp(top = if (i == 0) 0 else 8, c = c))
-            i += 3
+            i += porLinha
         }
         return box
     }
@@ -413,6 +389,23 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             val linhaBot = Ui.row(c, "Bot de fila", subBot(), R.drawable.ic_crown) { act.abre(SniperScreen(act)) }
             botSub = linhaBot.findViewWithTag("sub")
             add(linhaBot, 12)
+        }
+
+        // ---------------- novidade: bloco NOCRY no menu rápido (some depois de adicionar ou dispensar) ----------------
+        if (Prefs.lerNum("tile_dica") == 0L) {
+            val k = Ui.card(c, ligado = true)
+            val topo = Ui.hbox(c)
+            topo.gravity = Gravity.CENTER_VERTICAL
+            topo.addView(Ui.icone(c, R.drawable.ic_bolt, Ui.TEXT, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 8) })
+            topo.addView(Ui.text(c, "NOVO · MENU RÁPIDO", 10.5f, Ui.TEXT, true, mono = true))
+            k.addView(topo)
+            k.addView(Ui.text(c, "Coloque o botão NOCRY no menu que desce do topo da tela. Com 1 toque liga e desliga o modo competitivo, sem abrir o app.", 12.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
+            val bts = Ui.hbox(c)
+            bts.addView(Ui.button(c, "adicionar", Ui.Kind.PRIMARY) { MenuRapido.adicionar(act) { redesenha() } }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            bts.addView(Ui.button(c, "agora não", Ui.Kind.GHOST) { Prefs.gravaNum("tile_dica", 1L); redesenha() },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 8) })
+            k.addView(bts, Ui.lp(top = 12, c = c))
+            add(k, 12)
         }
 
         // ---------------- atalhos dos extras (pequenos, logo abaixo do bot) ----------------

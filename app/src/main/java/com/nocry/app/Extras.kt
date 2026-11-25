@@ -403,7 +403,6 @@ object Conquistas {
         val ganhas = cad.count { it.res == "g" }
         val partidas = Partida.lista().length()
         val seguidos = diasSeguidos()
-        val toque = Prefs.lerNum("toque_melhor_media", 0L)
         return listOf(
             C("aposta1", "Primeira aposta", "O bot pegou sua primeira aposta", cad.isNotEmpty()),
             C("ganhou10", "10 vitórias", "Marcou 10 salas como ganhas", ganhas >= 10),
@@ -412,8 +411,7 @@ object Conquistas {
             C("partidas20", "Viciado", "20 partidas com relatório", partidas >= 20),
             C("dias7", "7 dias seguidos", "Abriu o app 7 dias seguidos", seguidos >= 7),
             C("evento1", "Primeiro evento", "Se inscreveu num evento", Prefs.lerNum("ev_inscreveu") == 1L),
-            C("amigo1", "Tem parceiro", "Fez a primeira amizade no app", Prefs.lerNum("amigos_n") >= 1),
-            C("reflexo", "Reflexo rápido", "Média abaixo de 300 ms no teste de toque", toque in 1..299)
+            C("amigo1", "Tem parceiro", "Fez a primeira amizade no app", Prefs.lerNum("amigos_n") >= 1)
         )
     }
 
@@ -492,6 +490,27 @@ class CompTile : TileService() {
                 Notif.evento(this, if (ligar) "Modo competitivo" else "Modo competitivo", if (!ok) "O aparelho não aceitou a mudança" else if (ligar) "Ligado pelo menu rápido" else "Desligado: tudo voltou ao normal",
                     if (!ok) Notif.Efeito.FALHOU else if (ligar) Notif.Efeito.LIGOU else Notif.Efeito.DESLIGOU)
             }
+        }
+    }
+}
+
+/** pede pro Android colocar o bloco NOCRY no menu rápido (Android 13+ mostra a pergunta direto); antes disso, explica */
+object MenuRapido {
+    fun adicionar(act: MainActivity, depois: () -> Unit) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            try {
+                val sb = act.getSystemService(android.app.StatusBarManager::class.java)
+                sb.requestAddTileService(android.content.ComponentName(act, CompTile::class.java), "NOCRY",
+                    android.graphics.drawable.Icon.createWithResource(act, R.drawable.ic_bolt), act.mainExecutor) { r ->
+                    // 0 = não quis, 1 = já estava, 2 = adicionou
+                    if (r == 1 || r == 2) { Prefs.gravaNum("tile_dica", 1L); Ui.toast(act, "PRONTO! DESÇA O MENU DO TOPO") }
+                    depois()
+                }
+                return
+            } catch (_: Throwable) {}
+        }
+        Ui.dialogAviso(act, "MENU RÁPIDO", "1. Desça o menu do topo da tela duas vezes.\n2. Toque no lápis (editar).\n3. Arraste o bloco NOCRY pra cima.\n\nPronto: um toque liga e desliga o modo competitivo.", "ENTENDI") {
+            Prefs.gravaNum("tile_dica", 1L); depois()
         }
     }
 }
@@ -705,108 +724,6 @@ class PartidasScreen(a: MainActivity) : Screen(a) {
                 if (o.optBoolean("memBaixa")) Ui.WARN else Ui.TEXT), Ui.lp(top = 6, c = c))
             add(k, 8)
         }
-    }
-}
-
-// ---------------------------------------------------------------- TESTE DE TOQUE
-class TesteToqueScreen(a: MainActivity) : Screen(a) {
-    override val titulo = "Teste de toque"
-    private var rodando = false
-
-    override fun key(): String = "$rodando|${Prefs.extraTxt("toque_res")}"
-
-    private inner class Alvo(c: Context) : View(c) {
-        var total = 20
-        var feitos = 0
-        val tempos = ArrayList<Long>()
-        private var x = 0f
-        private var y = 0f
-        private var mostrouEm = 0L
-        private var visivel = false
-        private val raio = Ui.dp(c, 30).toFloat()
-        private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val fim = Handler(Looper.getMainLooper())
-        var aoTerminar: ((List<Long>) -> Unit)? = null
-
-        fun comeca() { feitos = 0; tempos.clear(); proximo() }
-
-        private fun proximo() {
-            visivel = false
-            invalidate()
-            // espera um tempinho aleatório pra ninguém tocar antes de aparecer
-            fim.postDelayed({
-                if (width <= 0) return@postDelayed
-                x = raio + Math.random().toFloat() * (width - 2 * raio)
-                y = raio + Math.random().toFloat() * (height - 2 * raio)
-                visivel = true
-                invalidate()
-                // o tempo conta do quadro em que o alvo apareceu na tela
-                Choreographer.getInstance().postFrameCallback { t -> mostrouEm = t / 1_000_000L }
-            }, 400L + (Math.random() * 900).toLong())
-        }
-
-        override fun onDraw(cv: Canvas) {
-            super.onDraw(cv)
-            if (!visivel) return
-            p.shader = RadialGradient(x, y, raio, Theme.accent, Theme.alpha(Theme.accent, 0x30), Shader.TileMode.CLAMP)
-            cv.drawCircle(x, y, raio, p)
-        }
-
-        override fun onTouchEvent(e: MotionEvent): Boolean {
-            if (e.actionMasked != MotionEvent.ACTION_DOWN) return true
-            if (!visivel || mostrouEm == 0L) return true
-            val dx = e.x - x; val dy = e.y - y
-            if (dx * dx + dy * dy > raio * raio * 2.2f) return true
-            tempos.add((e.eventTime - mostrouEm).coerceAtLeast(0))
-            mostrouEm = 0L
-            feitos++
-            if (feitos >= total) { visivel = false; invalidate(); aoTerminar?.invoke(tempos.toList()) } else proximo()
-            return true
-        }
-    }
-
-    override fun render() {
-        limpa()
-        val c = act
-        cabecalho(titulo, "Toque nos 20 alvos o mais rápido que conseguir. O app mede o tempo entre o alvo aparecer e o seu toque chegar. Faça com o competitivo ligado e desligado e compare.")
-        val comp = try { Comp.ligado() } catch (_: Throwable) { false }
-        add(Ui.dica(c, "Modo competitivo agora: " + if (comp) "LIGADO" else "DESLIGADO", if (comp) Ui.Dica.OK else Ui.Dica.INFO), 12)
-        if (rodando) {
-            val alvo = Alvo(c)
-            alvo.background = Ui.glass(c)
-            alvo.aoTerminar = { t -> salva(t, comp); rodando = false; redesenha() }
-            root.addView(alvo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 420)).also { it.topMargin = Ui.dp(c, 12) })
-            alvo.post { alvo.comeca() }
-            add(Ui.button(c, "cancelar", Ui.Kind.GHOST) { rodando = false; redesenha() }, 10)
-            return
-        }
-        add(Ui.button(c, "começar", Ui.Kind.PRIMARY, R.drawable.ic_play) { rodando = true; redesenha() }, 12)
-        val res = try { JSONArray(Prefs.extraTxt("toque_res") ?: "[]") } catch (_: Throwable) { JSONArray() }
-        if (res.length() == 0) return
-        val com = ArrayList<Long>(); val sem = ArrayList<Long>()
-        for (i in 0 until res.length()) res.optJSONObject(i)?.let { if (it.optBoolean("comp")) com.add(it.optLong("media")) else sem.add(it.optLong("media")) }
-        add(Ui.secao(c, "comparação"), 20)
-        val k = Ui.card(c, forte = true)
-        k.addView(linhaValor(c, "Com competitivo", if (com.isEmpty()) "faça um teste" else "${com.average().toLong()} ms (média)", Ui.OK))
-        k.addView(linhaValor(c, "Sem competitivo", if (sem.isEmpty()) "faça um teste" else "${sem.average().toLong()} ms (média)"), Ui.lp(top = 8, c = c))
-        add(k, 10)
-        add(Ui.secao(c, "últimos testes"), 20)
-        for (i in res.length() - 1 downTo 0) {
-            val o = res.optJSONObject(i) ?: continue
-            add(linhaValor(c, dataCurta(o.optLong("t")) + if (o.optBoolean("comp")) " · competitivo" else "", "média ${o.optLong("media")} ms · melhor ${o.optLong("melhor")} ms"), 8)
-        }
-    }
-
-    private fun salva(t: List<Long>, comp: Boolean) {
-        if (t.isEmpty()) return
-        val media = t.average().toLong()
-        val res = try { JSONArray(Prefs.extraTxt("toque_res") ?: "[]") } catch (_: Throwable) { JSONArray() }
-        res.put(JSONObject().put("t", System.currentTimeMillis()).put("comp", comp).put("media", media).put("melhor", t.minOrNull() ?: 0L))
-        val final = if (res.length() > 10) JSONArray().also { n -> for (i in res.length() - 10 until res.length()) n.put(res.get(i)) } else res
-        Prefs.extraTxt("toque_res", final.toString())
-        val melhor = Prefs.lerNum("toque_melhor_media", 0L)
-        if (melhor == 0L || media < melhor) Prefs.gravaNum("toque_melhor_media", media)
-        Ui.toast(act, "MÉDIA: $media ms")
     }
 }
 

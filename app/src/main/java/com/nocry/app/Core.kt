@@ -31,7 +31,7 @@ object Const {
     /** novidades mostradas na 1ª vez que abre depois de atualizar (pra todo mundo) */
     val NOVIDADES = listOf(
         "O ADB religa sozinho quando você troca de Wi-Fi ou liga o celular, e não trava mais quando a conexão cai.",
-        "Novo no início, em MAIS: Ajuda (testar o app e falar com a staff), Amigos, Eventos, Caderninho das apostas, Partidas e Teste de toque.",
+        "Atalhos novos abaixo do Bot de fila: Ajuda (testar o app e falar com a staff), Amigos, Eventos, Caderninho das apostas e Partidas.",
         "Bloco NOCRY no menu rápido do celular: liga e desliga o competitivo com 1 toque (arraste ele pro menu uma vez).",
     )
     /** novidades do bot de fila: só aparecem pra quem tem o bot (a key de dono). Vazio = nada novo no bot nesta versão */
