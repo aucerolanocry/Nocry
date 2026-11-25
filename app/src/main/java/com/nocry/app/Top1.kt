@@ -232,7 +232,7 @@ private object SomTop1 {
     fun tocar() {
         parar()
         val pcm = cache ?: return
-        run {
+        Bg.io {
             try {
                 val at = android.media.AudioTrack.Builder()
                     .setAudioAttributes(android.media.AudioAttributes.Builder()
@@ -476,76 +476,89 @@ object IntroTop1 {
         raiz.addView(camada, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         // tudo escondido até a explosão
-        for (v in listOf(caixa, linha, nm, selo, fr, pular)) v.alpha = 0f
+        val textos = listOf(nm, selo, fr, pular)
+        for (v in listOf(caixa, linha) + textos) v.alpha = 0f
 
         // som (gerado aqui) começa junto com a linha do tempo
         SomTop1.tocar()
 
-        // tremida: cresce antes da explosão, forte na explosão, menor no carimbo
-        val tremer = ValueAnimator.ofFloat(0f, 1f)
-        tremer.duration = Tempo.FIM
-        tremer.addUpdateListener {
-            val ms = SystemClock.uptimeMillis() - inicio
-            val amp = when {
-                ms < Tempo.BOOM -> 3f * (ms / Tempo.BOOM.toFloat()).let { x -> x * x }
-                ms < Tempo.BOOM + 600 -> 16f * (1f - (ms - Tempo.BOOM) / 600f)
-                ms in Tempo.CARIMBO..(Tempo.CARIMBO + 350) -> 8f * (1f - (ms - Tempo.CARIMBO) / 350f)
-                else -> 0f
-            } * d
-            col.translationX = (Random.nextFloat() * 2f - 1f) * amp
-            col.translationY = (Random.nextFloat() * 2f - 1f) * amp
-        }
-        tremer.start()
-
         fun vibra(forte: Boolean) {
             try { camada.performHapticFeedback(if (forte) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING) } catch (_: Throwable) {}
         }
+        fun cl(x: Float) = x.coerceIn(0f, 1f)
+        fun desacelera(t: Float) = 1f - (1f - t) * (1f - t) * (1f - t)
+        fun passa(t: Float, s: Float = 1.6f): Float { val u = t - 1f; return 1f + (s + 1f) * u * u * u + s * u * u }
 
-        // BOOM: a foto aparece de uma vez (grande → certinho), girando
-        camada.postDelayed({
-            vibra(true)
-            caixa.alpha = 1f; caixa.scaleX = 1.9f; caixa.scaleY = 1.9f; caixa.rotation = 25f
-            caixa.animate().scaleX(1f).scaleY(1f).rotation(0f).setDuration(520).setInterpolator(OvershootInterpolator(1.6f)).start()
-        }, Tempo.BOOM)
-
-        // carimbo do TOP 1: entra gigante e bate
-        camada.postDelayed({
-            vibra(true)
-            linha.alpha = 1f; linha.scaleX = 3.2f; linha.scaleY = 3.2f
-            linha.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(DecelerateInterpolator(2.5f)).start()
-        }, Tempo.CARIMBO)
-
-        // nome, selo e frase sobem em sequência
-        listOf(nm, selo, fr, pular).forEachIndexed { i, v ->
-            v.translationY = 36f * d
-            v.animate().alpha(if (v === pular) 0.8f else 1f).translationY(0f)
-                .setStartDelay(Tempo.NOME + i * 160L).setDuration(480).setInterpolator(DecelerateInterpolator(2f)).start()
-        }
-        camada.postDelayed({ vibra(false) }, Tempo.NOME)
-
+        // relógio próprio (cada quadro da tela): funciona mesmo com as animações do Android zeradas pela otimização
         var saiu = false
-        val sair = {
-            if (!saiu) {
-                saiu = true
-                tremer.cancel()
-                SomTop1.parar()
-                camada.animate().alpha(0f).setStartDelay(0).setDuration(450).withEndAction { try { raiz.removeView(camada) } catch (_: Throwable) {} }.start()
+        var fimEm = 0L
+        var vBoom = false; var vCarimbo = false; var vNome = false
+        val quadro = object : android.view.Choreographer.FrameCallback {
+            override fun doFrame(n: Long) {
+                if (camada.parent == null) return
+                val ms = SystemClock.uptimeMillis() - inicio
+                // tremida: cresce antes da explosão, forte na explosão, menor no carimbo
+                val amp = when {
+                    ms < Tempo.BOOM -> 3f * (ms / Tempo.BOOM.toFloat()).let { x -> x * x }
+                    ms < Tempo.BOOM + 600 -> 16f * (1f - (ms - Tempo.BOOM) / 600f)
+                    ms in Tempo.CARIMBO..(Tempo.CARIMBO + 350) -> 8f * (1f - (ms - Tempo.CARIMBO) / 350f)
+                    else -> 0f
+                } * d
+                col.translationX = (Random.nextFloat() * 2f - 1f) * amp
+                col.translationY = (Random.nextFloat() * 2f - 1f) * amp
+                // BOOM: a foto aparece grande e encaixa girando
+                if (ms >= Tempo.BOOM) {
+                    if (!vBoom) { vBoom = true; vibra(true) }
+                    val t = cl((ms - Tempo.BOOM) / 520f)
+                    val e = passa(t)
+                    caixa.alpha = 1f
+                    caixa.scaleX = 1.9f - 0.9f * e; caixa.scaleY = caixa.scaleX
+                    caixa.rotation = 25f * (1f - e)
+                }
+                // carimbo do TOP 1
+                if (ms >= Tempo.CARIMBO) {
+                    if (!vCarimbo) { vCarimbo = true; vibra(true) }
+                    val t = desacelera(cl((ms - Tempo.CARIMBO) / 260f))
+                    linha.alpha = 1f
+                    linha.scaleX = 3.2f - 2.2f * t; linha.scaleY = linha.scaleX
+                }
+                // nome, selo, frase e o "toque pra continuar" sobem um por um
+                if (ms >= Tempo.NOME && !vNome) { vNome = true; vibra(false) }
+                textos.forEachIndexed { i, v ->
+                    val t = desacelera(cl((ms - Tempo.NOME - i * 160L) / 480f))
+                    v.alpha = t * (if (v === pular) 0.8f else 1f)
+                    v.translationY = 36f * d * (1f - t)
+                }
+                // saída
+                if (ms >= Tempo.FIM && !saiu) { saiu = true; fimEm = ms; SomTop1.parar() }
+                if (saiu) {
+                    if (fimEm == 0L) fimEm = ms
+                    val t = cl((ms - fimEm) / 450f)
+                    camada.alpha = 1f - t
+                    if (t >= 1f) { try { raiz.removeView(camada) } catch (_: Throwable) {}; return }
+                }
+                android.view.Choreographer.getInstance().postFrameCallback(this)
             }
         }
-        camada.setOnClickListener { sair() }
-        camada.postDelayed({ sair() }, Tempo.FIM)
+        android.view.Choreographer.getInstance().postFrameCallback(quadro)
+        camada.setOnClickListener {
+            if (!saiu) { saiu = true; fimEm = 0L; SomTop1.parar() }
+        }
     }
 }
 
-/** o pulsar suave do cartão do top 1 */
+/** o pulsar suave do cartão do top 1 (relógio próprio: funciona com as animações do Android zeradas) */
 fun pulsar(v: View) {
-    val a = ValueAnimator.ofFloat(1f, 1.015f)
-    a.duration = 1400
-    a.repeatMode = ValueAnimator.REVERSE
-    a.repeatCount = ValueAnimator.INFINITE
-    a.addUpdateListener { v.scaleX = it.animatedValue as Float; v.scaleY = it.animatedValue as Float }
+    val passo = object : Runnable {
+        override fun run() {
+            if (!v.isAttachedToWindow) return
+            val e = 1f + 0.015f * (0.5f + 0.5f * sin(SystemClock.uptimeMillis() / 1400.0 * Math.PI).toFloat())
+            v.scaleX = e; v.scaleY = e
+            v.postOnAnimation(this)
+        }
+    }
     v.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-        override fun onViewAttachedToWindow(x: View) { if (!a.isStarted) a.start() }
-        override fun onViewDetachedFromWindow(x: View) { a.cancel() }
+        override fun onViewAttachedToWindow(x: View) { v.postOnAnimation(passo) }
+        override fun onViewDetachedFromWindow(x: View) { v.removeCallbacks(passo) }
     })
 }
