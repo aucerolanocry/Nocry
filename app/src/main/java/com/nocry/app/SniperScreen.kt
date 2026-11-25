@@ -499,6 +499,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         // chat (montado uma vez só)
         val card = Ui.card(c)
         card.addView(pedaco({ Sniper.salaAtiva ?: "-" }) { cabecaChat(it) })
+        card.addView(pedaco({ assinaturaAcoes() }) { acoesTopo(it) }, Ui.lp(top = 10, c = c))
 
         val sv = object : ScrollView(c) {
             private var yAnt = 0f
@@ -629,15 +630,74 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         contagemTxt = ct
         b.addView(ct, Ui.lp(top = 10, c = c))
 
-        if (s != null) {
-            val acoes = Ui.hbox(c)
-            acoes.addView(botaoMarcar("copiar id e senha", R.drawable.ic_copy) {
-                val v = idESenhaDaSala(s)
-                if (v != null) copiar(v, "id e senha copiados")
-                else Ui.toast(act, "não achei id/senha no chat dessa sala")
-            }, pesoUm())
-            acoes.addView(botaoMarcar("abrir no Discord", R.drawable.ic_globe) { abrirNoDiscord(s) }, pesoUm(6))
-            b.addView(acoes, Ui.lp(top = 10, c = c))
+    }
+
+    /** logo abaixo do tempo: confirmar/cancelar grandes e os atalhos da sala (pix, go, id/senha, discord) */
+    private fun acoesTopo(b: LinearLayout) {
+        val c = act
+        val sa = salaAtual() ?: return
+        if (sa.encerrada) {
+            b.addView(Ui.dica(c, "A org já fechou essa sala (cancelou ou acabou). Ela some sozinha em 3 min.", Ui.Dica.AVISO))
+            b.addView(Ui.button(c, "tirar do painel agora", Ui.Kind.GHOST, R.drawable.ic_trash) { Sniper.largar() }, Ui.lp(top = 8, c = c))
+            return
+        }
+        val linha = Ui.hbox(c)
+        linha.addView(Ui.button(c, "confirmar", Ui.Kind.PRIMARY, R.drawable.ic_check) { Sniper.confirmar() }, pesoUm())
+        linha.addView(Ui.button(c, "cancelar", Ui.Kind.DANGER, R.drawable.ic_xcircle) {
+            Ui.dialogConfirma(c, "CANCELAR SALA", "Ele clica em cancelar/sair na sala e volta a procurar nessa org.", "CANCELAR") { Sniper.cancelar() }
+        }, pesoUm(8))
+        b.addView(linha)
+        val semGo = sa.temGo == false && !Sniper.orgTemGo(sa.org)
+        val at = Ui.hbox(c)
+        at.addView(atalho("pix", R.drawable.ic_copy, false) { pixDaSala(sa) }, pesoUm())
+        at.addView(atalho(if (sa.goAuto) "go ligado" else if (semGo) "sem go" else "go auto", R.drawable.ic_play, sa.goAuto) {
+            Ui.toast(act, if (sa.goAuto) "desligando..." else "procurando o botão de go...")
+            Sniper.goAutomatico(!sa.goAuto) { msg -> Bg.ui { Ui.toast(act, msg) } }
+        }, pesoUm(6))
+        at.addView(atalho("id/senha", R.drawable.ic_key, false) {
+            val v = idESenhaDaSala(sa)
+            if (v != null) copiar(v, "id e senha copiados") else Ui.toast(act, "não achei id/senha no chat dessa sala")
+        }, pesoUm(6))
+        at.addView(atalho("discord", R.drawable.ic_globe, false) { abrirNoDiscord(sa) }, pesoUm(6))
+        b.addView(at, Ui.lp(top = 8, c = c))
+    }
+
+    /** botãozinho quadrado: ícone em cima, nome embaixo (aceso quando ligado) */
+    private fun atalho(rot: String, ico: Int, ligado: Boolean, acao: () -> Unit): View {
+        val c = act
+        val b = Ui.vbox(c)
+        b.gravity = Gravity.CENTER
+        val borda = if (ligado) Theme.alpha(Theme.accent, 0xCC) else Theme.alpha(android.graphics.Color.WHITE, 0x24)
+        b.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(if (ligado) Theme.accent else android.graphics.Color.WHITE, if (ligado) 0x26 else 0x0A), Ui.raioPeq(14), borda, 1),
+            Ui.shape(c, android.graphics.Color.WHITE, Ui.raioPeq(14)))
+        b.setPadding(Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 9))
+        b.addView(Ui.icone(c, ico, if (ligado) Theme.accent else Ui.TEXT, 19), LinearLayout.LayoutParams(Ui.dp(c, 19), Ui.dp(c, 19)))
+        val t = Ui.text(c, rot, 10.5f, Ui.TEXT, true, mono = true)
+        t.maxLines = 1
+        t.gravity = Gravity.CENTER
+        b.addView(t, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 5, c = c))
+        b.contentDescription = rot
+        Ui.clique(b) { acao() }
+        return b
+    }
+
+    /**
+     * pix da sala: pega a chave que o ADM (ou o bot da org) mandou, copia na hora e já mostra o QR com o valor da sala.
+     * Se nenhum ADM mandou chave ainda, abre pra colar/digitar.
+     */
+    private fun pixDaSala(sa: SSala) {
+        val valor = Caderno.valorDe(sa.fila)
+        val doAdm = sa.chat.toList().asReversed().firstNotNullOfOrNull { m ->
+            val papel = sa.pessoas[m.autorId]?.papel
+            if (m.tipo != "bot" && papel != "adm") null
+            else copiaveis(m.texto + "\n" + m.card).firstOrNull { it.first == "chave pix" }?.second
+        }
+        if (doAdm != null) {
+            copiar(Pix.normaliza(doAdm), "chave pix do ADM copiada")
+            Pix.mostrar(act, doAdm, valor)
+        } else {
+            Ui.toast(act, "o ADM ainda não mandou chave pix")
+            Pix.abrir(act, null, valor)
         }
     }
 
@@ -790,39 +850,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
     private fun acoes(b: LinearLayout) {
         val c = act
         val sa = salaAtual()
-        if (sa != null && sa.encerrada) {
-            b.addView(Ui.dica(c, "A org já fechou essa sala (cancelou ou acabou). Ela some sozinha em 3 min.", Ui.Dica.AVISO))
-            b.addView(Ui.button(c, "tirar do painel agora", Ui.Kind.GHOST, R.drawable.ic_trash) { Sniper.largar() }, Ui.lp(top = 8, c = c))
-            return
-        }
-        val linha = Ui.hbox(c)
-        linha.addView(Ui.button(c, "confirmar", Ui.Kind.PRIMARY, R.drawable.ic_check) { Sniper.confirmar() }, pesoUm())
-        linha.addView(Ui.button(c, "cancelar", Ui.Kind.DANGER, R.drawable.ic_xcircle) {
-            Ui.dialogConfirma(c, "CANCELAR SALA", "Ele clica em cancelar/sair na sala e volta a procurar nessa org.", "CANCELAR") { Sniper.cancelar() }
-        }, pesoUm(8))
-        b.addView(linha)
-        // pix: QR code e copiar de qualquer chave (já vem com a última chave que apareceu na sala)
-        if (sa != null) {
-            b.addView(Ui.button(c, "pix · qr code e copiar chave", Ui.Kind.GHOST, R.drawable.ic_copy) {
-                val ultima = sa.chat.toList().asReversed().firstNotNullOfOrNull { m ->
-                    copiaveis(m.texto + "\n" + m.card).firstOrNull { it.first == "chave pix" }?.second
-                }
-                Pix.abrir(act, ultima, Caderno.valorDe(sa.fila))
-            }, Ui.lp(top = 8, c = c))
-        }
-        // go automático: clica no botão de go que a org manda (e nos próximos dessa sala)
-        if (sa != null) {
-            val ligado = sa.goAuto
-            val rot = when {
-                ligado -> "go automático ligado"
-                sa.temGo == false && !Sniper.orgTemGo(sa.org) -> "go automático (essa sala não tem)"
-                else -> "dar go automático"
-            }
-            b.addView(Ui.button(c, rot, if (ligado) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_play) {
-                Ui.toast(act, if (ligado) "desligando..." else "procurando o botão de go...")
-                Sniper.goAutomatico(!ligado) { msg -> Bg.ui { Ui.toast(act, msg) } }
-            }, Ui.lp(top = 8, c = c))
-        }
+        if (sa == null || sa.encerrada) return
         val tirar = Ui.text(c, "tirar essa sala do painel", 11f, Ui.MUTED, true, mono = true)
         tirar.gravity = Gravity.CENTER
         tirar.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 2))

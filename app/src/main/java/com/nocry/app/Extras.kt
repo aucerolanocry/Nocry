@@ -1186,11 +1186,15 @@ object Pix {
                 Ui.toast(c, aviso)
             } catch (_: Throwable) {}
         }
+        val bts = Ui.hbox(c)
+        bts.addView(Ui.button(c, "copiar chave", Ui.Kind.PRIMARY, R.drawable.ic_copy) { copia(normaliza(chave), "CHAVE PIX COPIADA") },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        bts.addView(Ui.button(c, "copia e cola", Ui.Kind.GHOST) { copia(payload, "PIX COPIA E COLA COPIADO") },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 8) })
+        box.addView(bts, Ui.lp(top = 14, c = c))
         android.app.AlertDialog.Builder(c, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
             .setTitle("PIX")
-            .setView(box)
-            .setPositiveButton("COPIAR CHAVE") { _, _ -> copia(normaliza(chave), "CHAVE PIX COPIADA") }
-            .setNeutralButton("COPIA E COLA") { _, _ -> copia(payload, "PIX COPIA E COLA COPIADO") }
+            .setView(android.widget.ScrollView(c).also { it.addView(box) })
             .setNegativeButton("FECHAR", null)
             .show()
     }
