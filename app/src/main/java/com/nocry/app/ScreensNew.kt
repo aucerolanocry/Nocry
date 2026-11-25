@@ -531,7 +531,12 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             else Ui.peca(c, Ui.raioPeq(16), 0xD8)
         val pd = Ui.dp(c, 6)
         box.setPadding(pd, pd, pd, Ui.dp(c, 10))
-        box.addView(Miniatura.tema(c, t, sel), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 112)))
+        // miniatura com o efeito animado do tema por cima (fogo, sangue...) e o selo NOVO
+        val mini = android.widget.FrameLayout(c)
+        mini.addView(Miniatura.tema(c, t, sel), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        if (t.efeito.isNotEmpty()) mini.addView(EfeitoCartao(c, t.efeito), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        if (Temas.novo(t.id)) mini.addView(Ui.selo(c, "NOVO", t.c1, true), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).also { it.topMargin = Ui.dp(c, 6); it.rightMargin = Ui.dp(c, 6) })
+        box.addView(mini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 112)))
         val nome = Ui.text(c, t.nome, 12.5f, if (sel) Ui.RED else Ui.TEXT, true, mono = true)
         nome.setPadding(Ui.dp(c, 4), 0, Ui.dp(c, 4), 0)
         box.addView(nome, Ui.lp(top = 9, c = c))

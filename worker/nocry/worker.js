@@ -527,7 +527,7 @@ async function extrasRoute(req, env, ip) {
     const apelido = clean(b.apelido, 24).trim() || "jogador";
     const dono = a.rec.role === "owner";
     const frase = dono ? clean(b.frase, 60).trim() : "";
-    const estilo = dono && ["ouro", "sangue", "brasa", "morte", "raio", "toxico", "gelo", "glitch", "vazio", "aurora"].includes(String(b.estilo)) ? String(b.estilo) : "ouro";
+    const estilo = dono && ["ouro", "sangue", "brasa", "morte", "raio", "toxico", "gelo", "glitch", "vazio", "aurora", "diamante", "neon"].includes(String(b.estilo)) ? String(b.estilo) : "ouro";
     const num = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
     const real = (v) => Math.max(0, Math.min(1e7, Math.round((Number(v) || 0) * 100) / 100));
     const linhas = [];

@@ -24,7 +24,7 @@ object Efeitos {
     val forcaApp: Float get() = when (Prefs.lerNum("efeito_forca", 2L)) { 1L -> 0.8f; 3L -> 1.5f; else -> 1.1f }
 
     val TODOS = listOf("" to "Nenhum", "sangue" to "Sangue escorrendo", "inferno" to "Fogo", "raio" to "Raios",
-        "toxico" to "Gosma tóxica", "gelo" to "Gelo e neve", "vazio" to "Buraco negro", "aurora" to "Aurora", "glitch" to "Glitch", "morte" to "Caveira")
+        "toxico" to "Gosma tóxica", "gelo" to "Gelo e neve", "vazio" to "Buraco negro", "aurora" to "Aurora", "glitch" to "Glitch", "morte" to "Caveira", "diamante" to "Diamante", "neon" to "Neon city")
 
     fun animado(): Boolean = Prefs.anim
 
@@ -92,6 +92,8 @@ object Efeitos {
             "glitch" -> glitch(cv, l, t, w, h, d, semente, ms)
             "vazio" -> vazio(cv, l, t, w, h, d, semente, ms)
             "aurora" -> aurora(cv, l, t, w, h, d, semente, ms)
+            "diamante" -> diamante(cv, l, t, w, h, d, semente, ms)
+            "neon" -> neon(cv, l, t, w, h, d, semente, ms)
             "inferno" -> inferno(cv, l, b, w, h, d, semente, ms)
             "morte" -> morte(cv, l, t, w, h, d, semente, ms)
         }
@@ -421,6 +423,79 @@ object Efeitos {
             p.color = Theme.alpha(Color.WHITE, (a * 200).toInt())
             cv.drawCircle(l + w * ruido(sem + i * 2), t + h * ruido(sem + i * 2 + 1) * 0.5f, 1.1f * d, p)
         }
+    }
+
+    private val estrela = Path()
+
+    /** estrela de 4 pontas (brilho de diamante) */
+    private fun brilho4(cv: Canvas, x: Float, y: Float, r: Float, cor: Int, alfa: Int) {
+        estrela.reset()
+        estrela.moveTo(x, y - r); estrela.quadTo(x, y, x + r, y); estrela.quadTo(x, y, x, y + r)
+        estrela.quadTo(x, y, x - r, y); estrela.quadTo(x, y, x, y - r); estrela.close()
+        p.shader = null
+        p.color = Theme.alpha(cor, alfa)
+        cv.drawPath(estrela, p)
+        p.color = Theme.alpha(Color.WHITE, alfa)
+        cv.drawCircle(x, y, r * 0.14f, p)
+    }
+
+    /** diamante: faixa de luz arco-íris passando na diagonal e brilhos de 4 pontas piscando */
+    private fun diamante(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
+        val tt = ms / 1000f
+        val pos = ((tt * 0.35f) % 1.6f - 0.3f) * (w + h)
+        cv.save()
+        cv.rotate(-25f, l + w / 2f, t + h / 2f)
+        val faixa = 70f * d * forca
+        p.shader = LinearGradient(l + pos - faixa, 0f, l + pos + faixa, 0f,
+            intArrayOf(Color.TRANSPARENT, Theme.alpha(0xFF7DF9FF.toInt(), 0x40), Theme.alpha(Color.WHITE, 0x70), Theme.alpha(0xFFFF8AF0.toInt(), 0x40), Color.TRANSPARENT),
+            floatArrayOf(0f, 0.35f, 0.5f, 0.65f, 1f), Shader.TileMode.CLAMP)
+        cv.drawRect(l - h, t - w, l + w + h, t + h + w, p)
+        cv.restore()
+        p.shader = null
+        for (i in 0 until (9 * forca).toInt()) {
+            val per = 1.6f + 1.8f * ruido(sem + i)
+            val f = ((tt + ruido(sem + i + 4) * per) % per) / per
+            val a = sin(f * Math.PI).toFloat()
+            val x = l + w * ruido(sem + i * 3 + 1); val y = t + h * ruido(sem + i * 3 + 2)
+            brilho4(cv, x, y, (5f + 6f * ruido(i + 8)) * d * a, if (i % 2 == 0) 0xFF9EF6FF.toInt() else 0xFFFFB8F4.toInt(), (a * 255).toInt())
+        }
+    }
+
+    /** neon city: chão quadriculado andando embaixo e um sol de linhas atrás, com brilho rosa/ciano */
+    private fun neon(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
+        val tt = ms / 1000f
+        val y0 = t + h * 0.62f
+        // sol listrado
+        val cx = l + w * 0.78f; val rs = minOf(w, h) * 0.28f
+        p.shader = LinearGradient(0f, y0 - rs * 2f, 0f, y0, 0xFFFFD06B.toInt(), 0xFFFF3CAC.toInt(), Shader.TileMode.CLAMP)
+        cv.save()
+        cv.clipRect(l, t, l + w, y0)
+        cv.drawCircle(cx, y0 - rs * 0.4f, rs, p)
+        cv.restore()
+        p.shader = null
+        p.color = 0xFF07040F.toInt()
+        for (k in 0 until 5) { val yy = y0 - rs * 0.4f + k * rs * 0.18f; cv.drawRect(cx - rs, yy, cx + rs, yy + (1.5f + k) * d, p) }
+        // chão
+        p.color = Theme.alpha(0xFF07040F.toInt(), 0xC0)
+        cv.drawRect(l, y0, l + w, t + h, p)
+        p.strokeWidth = 1.2f * d
+        val n = 10
+        for (i in -n..n) {
+            val a = 1f - abs(i) / (n + 1f)
+            p.color = Theme.alpha(0xFF22E4FF.toInt(), (0x30 + 0x80 * a).toInt())
+            cv.drawLine(l + w / 2f + i * w * 0.04f, y0, l + w / 2f + i * w * 0.22f, t + h, p)
+        }
+        val sc = (tt * 0.5f) % 1f
+        for (j in 0 until 6) {
+            val f = (j + sc) / 6f
+            val y = y0 + (t + h - y0) * f * f
+            p.color = Theme.alpha(0xFFFF3CAC.toInt(), (0x40 + 0xA0 * f).toInt())
+            cv.drawLine(l, y, l + w, y, p)
+        }
+        // horizonte brilhando
+        p.shader = LinearGradient(0f, y0 - 6f * d, 0f, y0 + 6f * d, intArrayOf(Color.TRANSPARENT, Theme.alpha(0xFFFF3CAC.toInt(), 0xA0), Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
+        cv.drawRect(l, y0 - 6f * d, l + w, y0 + 6f * d, p)
+        p.shader = null
     }
 
     /** fundo Tempestade: chuva caindo de lado e relâmpago iluminando a tela */

@@ -1132,9 +1132,7 @@ class RankScreen(a: MainActivity) : Screen(a) {
         }
         if (License.isOwner() || BuildConfig.PREVIEW) add(Ui.button(c, "editar meu perfil do rank", Ui.Kind.GHOST, R.drawable.ic_crown) {
             Ui.dialogEscolha(act, "MEU PERFIL DO RANK", listOf("Estilo: " + EstiloPerfil.nome(Rank.estilo), "Frase embaixo do nome")) { o ->
-                if (o == 0) Ui.dialogEscolha(act, "ESTILO DO PERFIL", EstiloPerfil.ids.map { EstiloPerfil.nome(it) + " · " + EstiloPerfil.desc(it) }) { i ->
-                    Rank.estilo = EstiloPerfil.ids[i]; carregar()
-                } else Ui.dialogTexto(act, "FRASE DO SEU PERFIL", "aparece embaixo do seu nome no topo do rank") { v -> Rank.frase = v; carregar() }
+                if (o == 0) act.abre(EstilosScreen(act) { carregar() }) else Ui.dialogTexto(act, "FRASE DO SEU PERFIL", "aparece embaixo do seu nome no topo do rank") { v -> Rank.frase = v; carregar() }
             }
         }, 12)
         // o dono é sempre o 1º (se o servidor não mandou o dono e eu sou o dono, o meu cartão entra mesmo assim)

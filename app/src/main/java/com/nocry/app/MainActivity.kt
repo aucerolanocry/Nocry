@@ -285,8 +285,7 @@ class MainActivity : Activity() {
         if (!atualizou) return
         avisoAberto = true
         val novidades = Const.NOVIDADES + (if (License.isOwner()) Const.NOVIDADES_BOT else emptyList())
-        val msg = "Você está na v$atual.\n\nNovidades:\n" + novidades.joinToString("\n") { "• $it" } + "\n\n" + Const.AVISO_ATUALIZACOES
-        Ui.dialogAviso(this, "NOCRY atualizado", msg, "Entendi") {
+        Ui.novidades(this, atual, novidades, Const.AVISO_ATUALIZACOES) {
             avisoAberto = false
         }
     }
@@ -473,6 +472,7 @@ class MainActivity : Activity() {
             "eventos" -> EventosScreen(this)
             "amigos" -> AmigosScreen(this)
             "rank" -> RankScreen(this)
+            "estilos" -> EstilosScreen(this) {}
             else -> return
         }
         abre(t)

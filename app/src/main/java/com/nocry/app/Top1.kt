@@ -41,10 +41,10 @@ object Ouro {
 
 /** estilos do perfil do dono no rank: cores (claro, meio, fundo) e o efeito no cartão */
 object EstiloPerfil {
-    val ids = listOf("ouro", "sangue", "brasa", "raio", "vazio", "aurora", "toxico", "gelo", "glitch", "morte")
+    val ids = listOf("ouro", "sangue", "brasa", "raio", "vazio", "diamante", "neon", "aurora", "toxico", "gelo", "glitch", "morte")
     fun nome(id: String) = when (id) {
         "sangue" -> "Sangue"; "brasa" -> "Brasa"; "morte" -> "Morte"; "raio" -> "Raio"
-        "toxico" -> "Tóxico"; "gelo" -> "Gelo"; "glitch" -> "Glitch"; "vazio" -> "Vazio"; "aurora" -> "Aurora"; else -> "Ouro"
+        "toxico" -> "Tóxico"; "gelo" -> "Gelo"; "glitch" -> "Glitch"; "vazio" -> "Vazio"; "aurora" -> "Aurora"; "diamante" -> "Diamante"; "neon" -> "Neon city"; else -> "Ouro"
     }
     fun desc(id: String) = when (id) {
         "sangue" -> "sangue escorrendo pelo cartão"
@@ -56,6 +56,8 @@ object EstiloPerfil {
         "glitch" -> "tela bugando com cores separadas"
         "vazio" -> "buraco negro girando e puxando estrelas"
         "aurora" -> "faixas de luz verde e roxa ondulando"
+        "diamante" -> "luz arco-íris passando e brilhos piscando"
+        "neon" -> "sol listrado e chão neon andando"
         else -> "luz dourada correndo na borda"
     }
     fun cores(id: String): IntArray = when (id) {
@@ -68,12 +70,14 @@ object EstiloPerfil {
         "glitch" -> intArrayOf(0xFFFFFFFF.toInt(), 0xFF00F0FF.toInt(), 0xFFFF1E4E.toInt())
         "vazio" -> intArrayOf(0xFFF0E0FF.toInt(), 0xFFC9A0FF.toInt(), 0xFF7A2BFF.toInt())
         "aurora" -> intArrayOf(0xFFE0FFF4.toInt(), 0xFF3DFFB4.toInt(), 0xFF7A5CFF.toInt())
+        "diamante" -> intArrayOf(0xFFFFFFFF.toInt(), 0xFF9EF6FF.toInt(), 0xFFFF8AF0.toInt())
+        "neon" -> intArrayOf(0xFFFFE0F4.toInt(), 0xFFFF3CAC.toInt(), 0xFF22E4FF.toInt())
         else -> intArrayOf(Ouro.CLARO, Ouro.MEIO, Ouro.FUNDO)
     }
     /** efeito do Efeitos.kt pra cada estilo ("" = só a luz na borda) */
     fun efeito(id: String) = when (id) {
         "sangue" -> "sangue"; "brasa" -> "inferno"; "morte" -> "morte"; "raio" -> "raio"
-        "toxico" -> "toxico"; "gelo" -> "gelo"; "glitch" -> "glitch"; "vazio" -> "vazio"; "aurora" -> "aurora"; else -> ""
+        "toxico" -> "toxico"; "gelo" -> "gelo"; "glitch" -> "glitch"; "vazio" -> "vazio"; "aurora" -> "aurora"; "diamante" -> "diamante"; "neon" -> "neon"; else -> ""
     }
 }
 
@@ -626,4 +630,63 @@ fun pulsar(v: View) {
         override fun onViewAttachedToWindow(x: View) { v.postOnAnimation(passo) }
         override fun onViewDetachedFromWindow(x: View) { v.removeCallbacks(passo) }
     })
+}
+
+
+/** escolher o estilo do perfil do rank: cada estilo aparece num cartãozinho animado de verdade */
+class EstilosScreen(a: MainActivity, private val depois: () -> Unit) : Screen(a) {
+    override val titulo = "Estilo do perfil"
+    override fun key(): String = Rank.estilo
+
+    private fun mini(id: String): View {
+        val c = act
+        val sel = Rank.estilo == id
+        val cores = EstiloPerfil.cores(id)
+        val f = FrameLayout(c)
+        val fundo = View(c)
+        fundo.background = Painel(c, forte = true, ligado = sel)
+        f.addView(fundo, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val ef = EstiloPerfil.efeito(id)
+        if (ef.isNotEmpty()) f.addView(EfeitoCartao(c, ef), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val col = LinearLayout(c)
+        col.orientation = LinearLayout.VERTICAL
+        col.setPadding(Ui.dp(c, 12), Ui.dp(c, 12), Ui.dp(c, 12), Ui.dp(c, 12))
+        val topo = LinearLayout(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        topo.addView(AnelGiratorio(c).also { it.cores = cores; it.espessura = 2.2f }, LinearLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 34)))
+        topo.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
+        if (sel) topo.addView(Ui.selo(c, "usando", cores[1], true))
+        col.addView(topo)
+        val nome = TextoBrilho(c)
+        nome.cores = cores
+        nome.text = EstiloPerfil.nome(id).uppercase()
+        nome.textSize = 17f
+        nome.typeface = Ui.text(c, "x", 17f, Ui.TEXT, true).typeface
+        col.addView(nome, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 10) })
+        col.addView(Ui.text(c, EstiloPerfil.desc(id), 10f, Ui.MUTED).also { it.maxLines = 2 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 2) })
+        f.addView(col)
+        f.addView(BordaViva(c).also { it.cores = cores }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        f.contentDescription = EstiloPerfil.nome(id)
+        f.isClickable = true
+        f.setOnClickListener { Rank.estilo = id; depois(); act.onBackPressed() }
+        return f
+    }
+
+    override fun render() {
+        limpa()
+        val c = act
+        cabecalho(titulo, "Toque num estilo pra usar. Todo mundo que abrir o rank vê o seu cartão assim.")
+        val ids = EstiloPerfil.ids
+        var i = 0
+        while (i < ids.size) {
+            val linha = LinearLayout(c)
+            for (k in i until i + 2) {
+                val lp = LinearLayout.LayoutParams(0, Ui.dp(c, 132), 1f)
+                if (k % 2 == 1) lp.leftMargin = Ui.dp(c, 10)
+                linha.addView(if (k < ids.size) mini(ids[k]) else View(c), lp)
+            }
+            add(linha, if (i == 0) 14 else 10)
+            i += 2
+        }
+    }
 }

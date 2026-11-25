@@ -104,6 +104,12 @@ object Temas {
         Tema("grafite", "Grafite", "Corporativo, clean", 0xFF9FB4C7.toInt(), 0xFF3E6FA8.toInt(), 0xFF0A0C10.toInt(), "contorno", "instrument", 16, 1, 35, 45, "noite"),
         Tema("platina", "Platina", "Executivo, elegante", 0xFFE4E4EC.toInt(), 0xFF7B6CFF.toInt(), 0xFF08090D.toInt(), "vidro", "outfit", 20, 1, 30, 45, "grade"),
         Tema("nebulosa", "Nebulosa", "Roxo profundo, misterioso", 0xFFB388FF.toInt(), 0xFF5B2A9E.toInt(), 0xFF08050F.toInt(), "vidro", "bricolage", 26, 1, 60, 50, "noite"),
+        Tema("esmeralda", "Esmeralda", "Verde elegante, sofisticado", 0xFF4FD1A5.toInt(), 0xFF1B6E52.toInt(), 0xFF04100A.toInt(), "vidro", "instrument", 22, 1, 45, 55, "grade"),
+        // temas de rank: do bronze ao topo, cada um com cor, brilho e letra proprios
+        Tema("bronze", "Bronze", "Rank: começo da temporada", 0xFFE0A070.toInt(), 0xFF8C4A2F.toInt(), 0xFF0D0805.toInt(), "solido", "bigs", 6, 1, 45, 80, "brasas"),
+        Tema("diamante", "Diamante", "Rank: brilho de cristal", 0xFF8FE3FF.toInt(), 0xFFB388FF.toInt(), 0xFF050814.toInt(), "vidro", "russo", 16, 1, 65, 55, "neve"),
+        Tema("mestre", "Mestre", "Rank: roxo e vermelho", 0xFFFF4D6D.toInt(), 0xFFB14DFF.toInt(), 0xFF0B0512.toInt(), "hud", "russo", 2, 2, 70, 75, "noite"),
+        Tema("graomestre", "Grão-Mestre", "Rank: o topo, fogo e ouro", 0xFFFFD36B.toInt(), 0xFFFF5A1F.toInt(), 0xFF0A0604.toInt(), "hud", "orbitron", 2, 2, 80, 78, "brasas", true)
         // temas animados: fundo vivo + efeito nos cartões (dá pra trocar o efeito e a força em Estúdio › Efeitos)
         Tema("t_inferno", "Inferno", "Chamas lambendo os cartões", 0xFFFF7A1A.toInt(), 0xFFFF2A00.toInt(), 0xFF0A0402.toInt(), "hud", "russo", 2, 2, 80, 78, "inferno", efeito = "inferno", blur = 0),
         Tema("t_sangue", "Sangue", "Escorrendo pelos cartões", 0xFFFF2337.toInt(), 0xFF8A0014.toInt(), 0xFF0A0203.toInt(), "solido", "gloock", 12, 1, 55, 82, "sangue", efeito = "sangue", blur = 0),
@@ -112,15 +118,14 @@ object Temas {
         Tema("t_gelo", "Ártico", "Pingentes e neve nos cartões", 0xFFE6F6FF.toInt(), 0xFF6FC8FF.toInt(), 0xFF060A12.toInt(), "vidro", "instrument", 20, 1, 50, 55, "neve", efeito = "gelo", blur = 0),
         Tema("t_vazio", "Vazio", "Buraco negro girando", 0xFFC9A0FF.toInt(), 0xFFFF6BD8.toInt(), 0xFF05030A.toInt(), "vidro", "bricolage", 24, 1, 65, 55, "vazio", efeito = "vazio", blur = 0),
         Tema("t_morte", "Morte", "Caveiras e névoa", 0xFFE8E2D4.toInt(), 0xFFB3121F.toInt(), 0xFF050505.toInt(), "contorno", "bigs", 6, 1, 45, 80, "caveiras", efeito = "morte", blur = 0),
-        Tema("esmeralda", "Esmeralda", "Verde elegante, sofisticado", 0xFF4FD1A5.toInt(), 0xFF1B6E52.toInt(), 0xFF04100A.toInt(), "vidro", "instrument", 22, 1, 45, 55, "grade"),
-        // temas de rank: do bronze ao topo, cada um com cor, brilho e letra proprios
-        Tema("bronze", "Bronze", "Rank: começo da temporada", 0xFFE0A070.toInt(), 0xFF8C4A2F.toInt(), 0xFF0D0805.toInt(), "solido", "bigs", 6, 1, 45, 80, "brasas"),
-        Tema("diamante", "Diamante", "Rank: brilho de cristal", 0xFF8FE3FF.toInt(), 0xFFB388FF.toInt(), 0xFF050814.toInt(), "vidro", "russo", 16, 1, 65, 55, "neve"),
-        Tema("mestre", "Mestre", "Rank: roxo e vermelho", 0xFFFF4D6D.toInt(), 0xFFB14DFF.toInt(), 0xFF0B0512.toInt(), "hud", "russo", 2, 2, 70, 75, "noite"),
-        Tema("graomestre", "Grão-Mestre", "Rank: o topo, fogo e ouro", 0xFFFFD36B.toInt(), 0xFFFF5A1F.toInt(), 0xFF0A0604.toInt(), "hud", "orbitron", 2, 2, 80, 78, "brasas", true)
+        Tema("t_diamante", "Diamante", "Luz arco-íris e brilhos nos cartões", 0xFF9EF6FF.toInt(), 0xFFFF8AF0.toInt(), 0xFF070812.toInt(), "vidro", "outfit", 22, 1, 60, 55, "neve", efeito = "diamante", blur = 0),
+        Tema("t_neon", "Neon City", "Sol listrado e chão neon andando", 0xFFFF3CAC.toInt(), 0xFF22E4FF.toInt(), 0xFF07040F.toInt(), "contorno", "orbitron", 12, 1, 85, 70, "grade", efeito = "neon", scanner = true, blur = 0),
     )
 
     fun get(id: String): Tema = lista.firstOrNull { it.id == id } ?: lista[0]
+
+    /** temas novos: ficam no fim da lista com o selo NOVO */
+    fun novo(id: String) = id.startsWith("t_")
 
     /** aplica o tema: cores, formato, fonte e fundo animado. Video/imagem escolhidos pelo usuario continuam. */
     fun aplica(t: Tema) {

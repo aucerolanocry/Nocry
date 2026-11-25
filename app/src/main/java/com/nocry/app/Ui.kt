@@ -1102,55 +1102,121 @@ object Ui {
     // ---------------- caixas de dialogo ----------------
     private fun builder(c: Context) = AlertDialog.Builder(c, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
 
+    /**
+     * Janela do NOCRY: cartão no visual do tema (não a caixa cinza do Android), com título, conteúdo e botões.
+     * botões: (texto, primário?, ação). Devolve o Dialog pra quem quiser fechar.
+     */
+    fun janela(c: Context, titulo: String, corpo: View?, botoes: List<Triple<String, Boolean, () -> Unit>>, cancelavel: Boolean = true, icone: Int = 0): android.app.Dialog {
+        val dlg = android.app.Dialog(c)
+        dlg.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        val raiz = FrameLayout(c)
+        val card = vbox(c)
+        card.background = Painel(c, forte = true, ligado = true)
+        card.setPadding(dp(c, 20), dp(c, 20), dp(c, 20), dp(c, 16))
+        val topo = hbox(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        if (icone != 0) topo.addView(caixaIcone(c, icone, true, 34), LinearLayout.LayoutParams(dp(c, 34), dp(c, 34)).also { it.rightMargin = dp(c, 12) })
+        topo.addView(gradTexto(c, titulo, 19f).also { it.maxLines = 2 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        card.addView(topo)
+        if (corpo != null) {
+            val sc = android.widget.ScrollView(c)
+            sc.isVerticalScrollBarEnabled = false
+            sc.addView(corpo)
+            card.addView(sc, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.topMargin = dp(c, 14) })
+        }
+        if (botoes.isNotEmpty()) {
+            val linha = hbox(c)
+            botoes.forEachIndexed { k, (txt, prim, acao) ->
+                val b = button(c, txt, if (prim) Kind.PRIMARY else Kind.GHOST) { dlg.dismiss(); acao() }
+                linha.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (k > 0) it.leftMargin = dp(c, 10) })
+            }
+            card.addView(linha, lp(top = 18, c = c))
+        }
+        val m = dp(c, 18)
+        raiz.addView(card, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER).also { it.leftMargin = m; it.rightMargin = m })
+        dlg.setContentView(raiz)
+        dlg.setCancelable(cancelavel)
+        dlg.window?.let { w ->
+            w.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            w.setDimAmount(0.72f)
+            val alt = (c.resources.displayMetrics.heightPixels * 0.82f).toInt()
+            card.maxHeightCompat(alt)
+        }
+        dlg.show()
+        // entra subindo de leve (com as animações do Android zeradas ele só aparece)
+        card.alpha = 0f; card.translationY = dp(c, 24).toFloat()
+        card.animate().alpha(1f).translationY(0f).setDuration(220).start()
+        return dlg
+    }
+
+    private fun LinearLayout.maxHeightCompat(max: Int) {
+        viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                if (height > max) { layoutParams = layoutParams.also { it.height = max }; requestLayout() }
+                viewTreeObserver.removeOnGlobalLayoutListener(this)
+            }
+        })
+    }
+
+    private fun corpoTexto(c: Context, msg: String): View =
+        text(c, msg, 13f, TEXT).also { it.setLineSpacing(0f, 1.15f) }
+
     fun dialogNumero(c: Context, titulo: String, dica: String, min: Int, max: Int, atual: Int, onOk: (Int) -> Unit) {
         val e = field(c, dica, true)
         e.setText(atual.toString())
         e.setSelection(e.text.length)
         val box = vbox(c)
-        val p = dp(c, 20)
-        box.setPadding(p, dp(c, 8), p, 0)
         box.addView(text(c, "de $min a $max", 12f, MUTED))
         box.addView(e, lp(top = 8, c = c))
-        builder(c).setTitle(up(titulo)).setView(box)
-            .setPositiveButton(up("OK")) { _, _ ->
-                val v = e.text.toString().trim().toIntOrNull()
-                if (v == null || v < min || v > max) toast(c, "Use um numero de $min a $max") else onOk(v)
-            }
-            .setNegativeButton(up("CANCELAR"), null)
-            .show()
+        janela(c, titulo, box, listOf(Triple("cancelar", false) {}, Triple("ok", true) {
+            val v = e.text.toString().trim().toIntOrNull()
+            if (v == null || v < min || v > max) toast(c, "Use um numero de $min a $max") else onOk(v)
+        }))
     }
 
     fun dialogTexto(c: Context, titulo: String, dica: String, onOk: (String) -> Unit) {
         val e = field(c, dica, false)
-        val box = vbox(c)
-        val p = dp(c, 20)
-        box.setPadding(p, dp(c, 8), p, 0)
-        box.addView(e)
-        builder(c).setTitle(up(titulo)).setView(box)
-            .setPositiveButton(up("OK")) { _, _ -> onOk(e.text.toString()) }
-            .setNegativeButton(up("CANCELAR"), null)
-            .show()
+        janela(c, titulo, e, listOf(Triple("cancelar", false) {}, Triple("ok", true) { onOk(e.text.toString()) }))
     }
 
+    /** lista de opções: cada uma vira um botão do tema */
     fun dialogEscolha(c: Context, titulo: String, opcoes: List<String>, onPick: (Int) -> Unit) {
-        builder(c).setTitle(up(titulo))
-            .setItems(opcoes.map { up(it) }.toTypedArray()) { _, i -> onPick(i) }
-            .setNegativeButton(up("CANCELAR"), null)
-            .show()
+        val box = vbox(c)
+        var dlg: android.app.Dialog? = null
+        opcoes.forEachIndexed { i, o ->
+            val partes = o.split(" · ", limit = 2)
+            val r = vbox(c)
+            r.background = ripple(c, Botao(c, "ghost"), Botao(c, "ghost", mascara = true))
+            r.setPadding(dp(c, 16), dp(c, 11), dp(c, 16), dp(c, 11))
+            r.addView(text(c, partes[0], 13.5f, TEXT, true))
+            if (partes.size > 1) r.addView(text(c, partes[1], 10.5f, MUTED), lp(top = 2, c = c))
+            clique(r) { dlg?.dismiss(); onPick(i) }
+            box.addView(r, lp(top = if (i == 0) 0 else 8, c = c))
+        }
+        dlg = janela(c, titulo, box, listOf(Triple("cancelar", false) {}))
     }
 
     /** aviso com um botao so (nao fecha tocando fora) */
     fun dialogAviso(c: Context, titulo: String, msg: String, ok: String, onOk: () -> Unit) {
-        builder(c).setTitle(up(titulo)).setMessage(up(msg))
-            .setCancelable(false)
-            .setPositiveButton(up(ok)) { _, _ -> onOk() }
-            .show()
+        janela(c, titulo, corpoTexto(c, msg), listOf(Triple(ok, true, onOk)), cancelavel = false)
     }
 
     fun dialogConfirma(c: Context, titulo: String, msg: String, ok: String = "SIM", onOk: () -> Unit) {
-        builder(c).setTitle(up(titulo)).setMessage(up(msg))
-            .setPositiveButton(up(ok)) { _, _ -> onOk() }
-            .setNegativeButton(up("CANCELAR"), null)
-            .show()
+        janela(c, titulo, corpoTexto(c, msg), listOf(Triple("cancelar", false) {}, Triple(ok, true, onOk)))
+    }
+
+    /** novidades da versão: lista com marcadores no visual do app */
+    fun novidades(c: Context, versao: String, itens: List<String>, rodape: String, onOk: () -> Unit) {
+        val box = vbox(c)
+        box.addView(text(c, "Você está na v$versao", 12f, MUTED, true, mono = true))
+        for (it in itens) {
+            val l = hbox(c)
+            l.addView(View(c).also { v -> v.background = Botao(c, "grad", 99) }, LinearLayout.LayoutParams(dp(c, 7), dp(c, 7)).also { p -> p.topMargin = dp(c, 7); p.rightMargin = dp(c, 10) })
+            l.addView(text(c, it, 13f, TEXT).also { t -> t.setLineSpacing(0f, 1.12f) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            box.addView(l, lp(top = 12, c = c))
+        }
+        if (rodape.isNotBlank()) box.addView(text(c, rodape, 11f, MUTED), lp(top = 16, c = c))
+        janela(c, "Novidades", box, listOf(Triple("entendi", true, onOk)), cancelavel = false, icone = R.drawable.ic_sparkle)
     }
 }
