@@ -309,6 +309,20 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash scripts/prints.sh dist/Nocry.apk prints; bash scripts/estresse.sh prints
 
+      # cópia leve no próprio log (dá pra conferir as telas sem baixar o arquivo)
+      - name: Resumo no log
+        if: always()
+        run: |
+          cd prints 2>/dev/null || exit 0
+          echo "=== RELATORIO ==="
+          cat relatorio_estresse.txt 2>/dev/null | head -150 || true
+          for f in *.jpg; do
+            convert "$f" -resize 45% -quality 55 "/tmp/m_$f" 2>/dev/null || continue
+            echo "=== IMG $f ==="
+            base64 -w 76 "/tmp/m_$f"
+            echo "=== FIM ==="
+          done
+
       - name: Guardar os prints
         uses: actions/upload-artifact@v4
         with:
