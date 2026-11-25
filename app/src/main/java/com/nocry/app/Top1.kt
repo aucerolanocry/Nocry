@@ -176,7 +176,7 @@ private object Tempo {
 
 /** som da entrada, gerado no próprio celular (nada de música de fora): ronco subindo, explosão e o carimbo */
 private object SomTop1 {
-    private const val TAXA = 44100
+    private const val TAXA = 22050
     @Volatile private var faixa: android.media.AudioTrack? = null
 
     private fun gerar(): ShortArray {
@@ -226,7 +226,7 @@ private object SomTop1 {
     @Volatile private var cache: ShortArray? = null
 
     /** gera o som uma vez (fica guardado); chame fora da tela principal */
-    fun preparar() { if (cache == null) cache = try { gerar() } catch (_: Throwable) { null } }
+    @Synchronized fun preparar() { if (cache == null) cache = try { gerar() } catch (_: Throwable) { null } }
 
     /** toca na hora (o som já tem que estar pronto, senão fica sem som pra não atrasar) */
     fun tocar() {

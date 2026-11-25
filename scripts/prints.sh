@@ -79,11 +79,11 @@ if [ -z "${TELAS:-}" ] || echo " $TELAS " | grep -q " 36_rank "; then
   adb shell am start -n $PKG/$ACT --es tela rank --es fonte "$FONTE" >/dev/null
   sleep 1
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
-  adb shell screenrecord --time-limit 12 /sdcard/rank.mp4
+  adb shell screenrecord --time-limit 18 /sdcard/rank.mp4
   adb pull /sdcard/rank.mp4 "$OUT/cru/rank.mp4" >/dev/null 2>&1
-  ffmpeg -v error -i "$OUT/cru/rank.mp4" -vf "fps=3,scale=432:-1" "$OUT/cru/36_rank_%02d.png" 2>/dev/null
-  ls "$OUT"/cru/36_rank_*.png | head -24 | tail -18 > /tmp/rk.txt
-  montage $(cat /tmp/rk.txt) -tile 6x3 -geometry 432x960+6+6 -background '#111111' "$OUT/36_rank.jpg" 2>/dev/null
+  ffmpeg -v error -i "$OUT/cru/rank.mp4" -vf "fps=2,scale=432:-1" "$OUT/cru/36_rank_%02d.png" 2>/dev/null
+  ls "$OUT"/cru/36_rank_*.png | head -36 | tail -24 > /tmp/rk.txt
+  montage $(cat /tmp/rk.txt) -tile 8x3 -geometry 432x960+6+6 -background '#111111' "$OUT/36_rank.jpg" 2>/dev/null
   echo "ok 36_rank"
 fi
 shot 29_atalhos_grade home 0
