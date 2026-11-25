@@ -86,7 +86,7 @@ class EfeitoCartao(c: Context, private val tipo: String) : View(c) {
     override fun onDraw(cv: Canvas) {
         if (width <= 0) return
         val mais = Efeitos.noCartao(cv, path, 0f, 0f, width.toFloat(), height.toFloat(), d, 7, tipo, 1.7f)
-        if (mais && isAttachedToWindow) postInvalidateOnAnimation()
+        if (mais && isAttachedToWindow) postInvalidateDelayed(33)
     }
 }
 
@@ -136,7 +136,7 @@ class AnelGiratorio @JvmOverloads constructor(c: Context, a: AttributeSet? = nul
             pBrilho.shader = RadialGradient(x, y, 7f * d, intArrayOf(Color.WHITE, Theme.alpha(cores[1], 0x90), Color.TRANSPARENT), floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)
             cv.drawCircle(x, y, 7f * d, pBrilho)
         }
-        if (isAttachedToWindow) postInvalidateOnAnimation()
+        if (isAttachedToWindow) postInvalidateDelayed(33)
     }
 }
 
@@ -193,7 +193,7 @@ class BordaViva @JvmOverloads constructor(c: Context, a: AttributeSet? = null) :
             trecho(pos - comp * 0.45f, pos, 2f * d, Color.WHITE, 0xFF)
         }
         canvas = null
-        if (isAttachedToWindow) postInvalidateOnAnimation()
+        if (isAttachedToWindow) postInvalidateDelayed(33)
     }
 }
 
@@ -218,7 +218,7 @@ class TextoBrilho(c: Context) : TextView(c) {
         sh?.setLocalMatrix(m)
         paint.shader = sh
         super.onDraw(cv)
-        if (isAttachedToWindow) postInvalidateOnAnimation()
+        if (isAttachedToWindow) postInvalidateDelayed(33)
     }
 }
 
@@ -449,7 +449,7 @@ private class FundoTop1(c: Context, private val inicio: Long) : View(c) {
             flash(Tempo.BOOM, 420f, 255)
             flash(Tempo.CARIMBO, 220f, 120)
         }
-        if (isAttachedToWindow) postInvalidateOnAnimation()
+        if (isAttachedToWindow) postInvalidateDelayed(33)
     }
 }
 
