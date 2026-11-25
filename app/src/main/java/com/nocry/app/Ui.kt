@@ -226,7 +226,7 @@ object Ui {
             "sala" in t || "bot" in t -> R.drawable.ic_crown
             "partida" in t || "free fire" in t -> R.drawable.ic_gamepad
             "testar" in t || "passo" in t -> R.drawable.ic_check
-            "conquista" in t || "rank" in t -> R.drawable.ic_stat
+            "conquista" in t || "rank" in t -> R.drawable.ic_trofeu
             "key" in t -> R.drawable.ic_key
             "erro" in t -> R.drawable.ic_warn
             "amig" in t || "esperando" in t || "pedido" in t -> R.drawable.ic_user
