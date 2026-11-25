@@ -56,11 +56,11 @@ object Comunidade {
 
     fun avisoParaMostrar(): Pair<Long, String>? {
         val a = aviso ?: return null
-        return if (Prefs.extraLong("aviso_visto") == a.first) null else a
+        return if (Prefs.lerNum("aviso_visto") == a.first) null else a
     }
 
     fun dispensaAviso() {
-        aviso?.let { Prefs.extraLong("aviso_visto", it.first) }
+        aviso?.let { Prefs.gravaNum("aviso_visto", it.first) }
         versao++
     }
 
@@ -74,10 +74,10 @@ object Comunidade {
         if (sup > supNovas && sup > 0 && !Presenca.naTela) notifica(app, ID_SUPORTE, "A staff respondeu", "Toque pra ver a resposta no NOCRY", "ajuda")
         supNovas = sup
         val ev = j.optLong("evmax", 0L)
-        val visto = Prefs.extraLong("ev_visto")
-        if (ev > 0 && visto == 0L) Prefs.extraLong("ev_visto", ev)            // primeira vez: só guarda, não avisa do que já existia
+        val visto = Prefs.lerNum("ev_visto")
+        if (ev > 0 && visto == 0L) Prefs.gravaNum("ev_visto", ev)            // primeira vez: só guarda, não avisa do que já existia
         else if (ev > visto) {
-            Prefs.extraLong("ev_visto", ev)
+            Prefs.gravaNum("ev_visto", ev)
             notifica(app, ID_EVENTO_NOVO, "Evento novo no NOCRY", "Toque pra ver e participar", "eventos")
         }
         evMax = ev
@@ -284,7 +284,7 @@ object Partida {
         lista.put(o)
         val final = if (lista.length() > 30) JSONArray().also { n -> for (i in lista.length() - 30 until lista.length()) n.put(lista.get(i)) } else lista
         Prefs.extraTxt("partidas", final.toString())
-        if (Prefs.extraLong("partida_notif", 1L) == 1L) {
+        if (Prefs.lerNum("partida_notif", 1L) == 1L) {
             Comunidade.notifica(Sys.app, ID_NOTIF, "Partida encerrada · " + (dur / 60000) + " min", resumo(o), "partidas")
         }
     }
@@ -403,7 +403,7 @@ object Conquistas {
         val ganhas = cad.count { it.res == "g" }
         val partidas = Partida.lista().length()
         val seguidos = diasSeguidos()
-        val toque = Prefs.extraLong("toque_melhor_media", 0L)
+        val toque = Prefs.lerNum("toque_melhor_media", 0L)
         return listOf(
             C("aposta1", "Primeira aposta", "O bot pegou sua primeira aposta", cad.isNotEmpty()),
             C("ganhou10", "10 vitórias", "Marcou 10 salas como ganhas", ganhas >= 10),
@@ -411,8 +411,8 @@ object Conquistas {
             C("partida1", "Primeira partida", "Fechou o Free Fire com relatório", partidas >= 1),
             C("partidas20", "Viciado", "20 partidas com relatório", partidas >= 20),
             C("dias7", "7 dias seguidos", "Abriu o app 7 dias seguidos", seguidos >= 7),
-            C("evento1", "Primeiro evento", "Se inscreveu num evento", Prefs.extraLong("ev_inscreveu") == 1L),
-            C("amigo1", "Tem parceiro", "Fez a primeira amizade no app", Prefs.extraLong("amigos_n") >= 1),
+            C("evento1", "Primeiro evento", "Se inscreveu num evento", Prefs.lerNum("ev_inscreveu") == 1L),
+            C("amigo1", "Tem parceiro", "Fez a primeira amizade no app", Prefs.lerNum("amigos_n") >= 1),
             C("reflexo", "Reflexo rápido", "Média abaixo de 300 ms no teste de toque", toque in 1..299)
         )
     }
@@ -676,7 +676,7 @@ class CadernoScreen(a: MainActivity) : Screen(a) {
 // ---------------------------------------------------------------- PARTIDAS (relatórios)
 class PartidasScreen(a: MainActivity) : Screen(a) {
     override val titulo = "Partidas"
-    override fun key(): String = "${Comunidade.versao}|${Partida.jogando}|${Sys.acessibilidadeLigada()}|${Prefs.extraLong("partida_notif", 1L)}"
+    override fun key(): String = "${Comunidade.versao}|${Partida.jogando}|${Sys.acessibilidadeLigada()}|${Prefs.lerNum("partida_notif", 1L)}"
 
     override fun render() {
         limpa()
@@ -686,8 +686,8 @@ class PartidasScreen(a: MainActivity) : Screen(a) {
             add(Ui.dica(c, "Ligue a acessibilidade do NOCRY (passo na Conexão). É ela que percebe quando o Free Fire abre e fecha.", Ui.Dica.AVISO), 12)
         }
         if (Partida.jogando) add(Ui.dica(c, "Free Fire aberto agora: o relatório sai quando você fechar.", Ui.Dica.OK), 12)
-        add(Ui.toggle(c, "Avisar no fim da partida", "Notificação com o resumo quando fechar o jogo", Prefs.extraLong("partida_notif", 1L) == 1L) {
-            Prefs.extraLong("partida_notif", if (it) 1L else 0L); redesenha()
+        add(Ui.toggle(c, "Avisar no fim da partida", "Notificação com o resumo quando fechar o jogo", Prefs.lerNum("partida_notif", 1L) == 1L) {
+            Prefs.gravaNum("partida_notif", if (it) 1L else 0L); redesenha()
         }, 12)
         val l = Partida.lista()
         add(Ui.secao(c, "últimas partidas"), 20)
@@ -804,8 +804,8 @@ class TesteToqueScreen(a: MainActivity) : Screen(a) {
         res.put(JSONObject().put("t", System.currentTimeMillis()).put("comp", comp).put("media", media).put("melhor", t.minOrNull() ?: 0L))
         val final = if (res.length() > 10) JSONArray().also { n -> for (i in res.length() - 10 until res.length()) n.put(res.get(i)) } else res
         Prefs.extraTxt("toque_res", final.toString())
-        val melhor = Prefs.extraLong("toque_melhor_media", 0L)
-        if (melhor == 0L || media < melhor) Prefs.extraLong("toque_melhor_media", media)
+        val melhor = Prefs.lerNum("toque_melhor_media", 0L)
+        if (melhor == 0L || media < melhor) Prefs.gravaNum("toque_melhor_media", media)
         Ui.toast(act, "MÉDIA: $media ms")
     }
 }
@@ -857,7 +857,7 @@ class EventosScreen(a: MainActivity) : Screen(a) {
                     val ok = j?.optBoolean("ok") == true
                     if (ok) {
                         EventoReceiver.agenda(act, id, e.optString("nome"), quando, !eu)
-                        if (!eu) Prefs.extraLong("ev_inscreveu", 1L)
+                        if (!eu) Prefs.gravaNum("ev_inscreveu", 1L)
                     }
                     Bg.ui { ocupado = false; Ui.toast(act, if (ok) (if (eu) "VOCÊ SAIU DO EVENTO" else "INSCRITO! TE AVISO ANTES") else Comunidade.motivo(j)); busca() }
                 }
@@ -891,7 +891,7 @@ class AmigosScreen(a: MainActivity) : Screen(a) {
                 if (j?.optBoolean("ok") == true) {
                     dados = j
                     val n = j.optJSONArray("amigos")?.let { a -> (0 until a.length()).count { a.optJSONObject(it)?.optString("estado") == "amigo" } } ?: 0
-                    Prefs.extraLong("amigos_n", n.toLong())
+                    Prefs.gravaNum("amigos_n", n.toLong())
                 } else if (j?.optString("reason") == "sem_perfil") Prefs.extraTxt("am_codigo", null)
                 redesenha()
             }

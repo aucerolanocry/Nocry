@@ -376,7 +376,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         // ---------------- extras: ajuda, amigos, eventos, caderninho, partidas, teste de toque ----------------
         add(Ui.secao(c, "mais"), 22)
         val hoje = Caderno.resumo(Caderno.inicioDoDia())
-        val toque = Prefs.extraLong("toque_melhor_media", 0L)
+        val toque = Prefs.lerNum("toque_melhor_media", 0L)
         val extras = listOf(
             Ui.tile(c, R.drawable.ic_info, "Ajuda", "Testar o app e falar com a staff",
                 if (Comunidade.supNovas > 0) "${Comunidade.supNovas} resposta(s)" else "suporte", if (Comunidade.supNovas > 0) true else null) { act.abre(AjudaScreen(act)) },
