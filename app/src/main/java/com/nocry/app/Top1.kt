@@ -163,108 +163,293 @@ class TextoBrilho(c: Context) : TextView(c) {
     }
 }
 
-/** fundo da entrada do top 1: escurece, raios girando, brilho no meio e confete dourado caindo */
-private class FundoTop1(c: Context) : View(c) {
+/**
+ * Linha do tempo da entrada (ms). Tudo — som, tremida, flash, onda e o texto — sai daqui,
+ * então fica sincronizado.
+ */
+private object Tempo {
+    const val BOOM = 950L        // a explosão: flash branco, onda de choque, a foto aparece
+    const val CARIMBO = 1500L    // "TOP 1" bate na tela
+    const val NOME = 1950L       // o nome aparece (com um brilho subindo)
+    const val FIM = 5600L        // começa a sumir
+}
+
+/** som da entrada, gerado no próprio celular (nada de música de fora): ronco subindo, explosão e o carimbo */
+private object SomTop1 {
+    private const val TAXA = 44100
+    @Volatile private var faixa: android.media.AudioTrack? = null
+
+    private fun gerar(): ShortArray {
+        val total = (TAXA * 3.2).toInt()
+        val b = FloatArray(total)
+        val rnd = Random(7)
+        var ruido = 0f
+        fun env(t: Double, ini: Double, ataque: Double, queda: Double): Double =
+            if (t < ini) 0.0 else if (t < ini + ataque) (t - ini) / ataque else Math.exp(-(t - ini - ataque) / queda)
+        for (i in 0 until total) {
+            val t = i / TAXA.toDouble()
+            // ronco subindo até a explosão
+            val sobe = (t / (Tempo.BOOM / 1000.0)).coerceIn(0.0, 1.0)
+            var s = if (t < Tempo.BOOM / 1000.0) sobe * sobe * 0.35 * Math.sin(2 * Math.PI * (38 + 40 * sobe) * t) else 0.0
+            ruido = 0.96f * ruido + 0.04f * (rnd.nextFloat() * 2f - 1f)
+            if (t < Tempo.BOOM / 1000.0) s += sobe * sobe * sobe * 0.9 * ruido
+            // explosão: grave caindo + estalo de ruído
+            val tb = t - Tempo.BOOM / 1000.0
+            if (tb >= 0) {
+                val f = 70 * Math.exp(-tb * 3) + 32
+                s += 0.95 * env(t, Tempo.BOOM / 1000.0, 0.004, 0.55) * Math.sin(2 * Math.PI * f * tb)
+                s += 0.7 * env(t, Tempo.BOOM / 1000.0, 0.002, 0.09) * (rnd.nextFloat() * 2 - 1)
+                s += 0.35 * env(t, Tempo.BOOM / 1000.0, 0.01, 0.6) * ruido * 3
+            }
+            // carimbo do TOP 1: batida seca + brilho agudo
+            val tc = t - Tempo.CARIMBO / 1000.0
+            if (tc >= 0) {
+                s += 0.7 * env(t, Tempo.CARIMBO / 1000.0, 0.002, 0.16) * Math.sin(2 * Math.PI * (120 * Math.exp(-tc * 8) + 55) * tc)
+                s += 0.12 * env(t, Tempo.CARIMBO / 1000.0, 0.01, 0.9) * (Math.sin(2 * Math.PI * 1318.5 * tc) + 0.6 * Math.sin(2 * Math.PI * 1975.5 * tc))
+            }
+            // nome: brilho subindo (arpejo rapidinho)
+            val tn = t - Tempo.NOME / 1000.0
+            if (tn >= 0) {
+                val nota = doubleArrayOf(987.8, 1318.5, 1760.0, 2637.0)
+                val k = (tn / 0.07).toInt()
+                if (k < nota.size) s += 0.07 * Math.exp(-(tn - k * 0.07) * 18) * Math.sin(2 * Math.PI * nota[k] * tn)
+                else s += 0.06 * Math.exp(-(tn - 0.28) * 2.5) * Math.sin(2 * Math.PI * 2637.0 * tn)
+            }
+            b[i] = s.toFloat()
+        }
+        // normaliza sem estourar
+        var pico = 0.01f
+        for (x in b) pico = maxOf(pico, kotlin.math.abs(x))
+        return ShortArray(total) { (b[it] / pico * 0.92f * Short.MAX_VALUE).toInt().toShort() }
+    }
+
+    @Volatile private var cache: ShortArray? = null
+
+    /** gera o som uma vez (fica guardado); chame fora da tela principal */
+    fun preparar() { if (cache == null) cache = try { gerar() } catch (_: Throwable) { null } }
+
+    /** toca na hora (o som já tem que estar pronto, senão fica sem som pra não atrasar) */
+    fun tocar() {
+        parar()
+        val pcm = cache ?: return
+        run {
+            try {
+                val at = android.media.AudioTrack.Builder()
+                    .setAudioAttributes(android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_GAME)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                    .setAudioFormat(android.media.AudioFormat.Builder()
+                        .setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(TAXA).setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO).build())
+                    .setTransferMode(android.media.AudioTrack.MODE_STATIC)
+                    .setBufferSizeInBytes(pcm.size * 2).build()
+                at.write(pcm, 0, pcm.size)
+                faixa = at
+                at.play()
+            } catch (_: Throwable) {}
+        }
+    }
+
+    fun parar() {
+        val f = faixa ?: return
+        faixa = null
+        try { f.stop() } catch (_: Throwable) {}
+        try { f.release() } catch (_: Throwable) {}
+    }
+}
+
+/**
+ * Fundo da entrada: até a explosão, escuro com faíscas sendo puxadas pro meio; na explosão,
+ * flash branco, onda de choque, estilhaços voando, depois raios girando e confete dourado.
+ */
+private class FundoTop1(c: Context, private val inicio: Long) : View(c) {
     private val d = c.resources.displayMetrics.density
-    private val inicio = SystemClock.uptimeMillis()
     private val pRaio = Paint(Paint.ANTI_ALIAS_FLAG)
     private val pLuz = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val pConf = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val pPart = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val pOnda = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val raio = Path()
 
-    private class Conf(var x: Float, var y: Float, val vy: Float, val vx: Float, val giro: Float, val tam: Float, val cor: Int, var ang: Float)
-    private val confetes = ArrayList<Conf>()
+    private class P(var x: Float, var y: Float, var vx: Float, var vy: Float, val giro: Float, val tam: Float, val cor: Int, var ang: Float)
+    private val puxadas = ArrayList<P>()
+    private val estilhacos = ArrayList<P>()
+    private val confetes = ArrayList<P>()
     private var ultimo = 0L
+    private var explodiu = false
+    private val cores = intArrayOf(Ouro.MEIO, Ouro.CLARO, Ouro.FUNDO, Color.WHITE)
 
-    private fun nasce(w: Float, topo: Boolean): Conf {
-        val cores = intArrayOf(Ouro.MEIO, Ouro.CLARO, Ouro.FUNDO, Color.WHITE)
-        return Conf(Random.nextFloat() * w, if (topo) -Random.nextFloat() * 200f * d else Random.nextFloat() * height,
-            (120f + Random.nextFloat() * 220f) * d, (Random.nextFloat() - 0.5f) * 60f * d, (Random.nextFloat() - 0.5f) * 540f,
-            (3f + Random.nextFloat() * 4f) * d, cores[Random.nextInt(cores.size)], Random.nextFloat() * 360f)
-    }
+    private fun confete(w: Float, h: Float, topo: Boolean) = P(Random.nextFloat() * w, if (topo) -Random.nextFloat() * 200f * d else Random.nextFloat() * h * 0.3f - h * 0.3f,
+        (Random.nextFloat() - 0.5f) * 60f * d, (120f + Random.nextFloat() * 220f) * d, (Random.nextFloat() - 0.5f) * 540f,
+        (3f + Random.nextFloat() * 4f) * d, cores[Random.nextInt(cores.size)], Random.nextFloat() * 360f)
 
     override fun onDraw(cv: Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0f) return
         val agora = SystemClock.uptimeMillis()
         val ms = agora - inicio
-        val dt = if (ultimo == 0L) 0f else (agora - ultimo) / 1000f
+        val dt = if (ultimo == 0L) 0f else ((agora - ultimo) / 1000f).coerceAtMost(0.05f)
         ultimo = agora
         val cx = w / 2f; val cy = h * 0.4f
-        // fundo escuro
-        cv.drawColor(Theme.alpha(Color.BLACK, (min(1f, ms / 350f) * 0xE6).toInt()))
-        // raios girando
-        val giro = ms / 30f
-        val alcance = maxOf(w, h)
-        for (i in 0 until 14) {
-            val a0 = Math.toRadians((giro + i * 360f / 14).toDouble())
-            val a1 = Math.toRadians((giro + i * 360f / 14 + 9f).toDouble())
-            raio.reset()
-            raio.moveTo(cx, cy)
-            raio.lineTo(cx + (alcance * cos(a0)).toFloat(), cy + (alcance * sin(a0)).toFloat())
-            raio.lineTo(cx + (alcance * cos(a1)).toFloat(), cy + (alcance * sin(a1)).toFloat())
-            raio.close()
-            pRaio.shader = RadialGradient(cx, cy, alcance * 0.75f, intArrayOf(Theme.alpha(Ouro.MEIO, 0x46), Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
-            cv.drawPath(raio, pRaio)
-        }
-        // brilho no meio, pulsando
-        val pulso = 1f + 0.08f * sin(ms / 260.0).toFloat()
-        pLuz.shader = RadialGradient(cx, cy, 170f * d * pulso, intArrayOf(Theme.alpha(Ouro.MEIO, 0x70), Theme.alpha(Ouro.FUNDO, 0x20), Color.TRANSPARENT), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
-        cv.drawCircle(cx, cy, 170f * d * pulso, pLuz)
-        // confete
-        if (confetes.isEmpty()) repeat(70) { confetes.add(nasce(w, false)) }
-        for (k in confetes.indices) {
-            val f = confetes[k]
-            f.y += f.vy * dt; f.x += f.vx * dt; f.ang += f.giro * dt
-            if (f.y > h + 20f * d) confetes[k] = nasce(w, true)
-            pConf.color = f.cor
-            cv.save()
-            cv.rotate(f.ang, f.x, f.y)
-            cv.drawRect(f.x - f.tam / 2f, f.y - f.tam, f.x + f.tam / 2f, f.y + f.tam, pConf)
-            cv.restore()
+        cv.drawColor(Theme.alpha(Color.BLACK, (min(1f, ms / 300f) * 0xEE).toInt()))
+
+        if (ms < Tempo.BOOM) {
+            // antes da explosão: faíscas sendo sugadas pro centro, cada vez mais rápido
+            val forca = ms / Tempo.BOOM.toFloat()
+            if (puxadas.isEmpty()) repeat(90) {
+                val a = Random.nextFloat() * 6.283f
+                val r = (0.45f + Random.nextFloat() * 0.6f) * maxOf(w, h)
+                puxadas.add(P(cx + r * cos(a), cy + r * sin(a), 0f, 0f, 0f, (1.5f + Random.nextFloat() * 2f) * d, cores[Random.nextInt(cores.size)], 0f))
+            }
+            for (p in puxadas) {
+                val dx = cx - p.x; val dy = cy - p.y
+                val k = (0.6f + forca * forca * 5f) * dt
+                p.x += dx * k; p.y += dy * k
+                pPart.color = p.cor
+                pPart.alpha = (120 + 135 * forca).toInt().coerceAtMost(255)
+                cv.drawLine(p.x, p.y, p.x - dx * 0.06f, p.y - dy * 0.06f, pPart.also { it.strokeWidth = p.tam })
+            }
+            // núcleo de luz crescendo
+            val rn = (12f + 60f * forca * forca) * d
+            pLuz.shader = RadialGradient(cx, cy, rn, intArrayOf(Color.WHITE, Theme.alpha(Ouro.MEIO, 0xA0), Color.TRANSPARENT), floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)
+            cv.drawCircle(cx, cy, rn, pLuz)
+        } else {
+            val tb = ms - Tempo.BOOM
+            if (!explodiu) {
+                explodiu = true
+                repeat(80) {
+                    val a = Random.nextFloat() * 6.283f
+                    val v = (300f + Random.nextFloat() * 900f) * d
+                    estilhacos.add(P(cx, cy, v * cos(a), v * sin(a), (Random.nextFloat() - 0.5f) * 900f, (2f + Random.nextFloat() * 5f) * d, cores[Random.nextInt(cores.size)], Random.nextFloat() * 360f))
+                }
+                repeat(70) { confetes.add(confete(w, h, false)) }
+            }
+            // raios girando (entram junto com a explosão)
+            val giro = ms / 26f
+            val alcance = maxOf(w, h)
+            val forcaRaio = min(1f, tb / 400f)
+            for (i in 0 until 16) {
+                val a0 = Math.toRadians((giro + i * 360f / 16).toDouble())
+                val a1 = Math.toRadians((giro + i * 360f / 16 + 8f).toDouble())
+                raio.reset()
+                raio.moveTo(cx, cy)
+                raio.lineTo(cx + (alcance * cos(a0)).toFloat(), cy + (alcance * sin(a0)).toFloat())
+                raio.lineTo(cx + (alcance * cos(a1)).toFloat(), cy + (alcance * sin(a1)).toFloat())
+                raio.close()
+                pRaio.shader = RadialGradient(cx, cy, alcance * 0.75f, intArrayOf(Theme.alpha(Ouro.MEIO, (0x50 * forcaRaio).toInt()), Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
+                cv.drawPath(raio, pRaio)
+            }
+            // brilho no meio pulsando
+            val pulso = 1f + 0.08f * sin(ms / 240.0).toFloat()
+            pLuz.shader = RadialGradient(cx, cy, 175f * d * pulso, intArrayOf(Theme.alpha(Ouro.MEIO, 0x78), Theme.alpha(Ouro.FUNDO, 0x22), Color.TRANSPARENT), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+            cv.drawCircle(cx, cy, 175f * d * pulso, pLuz)
+            // ondas de choque (a da explosão e a do carimbo)
+            fun onda(desde: Long, dur: Float, maxR: Float, larg: Float) {
+                val t = (ms - desde) / dur
+                if (t < 0f || t > 1f) return
+                val e = 1f - (1f - t) * (1f - t)
+                pOnda.strokeWidth = larg * d * (1f - t) + 1f
+                pOnda.color = Color.WHITE
+                pOnda.alpha = ((1f - t) * 255).toInt()
+                cv.drawCircle(cx, cy, maxR * e, pOnda)
+                pOnda.color = Ouro.MEIO
+                pOnda.alpha = ((1f - t) * 140).toInt()
+                pOnda.strokeWidth = larg * 3f * d * (1f - t) + 1f
+                cv.drawCircle(cx, cy, maxR * e * 0.94f, pOnda)
+            }
+            onda(Tempo.BOOM, 700f, maxOf(w, h), 10f)
+            onda(Tempo.BOOM + 120, 900f, maxOf(w, h) * 0.8f, 5f)
+            onda(Tempo.CARIMBO, 520f, w * 0.75f, 6f)
+            // estilhaços voando pra fora
+            for (p in estilhacos) {
+                p.x += p.vx * dt; p.y += p.vy * dt
+                p.vx *= 0.985f; p.vy = p.vy * 0.985f + 300f * d * dt
+                p.ang += p.giro * dt
+                if (p.y > h + 40f * d) continue
+                pPart.color = p.cor
+                pPart.alpha = (255 * (1f - (tb / 2200f)).coerceIn(0f, 1f)).toInt()
+                cv.save(); cv.rotate(p.ang, p.x, p.y)
+                cv.drawRect(p.x - p.tam, p.y - p.tam / 2.5f, p.x + p.tam, p.y + p.tam / 2.5f, pPart)
+                cv.restore()
+            }
+            // confete caindo
+            for (k in confetes.indices) {
+                val f = confetes[k]
+                f.y += f.vy * dt; f.x += f.vx * dt; f.ang += f.giro * dt
+                if (f.y > h + 20f * d) confetes[k] = confete(w, h, true)
+                pPart.color = f.cor
+                pPart.alpha = 255
+                cv.save(); cv.rotate(f.ang, f.x, f.y)
+                cv.drawRect(f.x - f.tam / 2f, f.y - f.tam, f.x + f.tam / 2f, f.y + f.tam, pPart)
+                cv.restore()
+            }
+            // flash branco da explosão e um menor no carimbo
+            fun flash(desde: Long, dur: Float, forca: Int) {
+                val t = (ms - desde) / dur
+                if (t in 0f..1f) cv.drawColor(Theme.alpha(Color.WHITE, ((1f - t) * (1f - t) * forca).toInt()))
+            }
+            flash(Tempo.BOOM, 420f, 255)
+            flash(Tempo.CARIMBO, 220f, 120)
         }
         if (isAttachedToWindow) postInvalidateOnAnimation()
     }
 }
 
 /**
- * Entrada do top 1 (o dono): ao abrir o rank, a tela escurece, raios e confete dourado,
- * a foto entra girando com o anel, "TOP 1" e o nome brilhando. Toque pra pular; some sozinha.
+ * Entrada do top 1 (o dono): tela escurece e puxa faíscas pro meio (som subindo) → EXPLOSÃO
+ * (flash, onda de choque, tremida, vibração) com a foto aparecendo → "TOP 1" carimba na tela →
+ * o nome sobe brilhando. Tudo na mesma linha do tempo do som. Toque pra pular.
  */
 object IntroTop1 {
+    @Volatile private var abrindo = false
+
+    /** deixa o som pronto antes (chamado quando o rank abre) */
+    fun preparar() = SomTop1.preparar()
+
+    /** prepara o som e só então começa: assim som, explosão e texto saem juntos */
     fun mostrar(act: Activity, foto: Bitmap?, nome: String, frase: String) {
+        if (abrindo) return
+        abrindo = true
+        Bg.io {
+            SomTop1.preparar()
+            Bg.ui {
+                abrindo = false
+                if (!act.isFinishing) try { comecar(act, foto, nome, frase) } catch (_: Throwable) {}
+            }
+        }
+    }
+
+    private fun comecar(act: Activity, foto: Bitmap?, nome: String, frase: String) {
         val raiz = act.window?.decorView as? ViewGroup ?: return
         val c = act
         val d = c.resources.displayMetrics.density
         fun dp(v: Int) = (v * d).toInt()
+        val inicio = SystemClock.uptimeMillis()
 
         val camada = FrameLayout(c)
         camada.isClickable = true
-        camada.addView(FundoTop1(c), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        camada.addView(FundoTop1(c, inicio), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
         val col = LinearLayout(c)
         col.orientation = LinearLayout.VERTICAL
         col.gravity = Gravity.CENTER_HORIZONTAL
 
-        // foto + anel
         val caixa = FrameLayout(c)
-        val anel = AnelGiratorio(c).also { it.espessura = 4f; it.periodo = 1600L }
+        val anel = AnelGiratorio(c).also { it.espessura = 4f; it.periodo = 1500L }
         caixa.addView(anel, FrameLayout.LayoutParams(dp(220), dp(220)))
         val fv = FotoPerfil(c)
         fv.fixa = foto
         caixa.addView(fv, FrameLayout.LayoutParams(dp(168), dp(168), Gravity.CENTER))
         col.addView(caixa, LinearLayout.LayoutParams(dp(220), dp(220)))
 
-        // coroa + TOP 1
         val linha = LinearLayout(c)
         linha.gravity = Gravity.CENTER
         linha.addView(Ui.icone(c, R.drawable.ic_crown, Ouro.MEIO, 34), LinearLayout.LayoutParams(dp(34), dp(34)).also { it.rightMargin = dp(10) })
         val top = TextoBrilho(c)
         top.text = "TOP 1"
-        top.textSize = 46f
-        top.typeface = Ui.text(c, "x", 46f, Color.WHITE, true).typeface
+        top.textSize = 48f
+        top.typeface = Ui.text(c, "x", 48f, Color.WHITE, true).typeface
         top.letterSpacing = 0.12f
-        top.setShadowLayer(18f, 0f, 0f, Theme.alpha(Ouro.FUNDO, 0xC0))
+        top.setShadowLayer(22f, 0f, 0f, Theme.alpha(Ouro.FUNDO, 0xD0))
         linha.addView(top)
         col.addView(linha, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(14) })
 
@@ -282,7 +467,6 @@ object IntroTop1 {
 
         val fr = Ui.text(c, frase.ifBlank { "criador do NOCRY" }, 13f, Color.WHITE, false)
         fr.gravity = Gravity.CENTER
-        fr.alpha = 0.85f
         col.addView(fr, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(10) })
 
         val pular = Ui.text(c, "toque pra continuar", 10f, Theme.alpha(Color.WHITE, 0x99), true, mono = true)
@@ -291,26 +475,65 @@ object IntroTop1 {
         camada.addView(col, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER).also { it.bottomMargin = dp(60) })
         raiz.addView(camada, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        // entrada: a foto cresce girando, depois o texto sobe um por um
-        caixa.scaleX = 0.15f; caixa.scaleY = 0.15f; caixa.alpha = 0f; caixa.rotation = -200f
-        caixa.animate().scaleX(1f).scaleY(1f).alpha(1f).rotation(0f).setDuration(900).setInterpolator(OvershootInterpolator(1.4f)).start()
-        listOf(linha, nm, selo, fr, pular).forEachIndexed { i, v ->
-            v.alpha = 0f; v.translationY = 40f * d
-            v.animate().alpha(if (v === pular) 0.8f else 1f).translationY(0f).setStartDelay(550L + i * 170L).setDuration(520).setInterpolator(DecelerateInterpolator(2f)).start()
+        // tudo escondido até a explosão
+        for (v in listOf(caixa, linha, nm, selo, fr, pular)) v.alpha = 0f
+
+        // som (gerado aqui) começa junto com a linha do tempo
+        SomTop1.tocar()
+
+        // tremida: cresce antes da explosão, forte na explosão, menor no carimbo
+        val tremer = ValueAnimator.ofFloat(0f, 1f)
+        tremer.duration = Tempo.FIM
+        tremer.addUpdateListener {
+            val ms = SystemClock.uptimeMillis() - inicio
+            val amp = when {
+                ms < Tempo.BOOM -> 3f * (ms / Tempo.BOOM.toFloat()).let { x -> x * x }
+                ms < Tempo.BOOM + 600 -> 16f * (1f - (ms - Tempo.BOOM) / 600f)
+                ms in Tempo.CARIMBO..(Tempo.CARIMBO + 350) -> 8f * (1f - (ms - Tempo.CARIMBO) / 350f)
+                else -> 0f
+            } * d
+            col.translationX = (Random.nextFloat() * 2f - 1f) * amp
+            col.translationY = (Random.nextFloat() * 2f - 1f) * amp
         }
-        linha.scaleX = 2.2f; linha.scaleY = 2.2f
-        linha.animate().scaleX(1f).scaleY(1f).setStartDelay(550).setDuration(520).setInterpolator(OvershootInterpolator(2f)).start()
-        camada.postDelayed({ try { camada.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS) } catch (_: Throwable) {} }, 600)
+        tremer.start()
+
+        fun vibra(forte: Boolean) {
+            try { camada.performHapticFeedback(if (forte) HapticFeedbackConstants.LONG_PRESS else HapticFeedbackConstants.KEYBOARD_TAP, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING) } catch (_: Throwable) {}
+        }
+
+        // BOOM: a foto aparece de uma vez (grande → certinho), girando
+        camada.postDelayed({
+            vibra(true)
+            caixa.alpha = 1f; caixa.scaleX = 1.9f; caixa.scaleY = 1.9f; caixa.rotation = 25f
+            caixa.animate().scaleX(1f).scaleY(1f).rotation(0f).setDuration(520).setInterpolator(OvershootInterpolator(1.6f)).start()
+        }, Tempo.BOOM)
+
+        // carimbo do TOP 1: entra gigante e bate
+        camada.postDelayed({
+            vibra(true)
+            linha.alpha = 1f; linha.scaleX = 3.2f; linha.scaleY = 3.2f
+            linha.animate().scaleX(1f).scaleY(1f).setDuration(260).setInterpolator(DecelerateInterpolator(2.5f)).start()
+        }, Tempo.CARIMBO)
+
+        // nome, selo e frase sobem em sequência
+        listOf(nm, selo, fr, pular).forEachIndexed { i, v ->
+            v.translationY = 36f * d
+            v.animate().alpha(if (v === pular) 0.8f else 1f).translationY(0f)
+                .setStartDelay(Tempo.NOME + i * 160L).setDuration(480).setInterpolator(DecelerateInterpolator(2f)).start()
+        }
+        camada.postDelayed({ vibra(false) }, Tempo.NOME)
 
         var saiu = false
         val sair = {
             if (!saiu) {
                 saiu = true
+                tremer.cancel()
+                SomTop1.parar()
                 camada.animate().alpha(0f).setStartDelay(0).setDuration(450).withEndAction { try { raiz.removeView(camada) } catch (_: Throwable) {} }.start()
             }
         }
         camada.setOnClickListener { sair() }
-        camada.postDelayed({ sair() }, 4300)
+        camada.postDelayed({ sair() }, Tempo.FIM)
     }
 }
 

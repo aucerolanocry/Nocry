@@ -973,6 +973,7 @@ class RankScreen(a: MainActivity) : Screen(a) {
         carregando = true; erro = false
         redesenha()
         Bg.io {
+            try { IntroTop1.preparar() } catch (_: Throwable) {}
             try { Rank.enviar(act, forcar = true) } catch (_: Throwable) {}
             val l = if (BuildConfig.PREVIEW) listOf(
                 Rank.Linha("Aucerola", 42, 7, 380.0, 120, 9, true, 900, true, "o mais brabo do NOCRY", 520.0, 49, mapOf(3.5 to 20, 10.0 to 15)),

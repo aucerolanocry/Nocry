@@ -73,12 +73,16 @@ shot 27_eventos eventos
 shot 28_amigos amigos
 # rank: a entrada do top 1 é animada, então tira várias fotos seguidas
 if [ -z "${TELAS:-}" ] || echo " $TELAS " | grep -q " 36_rank "; then
+  # grava a tela e tira 12 quadros (a cada 0,5 s) do vídeo
+  adb shell screenrecord --time-limit 9 /sdcard/rank.mp4 &
+  sleep 0.5
   adb shell am force-stop $PKG
   adb shell am start -n $PKG/$ACT --es tela rank --es fonte "$FONTE" >/dev/null
-  sleep 2.5
-  for i in 1 2 3 4 5 6 7 8; do adb exec-out screencap -p > "$OUT/cru/36_rank_$i.png"; sleep 0.6; done
-  sleep 3; adb exec-out screencap -p > "$OUT/cru/36_rank_9.png"
-  montage "$OUT"/cru/36_rank_[1-9].png -tile 9x1 -geometry 432x960+6+0 -background '#111111' "$OUT/36_rank.jpg" 2>/dev/null
+  wait
+  adb pull /sdcard/rank.mp4 "$OUT/cru/rank.mp4" >/dev/null 2>&1
+  ffmpeg -v error -i "$OUT/cru/rank.mp4" -vf "fps=2,scale=432:-1" "$OUT/cru/36_rank_%02d.png" 2>/dev/null
+  ls "$OUT"/cru/36_rank_*.png | head -16 | tail -12 > /tmp/rk.txt
+  montage $(cat /tmp/rk.txt) -tile 6x2 -geometry 432x960+6+6 -background '#111111' "$OUT/36_rank.jpg" 2>/dev/null
   echo "ok 36_rank"
 fi
 shot 29_atalhos_grade home 0
