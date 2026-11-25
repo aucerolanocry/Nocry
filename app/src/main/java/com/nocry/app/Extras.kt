@@ -442,7 +442,8 @@ object Caderno {
 // =====================================================================================
 object Rank {
     class Linha(val apelido: String, val vit: Int, val der: Int, val valor: Double, val byp: Int, val seq: Int, val eu: Boolean,
-                val uso: Int = 0, val dono: Boolean = false, val frase: String = "")
+                val uso: Int = 0, val dono: Boolean = false, val frase: String = "",
+                val jog: Double = 0.0, val salas: Int = 0, val vals: Map<Double, Int> = emptyMap())
 
     /** tempo com o app aberto (em ms), no total e no mês */
     fun contaUso(ms: Long) {
@@ -487,7 +488,11 @@ object Rank {
         fun per(nome: String, desde: Long, byp: Long, uso: Long): JSONObject {
             val r = Caderno.resumo(desde)
             val ganho = Caderno.itens().filter { it.t >= desde && it.res == "g" }.sumOf { it.valor }
+            val doPer = Caderno.itens().filter { it.t >= desde }
+            val vals = JSONObject()
+            doPer.filter { it.valor > 0 }.groupingBy { it.valor }.eachCount().forEach { (v, n) -> vals.put(v.toString(), n) }
             return JSONObject().put("per", nome).put("vit", r.ganhou).put("der", r.perdeu).put("valor", ganho)
+                .put("jog", doPer.sumOf { it.valor }).put("salas", doPer.size).put("vals", vals)
                 .put("byp", byp).put("seq", Caderno.sequencia(desde)).put("uso", uso / 60000L)
         }
         val apelido = Prefs.apelido.ifEmpty { License.label() }.ifEmpty { "jogador" }
@@ -503,7 +508,11 @@ object Rank {
         val a = j.optJSONArray("lista") ?: return emptyList()
         return (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o ->
             Linha(o.optString("apelido"), o.optInt("vit"), o.optInt("der"), o.optDouble("valor", 0.0), o.optInt("byp"), o.optInt("seq"), o.optBoolean("eu"),
-                o.optInt("uso"), o.optBoolean("dono"), o.optString("frase"))
+                o.optInt("uso"), o.optBoolean("dono"), o.optString("frase"),
+                o.optDouble("jog", 0.0), o.optInt("salas"), try {
+                    val v = JSONObject(o.optString("vals", "{}"))
+                    v.keys().asSequence().mapNotNull { k -> k.toDoubleOrNull()?.let { it to v.optInt(k) } }.toMap()
+                } catch (_: Throwable) { emptyMap() })
         } }
     }
 }
@@ -900,6 +909,10 @@ class CadernoScreen(a: MainActivity) : Screen(a) {
         card.addView(Ui.text(c, "SALDO", 10.5f, Ui.MUTED, true, mono = true))
         card.addView(Ui.text(c, Caderno.dinheiro(r.saldo), 30f, if (r.saldo > 0) Ui.OK else if (r.saldo < 0) Ui.BAD else Ui.TEXT, true), Ui.lp(top = 2, c = c))
         card.addView(linhaValor(c, "Salas", "${r.salas}"), Ui.lp(top = 10, c = c))
+        val doPer = Caderno.itens().filter { it.t >= desde }
+        card.addView(linhaValor(c, "Total jogado", "R$ " + String.format(Locale("pt", "BR"), "%.2f", doPer.sumOf { it.valor })), Ui.lp(top = 6, c = c))
+        val porValor = doPer.filter { it.valor > 0 }.groupingBy { it.valor }.eachCount().entries.sortedByDescending { it.key }
+        if (porValor.isNotEmpty()) card.addView(linhaValor(c, "Valores", porValor.joinToString("  ·  ") { "R$ " + String.format(Locale("pt", "BR"), "%.2f", it.key) + " ${it.value}x" }), Ui.lp(top = 6, c = c))
         card.addView(linhaValor(c, "Ganhou", "${r.ganhou}", Ui.OK), Ui.lp(top = 6, c = c))
         card.addView(linhaValor(c, "Perdeu", "${r.perdeu}", Ui.BAD), Ui.lp(top = 6, c = c))
         card.addView(linhaValor(c, "Sem resultado", "${r.salas - r.ganhou - r.perdeu}"), Ui.lp(top = 6, c = c))
@@ -982,10 +995,25 @@ class RankScreen(a: MainActivity) : Screen(a) {
         val itens = listOf(
             cel("${r.vit}", "vitórias", Ui.OK),
             cel("R$ " + String.format(Locale("pt", "BR"), "%.0f", r.valor), "ganho", Ui.OK),
+            cel("R$ " + String.format(Locale("pt", "BR"), "%.0f", r.jog), "jogado", Ui.TEXT),
             cel("${r.byp}", "bypass", Ui.TEXT),
             cel(Rank.tempo(r.uso), "no app", Ui.TEXT))
         itens.forEachIndexed { i, v -> l.addView(v, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i > 0) it.leftMargin = Ui.dp(c, 6) }) }
         return l
+    }
+
+    /** toque numa pessoa: todos os valores que ela jogou */
+    private fun detalhes(r: Rank.Linha) {
+        val br = Locale("pt", "BR")
+        val sb = StringBuilder()
+        sb.append("${r.salas} salas jogadas · R$ ${String.format(br, "%.2f", r.jog)} no total\n")
+        sb.append("${r.vit} vitórias · ${r.der} derrotas · R$ ${String.format(br, "%.2f", r.valor)} ganho\n\n")
+        if (r.vals.isEmpty()) sb.append("Ainda sem valores anotados.")
+        else {
+            sb.append("VALORES JOGADOS\n")
+            for ((v, n) in r.vals.entries.sortedByDescending { it.key }) sb.append("R$ ${String.format(br, "%.2f", v)}  ·  ${n}x\n")
+        }
+        Ui.dialogAviso(act, r.apelido.uppercase(), sb.toString().trim(), "FECHAR") {}
     }
 
     private fun cartao(r: Rank.Linha, pos: Int): View {
@@ -1001,6 +1029,7 @@ class RankScreen(a: MainActivity) : Screen(a) {
         h.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         k.addView(h)
         k.addView(numeros(r, false), Ui.lp(top = 10, c = c))
+        Ui.clique(k) { detalhes(r) }
         return k
     }
 
@@ -1032,6 +1061,7 @@ class RankScreen(a: MainActivity) : Screen(a) {
         k.addView(topo)
         k.addView(numeros(r, true), Ui.lp(top = 14, c = c))
         if (r.seq >= 2) k.addView(Ui.text(c, "${r.seq} vitórias seguidas · ${r.der} derrotas", 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
+        Ui.clique(k) { detalhes(r) }
         return k
     }
 
@@ -1040,9 +1070,10 @@ class RankScreen(a: MainActivity) : Screen(a) {
         val c = act
         cabecalho(titulo, "Quem mais ganhou e quem mais usou bypass entre todo mundo do Nocry. Aparece o seu apelido do Estúdio.")
         add(Ui.segmento(c, listOf("Este mês", "Geral"), if (mes) 0 else 1) { mes = it == 0; carregar() }, 14)
-        add(Ui.segmento(c, listOf("Vitórias", "R$", "Bypass", "Tempo"), when (por) { "valor" -> 1; "byp" -> 2; "uso" -> 3; else -> 0 }) {
-            por = when (it) { 1 -> "valor"; 2 -> "byp"; 3 -> "uso"; else -> "vit" }; carregar()
+        add(Ui.segmento(c, listOf("Vitórias", "Ganho", "Jogado", "Bypass", "Tempo"), when (por) { "valor" -> 1; "jog" -> 2; "byp" -> 3; "uso" -> 4; else -> 0 }) {
+            por = when (it) { 1 -> "valor"; 2 -> "jog"; 3 -> "byp"; 4 -> "uso"; else -> "vit" }; carregar()
         }, 8)
+        add(Ui.text(c, "Toque numa pessoa pra ver todos os valores que ela jogou.", 10f, Ui.MUTED), 6)
         val l = linhas
         when {
             carregando && l == null -> { add(Ui.dica(c, "Carregando o rank...", Ui.Dica.INFO), 14); return }
