@@ -801,6 +801,15 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             Ui.dialogConfirma(c, "CANCELAR SALA", "Ele clica em cancelar/sair na sala e volta a procurar nessa org.", "CANCELAR") { Sniper.cancelar() }
         }, pesoUm(8))
         b.addView(linha)
+        // pix: QR code e copiar de qualquer chave (já vem com a última chave que apareceu na sala)
+        if (sa != null) {
+            b.addView(Ui.button(c, "pix · qr code e copiar chave", Ui.Kind.GHOST, R.drawable.ic_copy) {
+                val ultima = sa.chat.toList().asReversed().firstNotNullOfOrNull { m ->
+                    copiaveis(m.texto + "\n" + m.card).firstOrNull { it.first == "chave pix" }?.second
+                }
+                Pix.abrir(act, ultima, Caderno.valorDe(sa.fila))
+            }, Ui.lp(top = 8, c = c))
+        }
         // go automático: clica no botão de go que a org manda (e nos próximos dessa sala)
         if (sa != null) {
             val ligado = sa.goAuto

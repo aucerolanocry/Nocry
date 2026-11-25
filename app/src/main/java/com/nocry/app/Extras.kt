@@ -1125,6 +1125,44 @@ object Pix {
         b
     } catch (_: Throwable) { null }
 
+    /** janela pra qualquer chave: já vem com a última chave da sala (se tiver) e o valor da sala; dá pra trocar */
+    fun abrir(c: Context, sugerida: String?, valor: Double) {
+        val box = Ui.vbox(c)
+        box.setPadding(Ui.dp(c, 20), Ui.dp(c, 8), Ui.dp(c, 20), 0)
+        box.addView(Ui.text(c, if (sugerida != null) "Achei essa chave na sala. Pode trocar por outra." else "Cole ou digite a chave pix (e-mail, CPF, CNPJ, telefone ou aleatória).", 11.5f, Ui.MUTED))
+        val k = Ui.field(c, "chave pix", false)
+        k.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        if (sugerida != null) k.setText(sugerida)
+        box.addView(k, Ui.lp(top = 10, c = c))
+        val v = Ui.field(c, "valor (opcional)", false)
+        v.inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        if (valor > 0) v.setText(String.format(Locale.US, "%.2f", valor))
+        box.addView(v, Ui.lp(top = 8, c = c))
+        val d = android.app.AlertDialog.Builder(c, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            .setTitle("PIX · QR CODE")
+            .setView(box)
+            .setPositiveButton("GERAR QR", null)
+            .setNeutralButton("COPIAR CHAVE", null)
+            .setNegativeButton("FECHAR", null)
+            .create()
+        d.setOnShowListener {
+            fun chave(): String? = k.text.toString().trim().ifEmpty { null }.also { if (it == null) Ui.toast(c, "Digite a chave pix") }
+            d.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val ch = chave() ?: return@setOnClickListener
+                d.dismiss()
+                mostrar(c, ch, v.text.toString().replace(',', '.').toDoubleOrNull() ?: 0.0)
+            }
+            d.getButton(android.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                val ch = chave() ?: return@setOnClickListener
+                try {
+                    (c.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("pix", normaliza(ch)))
+                    Ui.toast(c, "CHAVE PIX COPIADA")
+                } catch (_: Throwable) {}
+            }
+        }
+        d.show()
+    }
+
     /** janela com o QR, o valor e os botões de copiar */
     fun mostrar(c: Context, chave: String, valor: Double) {
         val payload = copiaECola(chave, valor)
