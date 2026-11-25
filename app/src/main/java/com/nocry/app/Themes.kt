@@ -59,12 +59,14 @@ class Tema(
     val vidro: Int,
     val fundo: String,
     val scanner: Boolean = false,
+    /** efeito animado nos cartões (Efeitos.kt); "" = nenhum */
+    val efeito: String = "",
     /** desfoque do fundo (-1 = deixa como a pessoa escolheu) */
     val blur: Int = -1
 )
 
 object Temas {
-    val FUNDOS = listOf("brasas", "grade", "aurora", "sol", "chuva", "neve", "petalas", "ouro", "noite")
+    val FUNDOS = listOf("brasas", "grade", "aurora", "sol", "chuva", "neve", "petalas", "ouro", "noite", "inferno", "sangue", "caveiras", "tempestade", "toxico", "vazio")
 
     fun nomeFundo(id: String): String = when (id) {
         "brasas" -> "Brasas"
@@ -78,6 +80,9 @@ object Temas {
         "caveiras" -> "Caveiras"
         "sangue" -> "Sangue"
         "inferno" -> "Inferno"
+        "tempestade" -> "Tempestade"
+        "toxico" -> "Tóxico"
+        "vazio" -> "Vazio"
         else -> "Noite"
     }
 
@@ -99,6 +104,14 @@ object Temas {
         Tema("grafite", "Grafite", "Corporativo, clean", 0xFF9FB4C7.toInt(), 0xFF3E6FA8.toInt(), 0xFF0A0C10.toInt(), "contorno", "instrument", 16, 1, 35, 45, "noite"),
         Tema("platina", "Platina", "Executivo, elegante", 0xFFE4E4EC.toInt(), 0xFF7B6CFF.toInt(), 0xFF08090D.toInt(), "vidro", "outfit", 20, 1, 30, 45, "grade"),
         Tema("nebulosa", "Nebulosa", "Roxo profundo, misterioso", 0xFFB388FF.toInt(), 0xFF5B2A9E.toInt(), 0xFF08050F.toInt(), "vidro", "bricolage", 26, 1, 60, 50, "noite"),
+        // temas animados: fundo vivo + efeito nos cartões (dá pra trocar o efeito e a força em Estúdio › Efeitos)
+        Tema("t_inferno", "Inferno", "Chamas lambendo os cartões", 0xFFFF7A1A.toInt(), 0xFFFF2A00.toInt(), 0xFF0A0402.toInt(), "hud", "russo", 2, 2, 80, 78, "inferno", efeito = "inferno", blur = 0),
+        Tema("t_sangue", "Sangue", "Escorrendo pelos cartões", 0xFFFF2337.toInt(), 0xFF8A0014.toInt(), 0xFF0A0203.toInt(), "solido", "gloock", 12, 1, 55, 82, "sangue", efeito = "sangue", blur = 0),
+        Tema("t_tempestade", "Tempestade", "Raios estalando nos cartões", 0xFF9EC9FF.toInt(), 0xFF7A5CFF.toInt(), 0xFF05060E.toInt(), "contorno", "tektur", 10, 1, 70, 70, "tempestade", efeito = "raio", blur = 0),
+        Tema("t_toxico", "Tóxico", "Gosma verde e bolhas", 0xFF5CFF4A.toInt(), 0xFF0FA64A.toInt(), 0xFF020A03.toInt(), "solido", "pixelify", 8, 1, 60, 80, "toxico", efeito = "toxico", blur = 0),
+        Tema("t_gelo", "Ártico", "Pingentes e neve nos cartões", 0xFFE6F6FF.toInt(), 0xFF6FC8FF.toInt(), 0xFF060A12.toInt(), "vidro", "instrument", 20, 1, 50, 55, "neve", efeito = "gelo", blur = 0),
+        Tema("t_vazio", "Vazio", "Buraco negro girando", 0xFFC9A0FF.toInt(), 0xFFFF6BD8.toInt(), 0xFF05030A.toInt(), "vidro", "bricolage", 24, 1, 65, 55, "vazio", efeito = "vazio", blur = 0),
+        Tema("t_morte", "Morte", "Caveiras e névoa", 0xFFE8E2D4.toInt(), 0xFFB3121F.toInt(), 0xFF050505.toInt(), "contorno", "bigs", 6, 1, 45, 80, "caveiras", efeito = "morte", blur = 0),
         Tema("esmeralda", "Esmeralda", "Verde elegante, sofisticado", 0xFF4FD1A5.toInt(), 0xFF1B6E52.toInt(), 0xFF04100A.toInt(), "vidro", "instrument", 22, 1, 45, 55, "grade"),
         // temas de rank: do bronze ao topo, cada um com cor, brilho e letra proprios
         Tema("bronze", "Bronze", "Rank: começo da temporada", 0xFFE0A070.toInt(), 0xFF8C4A2F.toInt(), 0xFF0D0805.toInt(), "solido", "bigs", 6, 1, 45, 80, "brasas"),
@@ -124,6 +137,7 @@ object Temas {
         Prefs.brilho = t.brilho
         // a opacidade dos cartoes e escolha da pessoa (padrao 0 = transparente): trocar de tema nao mexe nela
         Prefs.bgPreset = t.fundo
+        Prefs.extraTxt("efeito_cartao", t.efeito)
         Prefs.scanner = t.scanner
         if (t.blur >= 0) Prefs.bgBlur = t.blur
         if (Prefs.bgTipo == "solido") Prefs.bgTipo = "animado"

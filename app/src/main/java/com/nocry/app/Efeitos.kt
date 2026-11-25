@@ -18,7 +18,13 @@ import kotlin.math.sin
  */
 object Efeitos {
     /** qual efeito o tema escolhido põe nos cartões: "morte", "sangue", "inferno" ou "" */
-    val cartao: String get() = ""
+    /** efeito nos cartões do app (escolhido no Estúdio ou pelo tema); "" = nenhum */
+    val cartao: String get() = Prefs.extraTxt("efeito_cartao") ?: ""
+    /** força escolhida no Estúdio: 1 fraco · 2 médio · 3 forte */
+    val forcaApp: Float get() = when (Prefs.lerNum("efeito_forca", 2L)) { 1L -> 0.8f; 3L -> 1.5f; else -> 1.1f }
+
+    val TODOS = listOf("" to "Nenhum", "sangue" to "Sangue escorrendo", "inferno" to "Fogo", "raio" to "Raios",
+        "toxico" to "Gosma tóxica", "gelo" to "Gelo e neve", "vazio" to "Buraco negro", "aurora" to "Aurora", "glitch" to "Glitch", "morte" to "Caveira")
 
     fun animado(): Boolean = Prefs.anim
 
@@ -84,6 +90,8 @@ object Efeitos {
             "raio" -> raio(cv, l, t, w, h, d, semente, ms)
             "gelo" -> gelo(cv, l, t, w, h, d, semente, ms)
             "glitch" -> glitch(cv, l, t, w, h, d, semente, ms)
+            "vazio" -> vazio(cv, l, t, w, h, d, semente, ms)
+            "aurora" -> aurora(cv, l, t, w, h, d, semente, ms)
             "inferno" -> inferno(cv, l, b, w, h, d, semente, ms)
             "morte" -> morte(cv, l, t, w, h, d, semente, ms)
         }
@@ -358,6 +366,133 @@ object Efeitos {
             cv.drawRect(l + dx - 3f * d, y0, l + w * (0.3f + 0.7f * ruido(k + 4)) + dx - 3f * d, y0 + alt, p)
             p.color = Theme.alpha(0xFF00F0FF.toInt(), 0x50)
             cv.drawRect(l + dx + 3f * d, y0 + 1f * d, l + w * (0.2f + 0.8f * ruido(k + 5)) + dx + 3f * d, y0 + alt + 1f * d, p)
+        }
+    }
+
+    /** buraco negro: um redemoinho roxo puxando partículas pro centro, com anel de luz */
+    private fun vazio(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
+        val tt = ms / 1000f
+        val cx = l + w * 0.78f; val cy = t + h * 0.45f
+        val R = minOf(w, h) * 0.55f * forca
+        // disco de acreção girando
+        cv.save()
+        cv.rotate(tt * 40f, cx, cy)
+        p.shader = android.graphics.SweepGradient(cx, cy, intArrayOf(Color.TRANSPARENT, Theme.alpha(0xFFB46BFF.toInt(), 0x70), Theme.alpha(0xFF5A2BFF.toInt(), 0x30), Color.TRANSPARENT, Theme.alpha(0xFFFF6BD8.toInt(), 0x50), Color.TRANSPARENT), null)
+        cv.drawCircle(cx, cy, R, p)
+        cv.restore()
+        // miolo preto com borda de luz
+        p.shader = RadialGradient(cx, cy, R * 0.42f, intArrayOf(Color.BLACK, Color.BLACK, Theme.alpha(0xFFE0B8FF.toInt(), 0xC0), Color.TRANSPARENT), floatArrayOf(0f, 0.62f, 0.72f, 1f), Shader.TileMode.CLAMP)
+        cv.drawCircle(cx, cy, R * 0.42f, p)
+        p.shader = null
+        // partículas em espiral caindo no centro
+        for (i in 0 until (26 * forca).toInt()) {
+            val per = 2.5f + 2f * ruido(sem + i)
+            val f = ((tt + ruido(sem + i + 7) * per) % per) / per
+            val ang = ruido(sem + i + 3) * 6.283f + f * 7f
+            val rr = R * 1.6f * (1f - f)
+            val x = cx + rr * kotlin.math.cos(ang); val y = cy + rr * kotlin.math.sin(ang) * 0.75f
+            p.color = Theme.alpha(if (i % 3 == 0) 0xFFFFFFFF.toInt() else 0xFFC9A0FF.toInt(), (sin(f * Math.PI).toFloat() * 230).toInt())
+            cv.drawCircle(x, y, (0.8f + 1.4f * (1f - f)) * d, p)
+        }
+    }
+
+    /** aurora: faixas de luz verde/roxa ondulando devagar pelo cartão */
+    private fun aurora(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
+        val tt = ms / 1000f
+        val cores = intArrayOf(0xFF3DFFB4.toInt(), 0xFF7A5CFF.toInt(), 0xFF3AC8FF.toInt())
+        for (k in 0 until 3) {
+            gota.reset()
+            val base = t + h * (0.25f + 0.22f * k)
+            gota.moveTo(l, base)
+            val passos = 16
+            for (i in 0..passos) {
+                val x = l + w * i / passos
+                val y = base + sin(i * 0.55f + tt * (0.6f + 0.2f * k) + k * 2f) * 12f * d * forca + sin(i * 1.3f + tt * 1.4f) * 4f * d
+                gota.lineTo(x, y)
+            }
+            gota.lineTo(l + w, base + 40f * d * forca); gota.lineTo(l, base + 40f * d * forca); gota.close()
+            p.shader = LinearGradient(0f, base - 14f * d, 0f, base + 40f * d * forca, intArrayOf(Theme.alpha(cores[k], 0x70), Theme.alpha(cores[k], 0x18), Color.TRANSPARENT), floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)
+            cv.drawPath(gota, p)
+        }
+        p.shader = null
+        // estrelinhas
+        for (i in 0 until 10) {
+            val a = 0.4f + 0.6f * abs(sin(tt * (1f + ruido(i)) + i))
+            p.color = Theme.alpha(Color.WHITE, (a * 200).toInt())
+            cv.drawCircle(l + w * ruido(sem + i * 2), t + h * ruido(sem + i * 2 + 1) * 0.5f, 1.1f * d, p)
+        }
+    }
+
+    /** fundo Tempestade: chuva caindo de lado e relâmpago iluminando a tela */
+    fun fundoTempestade(cv: Canvas, w: Float, h: Float, t: Float, d: Float) {
+        val ms = (t * 1000).toLong()
+        if (Prefs.particulas) {
+            pb.strokeWidth = 1.2f * d
+            for (i in 0 until 70) {
+                val per = 0.7f + 0.5f * ruido(i)
+                val f = ((t + ruido(i + 30) * per) % per) / per
+                val x = w * ruido(i + 60) + f * 40f * d
+                val y = -40f * d + f * (h + 80f * d)
+                pb.color = Theme.alpha(0xFFB8D4FF.toInt(), 0x50)
+                cv.drawLine(x, y, x - 6f * d, y - 22f * d, pb)
+            }
+        }
+        // relâmpago grande a cada ~5 s
+        val ciclo = 5200L
+        val fase = (ms % ciclo) / ciclo.toFloat()
+        if (fase < 0.06f) {
+            val a = (1f - fase / 0.06f) * (if ((ms / 50) % 2 == 0L) 1f else 0.5f)
+            cv.drawColor(Theme.alpha(0xFFC8C0FF.toInt(), (a * 0x50).toInt()))
+            val sem = (ms / ciclo).toInt()
+            gota.reset()
+            var x = w * (0.2f + 0.6f * ruido(sem)); gota.moveTo(x, 0f)
+            for (i in 1..12) { x += (ruido(sem + i) - 0.5f) * w * 0.12f; gota.lineTo(x, h * 0.65f * i / 12) }
+            pb.style = Paint.Style.STROKE
+            for ((lw, al, cor) in listOf(Triple(14f, 0x40, 0xFF7A5CFF.toInt()), Triple(3f, 0xFF, Color.WHITE))) {
+                pb.strokeWidth = lw * d; pb.color = Theme.alpha(cor, (al * a).toInt()); cv.drawPath(gota, pb)
+            }
+            pb.style = Paint.Style.FILL
+        }
+    }
+
+    /** fundo Tóxico: névoa verde e bolhas subindo */
+    fun fundoToxico(cv: Canvas, w: Float, h: Float, t: Float, d: Float) {
+        pb.shader = LinearGradient(0f, h * 0.5f, 0f, h, Color.TRANSPARENT, Theme.alpha(0xFF2BFF4A.toInt(), 0x40), Shader.TileMode.CLAMP)
+        cv.drawRect(0f, h * 0.5f, w, h, pb)
+        pb.shader = null
+        if (!Prefs.particulas) return
+        pb.style = Paint.Style.STROKE
+        for (i in 0 until 30) {
+            val per = 4f + 5f * ruido(i)
+            val f = ((t + ruido(i + 40) * per) % per) / per
+            val x = w * ruido(i + 80) + sin(t * 1.2f + i) * 14f * d
+            val y = h * (1.05f - f * 1.1f)
+            pb.strokeWidth = 1.4f * d
+            pb.color = Theme.alpha(0xFF7DFF6A.toInt(), (sin(f * Math.PI).toFloat() * 170).toInt())
+            cv.drawCircle(x, y, (3f + 7f * ruido(i + 5)) * d, pb)
+        }
+        pb.style = Paint.Style.FILL
+    }
+
+    /** fundo Vazio: buraco negro girando no alto da tela, sugando estrelas */
+    fun fundoVazio(cv: Canvas, w: Float, h: Float, t: Float, d: Float) {
+        val cx = w * 0.5f; val cy = h * 0.3f
+        val R = w * 0.75f
+        cv.save(); cv.rotate(t * 12f, cx, cy)
+        pb.shader = android.graphics.SweepGradient(cx, cy, intArrayOf(Color.TRANSPARENT, Theme.alpha(0xFFB46BFF.toInt(), 0x45), Color.TRANSPARENT, Theme.alpha(0xFFFF6BD8.toInt(), 0x35), Color.TRANSPARENT), null)
+        cv.drawCircle(cx, cy, R, pb)
+        cv.restore()
+        pb.shader = RadialGradient(cx, cy, R * 0.25f, intArrayOf(Color.BLACK, Color.BLACK, Theme.alpha(0xFFE0B8FF.toInt(), 0x90), Color.TRANSPARENT), floatArrayOf(0f, 0.6f, 0.7f, 1f), Shader.TileMode.CLAMP)
+        cv.drawCircle(cx, cy, R * 0.25f, pb)
+        pb.shader = null
+        if (!Prefs.particulas) return
+        for (i in 0 until 60) {
+            val per = 5f + 4f * ruido(i)
+            val f = ((t + ruido(i + 7) * per) % per) / per
+            val ang = ruido(i + 3) * 6.283f + f * 6f
+            val rr = maxOf(w, h) * 0.8f * (1f - f)
+            pb.color = Theme.alpha(Color.WHITE, (sin(f * Math.PI).toFloat() * 200).toInt())
+            cv.drawCircle(cx + rr * kotlin.math.cos(ang), cy + rr * kotlin.math.sin(ang) * 0.8f, (0.8f + 1.2f * (1f - f)) * d, pb)
         }
     }
 

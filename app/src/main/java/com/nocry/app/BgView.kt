@@ -93,6 +93,9 @@ class AnimBg(c: Context) : View(c) {
             "caveiras" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF0E0F10.toInt(), 0xFF050505.toInt(), 0xFF120607.toInt()), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
             "sangue" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF140204.toInt(), 0xFF070102.toInt(), 0xFF1E0306.toInt()), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
             "inferno" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF0A0302.toInt(), 0xFF160603.toInt(), 0xFF3A0C02.toInt()), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+            "tempestade" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF0B0C1C.toInt(), 0xFF05060E.toInt(), 0xFF0E0A1E.toInt()), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
+            "toxico" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF020A03.toInt(), 0xFF041006.toInt(), 0xFF0A2A0C.toInt()), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+            "vazio" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF0C0618.toInt(), 0xFF05030A.toInt(), 0xFF020104.toInt()), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
             else -> null
         }
         raioMancha = max(w, h) * 0.6f
@@ -175,6 +178,9 @@ class AnimBg(c: Context) : View(c) {
             "caveiras" -> Efeitos.fundoCaveiras(cv, w, h, t, d)
             "sangue" -> Efeitos.fundoSangue(cv, w, h, t, d)
             "inferno" -> Efeitos.fundoInferno(cv, w, h, t, d)
+            "tempestade" -> Efeitos.fundoTempestade(cv, w, h, t, d)
+            "toxico" -> Efeitos.fundoToxico(cv, w, h, t, d)
+            "vazio" -> Efeitos.fundoVazio(cv, w, h, t, d)
             else -> desenhaBrasas(cv, w, h, t, c1, c2)
         }
         if (Prefs.scanner) desenhaScanner(cv, w, h, t)

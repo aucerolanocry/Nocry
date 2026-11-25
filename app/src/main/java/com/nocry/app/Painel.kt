@@ -191,7 +191,7 @@ class Painel(
         }
 
         // 3.5) efeito do tema (sangue escorrendo, fogo, caveira): anima sozinho
-        if (Efeitos.noCartao(cv, path, b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(), d, b.width() * 7 + b.height() * 3)) {
+        if (Efeitos.noCartao(cv, path, b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(), d, b.width() * 7 + b.height() * 3, Efeitos.cartao, Efeitos.forcaApp)) {
             unscheduleSelf(redesenha)
             scheduleSelf(redesenha, android.os.SystemClock.uptimeMillis() + 40)
         }

@@ -71,7 +71,8 @@ shot 24_caderno caderno
 shot 25_partidas partidas
 shot 27_eventos eventos
 shot 28_amigos amigos
-for e in ouro sangue brasa raio toxico gelo glitch morte; do PERFIL=$e; shot 38_perfil_${e} rank; done; PERFIL=""
+for e in ouro sangue brasa raio toxico gelo glitch morte vazio aurora; do PERFIL=$e; shot 38_perfil_${e} rank; done; PERFIL=""
+for t in t_inferno t_sangue t_tempestade t_toxico t_gelo t_vazio; do TEMA=$t; shot 39_${t} home; done; TEMA=""
 # rank: a entrada do top 1 é animada, então tira várias fotos seguidas
 if [ -z "${TELAS:-}" ] || echo " $TELAS " | grep -q " 36_rank "; then
   # entrada 6x mais lenta (só no teste) e uma foto por segundo

@@ -625,6 +625,21 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             Ui.itemChave(c, "Linhas de scanner", "listras e uma faixa de luz que varre a tela", Prefs.scanner, R.drawable.ic_sliders) { x -> Prefs.scanner = x; muda() },
             Ui.itemChave(c, "Brilho pulsando", "o anel do início respira", Prefs.pulso, R.drawable.ic_stat) { x -> Prefs.pulso = x; muda() }
         )), 14)
+        run {
+            val atual = Efeitos.TODOS.firstOrNull { it.first == Efeitos.cartao }?.second ?: "Nenhum"
+            add(Ui.grupo(c, "efeito nos cartões", listOf(
+                Ui.item(c, "Efeito", atual + " · toque pra trocar", R.drawable.ic_sparkle, "trocar") {
+                    Ui.dialogEscolha(act, "EFEITO NOS CARTÕES", Efeitos.TODOS.map { it.second }) { i ->
+                        Prefs.extraTxt("efeito_cartao", Efeitos.TODOS[i].first); muda()
+                    }
+                }
+            )), 18)
+            if (Efeitos.cartao.isNotEmpty()) {
+                val f = Prefs.lerNum("efeito_forca", 2L).toInt()
+                add(Ui.segmento(c, listOf("Fraco", "Médio", "Forte"), (f - 1).coerceIn(0, 2)) { i -> Prefs.gravaNum("efeito_forca", (i + 1).toLong()); muda() }, 8)
+                add(Ui.text(c, "O efeito anima em todos os cartões do app. Com as animações desligadas ele fica parado.", 10.5f, Ui.MUTED), 6)
+            }
+        }
         add(Ui.grupo(c, "barra de baixo", listOf(
             Ui.itemChave(c, "Nome em todos os botões", "mostra o nome embaixo de cada ícone (desligado: só o da aba aberta)", Prefs.navNomes, R.drawable.ic_home) { x -> Prefs.navNomes = x; act.reaplica() }
         )), 18)

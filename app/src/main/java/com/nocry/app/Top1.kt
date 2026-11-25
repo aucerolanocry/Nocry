@@ -41,10 +41,10 @@ object Ouro {
 
 /** estilos do perfil do dono no rank: cores (claro, meio, fundo) e o efeito no cartão */
 object EstiloPerfil {
-    val ids = listOf("ouro", "sangue", "brasa", "raio", "toxico", "gelo", "glitch", "morte")
+    val ids = listOf("ouro", "sangue", "brasa", "raio", "vazio", "aurora", "toxico", "gelo", "glitch", "morte")
     fun nome(id: String) = when (id) {
         "sangue" -> "Sangue"; "brasa" -> "Brasa"; "morte" -> "Morte"; "raio" -> "Raio"
-        "toxico" -> "Tóxico"; "gelo" -> "Gelo"; "glitch" -> "Glitch"; else -> "Ouro"
+        "toxico" -> "Tóxico"; "gelo" -> "Gelo"; "glitch" -> "Glitch"; "vazio" -> "Vazio"; "aurora" -> "Aurora"; else -> "Ouro"
     }
     fun desc(id: String) = when (id) {
         "sangue" -> "sangue escorrendo pelo cartão"
@@ -54,6 +54,8 @@ object EstiloPerfil {
         "toxico" -> "gosma verde pingando e bolhas estourando"
         "gelo" -> "pingentes de gelo, cantos congelados e neve"
         "glitch" -> "tela bugando com cores separadas"
+        "vazio" -> "buraco negro girando e puxando estrelas"
+        "aurora" -> "faixas de luz verde e roxa ondulando"
         else -> "luz dourada correndo na borda"
     }
     fun cores(id: String): IntArray = when (id) {
@@ -64,12 +66,14 @@ object EstiloPerfil {
         "toxico" -> intArrayOf(0xFFDFFFD0.toInt(), 0xFF3DFF3A.toInt(), 0xFF0E8A10.toInt())
         "gelo" -> intArrayOf(0xFFFFFFFF.toInt(), 0xFF9EE4FF.toInt(), 0xFF3A8DFF.toInt())
         "glitch" -> intArrayOf(0xFFFFFFFF.toInt(), 0xFF00F0FF.toInt(), 0xFFFF1E4E.toInt())
+        "vazio" -> intArrayOf(0xFFF0E0FF.toInt(), 0xFFC9A0FF.toInt(), 0xFF7A2BFF.toInt())
+        "aurora" -> intArrayOf(0xFFE0FFF4.toInt(), 0xFF3DFFB4.toInt(), 0xFF7A5CFF.toInt())
         else -> intArrayOf(Ouro.CLARO, Ouro.MEIO, Ouro.FUNDO)
     }
     /** efeito do Efeitos.kt pra cada estilo ("" = só a luz na borda) */
     fun efeito(id: String) = when (id) {
         "sangue" -> "sangue"; "brasa" -> "inferno"; "morte" -> "morte"; "raio" -> "raio"
-        "toxico" -> "toxico"; "gelo" -> "gelo"; "glitch" -> "glitch"; else -> ""
+        "toxico" -> "toxico"; "gelo" -> "gelo"; "glitch" -> "glitch"; "vazio" -> "vazio"; "aurora" -> "aurora"; else -> ""
     }
 }
 
