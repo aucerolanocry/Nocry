@@ -73,6 +73,8 @@ shot 27_eventos eventos
 shot 28_amigos amigos
 shot 29_atalhos_grade home 0
 COR=8b5cf6; ESTILO=""; shot 40_estilo_inicio home; shot 40_estilo_estudio estudio; shot 40_estilo_logs log; shot 40_estilo_sobre sobre; shot 40_estilo_bypass bypass
+COR=8b5cf6; ESTILO=""; shot 50_jeito_inicio home; shot 50_jeito_sobre sobre
+for e in A B C; do ESTILO=$e; shot 5${e}_jeito_inicio home; shot 5${e}_jeito_sobre sobre; done; ESTILO=""
 for e in 1 2 3; do ESTILO=$e; shot 4${e}_estilo_inicio home; shot 4${e}_estilo_estudio estudio; shot 4${e}_estilo_logs log; shot 4${e}_estilo_sobre sobre; shot 4${e}_estilo_bypass bypass; done; ESTILO=""; COR=""
 INICIO=D; shot 30_inicio_d home; INICIO=""
 # 2ª passada: tela LARGA (411dp), só as principais, pra conferir que nada ficou pequeno demais

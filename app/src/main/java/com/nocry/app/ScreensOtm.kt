@@ -1020,14 +1020,25 @@ class SobreScreen(a: MainActivity) : Screen(a) {
             }, Ui.lp(top = 14, c = c))
             kc.addView(Ui.dica(c, "No painel, entre com a sua própria key.", Ui.Dica.INFO), Ui.lp(top = 8, c = c))
         }
-        if (License.isOwner() && BuildConfig.API_URL.isNotBlank()) {
-            kc.addView(Ui.button(c, "trocar key de dono", Ui.Kind.GHOST, R.drawable.ic_key) { trocarKeyDono() }, Ui.lp(top = 10, c = c))
-        }
-        kc.addView(Ui.button(c, "sair da key", Ui.Kind.GHOST, R.drawable.ic_logout) {
+        val sair: () -> Unit = {
             Ui.dialogConfirma(act, "SAIR DA KEY", "O app volta para a tela da key e os monitores param (o toque e a tela voltam ao normal).", "SAIR") {
                 License.sair("você saiu")
             }
-        }, Ui.lp(top = 12, c = c))
+        }
+        val jeitoNovo = Ui.estiloBt == "A" || Ui.estiloBt == "B" || Ui.estiloBt == "C"
+        if (jeitoNovo) {
+            // trocar key e sair lado a lado, menores
+            val l = Ui.hbox(c)
+            if (License.isOwner() && BuildConfig.API_URL.isNotBlank())
+                l.addView(Ui.button(c, "trocar key", Ui.Kind.GHOST, R.drawable.ic_key) { trocarKeyDono() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.rightMargin = Ui.dp(c, 8) })
+            l.addView(Ui.button(c, "sair", Ui.Kind.GHOST, R.drawable.ic_logout) { sair() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            kc.addView(l, Ui.lp(top = 12, c = c))
+        } else {
+            if (License.isOwner() && BuildConfig.API_URL.isNotBlank()) {
+                kc.addView(Ui.button(c, "trocar key de dono", Ui.Kind.GHOST, R.drawable.ic_key) { trocarKeyDono() }, Ui.lp(top = 10, c = c))
+            }
+            kc.addView(Ui.button(c, "sair da key", Ui.Kind.GHOST, R.drawable.ic_logout) { sair() }, Ui.lp(top = 12, c = c))
+        }
         add(kc, 16)
 
         // ---------------- atualizacao ----------------
