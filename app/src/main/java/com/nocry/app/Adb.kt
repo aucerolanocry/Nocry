@@ -384,7 +384,11 @@ object AdbAuto {
     @Volatile private var ouvindo = false
 
     /** da pra fazer sozinho: Android 11+, ja conectou antes e tem a permissao */
-    fun pode(): Boolean = Build.VERSION.SDK_INT >= 30 && Prefs.adbJaConectou && Sys.hasWriteSecure()
+    fun pode(): Boolean = Build.VERSION.SDK_INT >= 30 && !BuildConfig.PREVIEW && Prefs.lerNum("adb_auto", 1L) == 1L &&
+        Prefs.adbJaConectou && Sys.hasWriteSecure()
+
+    /** o Android perguntou "permitir nesta rede?" e a pessoa não permitiu: não pergunta de novo por 30 min */
+    private fun negouRecente(): Boolean = System.currentTimeMillis() - Prefs.lerNum("adb_auto_negado") < 30 * 60_000L
 
     private fun noWifi(c: Context): Boolean {
         return try {
@@ -407,6 +411,7 @@ object AdbAuto {
                 Thread.sleep(2000)
                 if (!noWifi(app)) return@io
                 if (!ligada(app)) {
+                    if (negouRecente()) return@io
                     try {
                         Settings.Global.putInt(app.contentResolver, CHAVE, 1)
                     } catch (t: Throwable) {
@@ -418,6 +423,7 @@ object AdbAuto {
                 }
                 for (i in 1..3) {
                     if (Adb.connect(app, 6000)) {
+                        Prefs.gravaNum("adb_auto_negado", 0L)
                         NLog.add("adb", "conectou sozinho ($motivo)")
                         Bg.ui { Engine.onChange?.invoke() }
                         return@io
@@ -425,6 +431,7 @@ object AdbAuto {
                     // o Android voltou pra desligado: rede nova, esta esperando a pessoa tocar em "permitir"
                     if (!ligada(app)) {
                         NLog.add("adb", "rede nova: o Android pediu pra permitir a depuração nesta rede")
+                        Prefs.gravaNum("adb_auto_negado", System.currentTimeMillis())
                         return@io
                     }
                     Thread.sleep(3000)

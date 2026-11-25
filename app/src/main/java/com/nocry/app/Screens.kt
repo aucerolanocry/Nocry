@@ -618,6 +618,11 @@ class SetupScreen(a: MainActivity) : Screen(a) {
                         if (Adb.connect(act.applicationContext, 9000)) "CONECTADO" else "Não conectou: " + Adb.lastError
                     }
                 }, Ui.lp(top = 12, c = c))
+                if (Build.VERSION.SDK_INT >= 30) v.addView(Ui.toggle(c, "Religar sozinho", "Liga a depuração sem fio e conecta quando troca de Wi-Fi ou liga o celular", Prefs.lerNum("adb_auto", 1L) == 1L) {
+                    Prefs.gravaNum("adb_auto", if (it) 1L else 0L)
+                    if (it) { Prefs.gravaNum("adb_auto_negado", 0L); AdbAuto.religar(act, "ligou o religar sozinho") }
+                    redesenha()
+                }, Ui.lp(top = 12, c = c))
                 v.addView(Ui.dica(c, "Trocou de Wi-Fi ou reiniciou o celular? O app religa a depuração e conecta sozinho. Em rede nova, o Android pergunta se pode: marque \"sempre permitir\". Se não voltar, toque aqui.", Ui.Dica.INFO), Ui.lp(top = 12, c = c))
             }
             3 -> {
