@@ -991,23 +991,26 @@ class RankScreen(a: MainActivity) : Screen(a) {
     /** 4 números lado a lado: vitórias, R$, bypass e tempo de app */
     private fun numeros(r: Rank.Linha, claro: Boolean): View {
         val c = act
-        fun cel(v: String, rot: String, cor: Int): View {
+        // um bloco só (antes eram 5 quadradinhos separados): os números lado a lado com uma linha fina entre eles
+        val l = Ui.hbox(c)
+        l.gravity = Gravity.CENTER_VERTICAL
+        l.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, if (claro) 0x16 else 0x0B), Ui.raioPeq(14), Theme.alpha(android.graphics.Color.WHITE, 0x1E), 1)
+        l.setPadding(Ui.dp(c, 2), Ui.dp(c, 8), Ui.dp(c, 2), Ui.dp(c, 8))
+        val br = Locale("pt", "BR")
+        val itens = listOf(
+            Triple("${r.vit}", "vitórias", Ui.OK),
+            Triple("R$" + String.format(br, "%.0f", r.valor), "ganho", Ui.OK),
+            Triple("R$" + String.format(br, "%.0f", r.jog), "jogado", Ui.TEXT),
+            Triple("${r.byp}", "bypass", Ui.TEXT),
+            Triple(Rank.tempo(r.uso), "tempo", Ui.TEXT))
+        itens.forEachIndexed { i, (v, rot, cor) ->
+            if (i > 0) l.addView(View(c).also { it.setBackgroundColor(Theme.alpha(android.graphics.Color.WHITE, 0x1E)) }, LinearLayout.LayoutParams(Ui.dp(c, 1), Ui.dp(c, 26)))
             val b = Ui.vbox(c)
             b.gravity = Gravity.CENTER
-            b.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, if (claro) 0x1C else 0x0E), Ui.raioPeq(12))
-            b.setPadding(Ui.dp(c, 4), Ui.dp(c, 7), Ui.dp(c, 4), Ui.dp(c, 7))
             b.addView(Ui.text(c, v, 12.5f, cor, true).also { Ui.umaLinha(it, 8); it.gravity = Gravity.CENTER })
-            b.addView(Ui.text(c, rot, 8f, Ui.MUTED, true, mono = true).also { Ui.umaLinha(it, 6); it.gravity = Gravity.CENTER }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 2, c = c))
-            return b
+            b.addView(Ui.text(c, rot, 7.5f, Ui.MUTED, true, mono = true).also { Ui.umaLinha(it, 6); it.gravity = Gravity.CENTER }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 2, c = c))
+            l.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
-        val l = Ui.hbox(c)
-        val itens = listOf(
-            cel("${r.vit}", "vitórias", Ui.OK),
-            cel("R$ " + String.format(Locale("pt", "BR"), "%.0f", r.valor), "ganho", Ui.OK),
-            cel("R$ " + String.format(Locale("pt", "BR"), "%.0f", r.jog), "jogado", Ui.TEXT),
-            cel("${r.byp}", "bypass", Ui.TEXT),
-            cel(Rank.tempo(r.uso), "no app", Ui.TEXT))
-        itens.forEachIndexed { i, v -> l.addView(v, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i > 0) it.leftMargin = Ui.dp(c, 6) }) }
         return l
     }
 
@@ -1105,15 +1108,27 @@ class RankScreen(a: MainActivity) : Screen(a) {
         val c = act
         cabecalho(titulo, "Quem mais ganhou e quem mais usou bypass entre todo mundo do Nocry. Aparece o seu apelido do Estúdio.")
         add(Ui.segmento(c, listOf("Este mês", "Geral"), if (mes) 0 else 1) { mes = it == 0; carregar() }, 14)
-        add(Ui.segmento(c, listOf("Vitória", "Ganho", "Jogado", "Bypass", "Tempo"), when (por) { "valor" -> 1; "jog" -> 2; "byp" -> 3; "uso" -> 4; else -> 0 }) {
-            por = when (it) { 1 -> "valor"; 2 -> "jog"; 3 -> "byp"; 4 -> "uso"; else -> "vit" }; carregar()
-        }, 8)
+        run {
+            // ordenar: um botão só que abre as opções
+            val nomes = listOf("vit" to "Vitórias", "valor" to "R$ ganho", "jog" to "R$ jogado", "byp" to "Bypass", "uso" to "Tempo no app")
+            val atual = nomes.firstOrNull { it.first == por }?.second ?: "Vitórias"
+            val b = Ui.hbox(c)
+            b.gravity = Gravity.CENTER_VERTICAL
+            b.background = Ui.ripple(c, Botao(c, "ghost"), Botao(c, "ghost", mascara = true))
+            b.setPadding(Ui.dp(c, 14), Ui.dp(c, 10), Ui.dp(c, 12), Ui.dp(c, 10))
+            b.addView(Ui.icone(c, R.drawable.ic_sliders, Ui.MUTED, 15), LinearLayout.LayoutParams(Ui.dp(c, 15), Ui.dp(c, 15)).also { it.rightMargin = Ui.dp(c, 8) })
+            b.addView(Ui.text(c, "ordenar por", 10.5f, Ui.MUTED, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            b.addView(Ui.text(c, atual, 12f, Ui.TEXT, true))
+            b.addView(Ui.icone(c, R.drawable.ic_chevron, Ui.MUTED, 14).also { it.rotation = 90f }, LinearLayout.LayoutParams(Ui.dp(c, 14), Ui.dp(c, 14)).also { it.leftMargin = Ui.dp(c, 6) })
+            Ui.clique(b) { Ui.dialogEscolha(act, "ORDENAR POR", nomes.map { it.second }) { i -> por = nomes[i].first; carregar() } }
+            add(b, 8)
+        }
         add(Ui.text(c, "Toque numa pessoa pra ver todos os valores que ela jogou.", 10f, Ui.MUTED), 6)
         val l = linhas
         when {
             carregando && l == null -> { add(Ui.dica(c, "Carregando o rank...", Ui.Dica.INFO), 14); return }
             erro -> { add(Ui.dica(c, "Sem internet agora. Toque pra tentar de novo.", Ui.Dica.AVISO).also { v -> Ui.clique(v) { carregar() } }, 14); return }
-            l.isNullOrEmpty() -> { add(Ui.dica(c, "Ninguém pontuou ainda nesse período. As vitórias entram sozinhas pelo Caderno.", Ui.Dica.INFO), 14); return }
+            l.isNullOrEmpty() && !License.isOwner() -> { add(Ui.dica(c, "Ninguém pontuou ainda nesse período. As vitórias entram sozinhas pelo Caderno.", Ui.Dica.INFO), 14); return }
         }
         if (License.isOwner() || BuildConfig.PREVIEW) add(Ui.button(c, "editar meu perfil do rank", Ui.Kind.GHOST, R.drawable.ic_crown) {
             Ui.dialogEscolha(act, "MEU PERFIL DO RANK", listOf("Estilo: " + EstiloPerfil.nome(Rank.estilo), "Frase embaixo do nome")) { o ->
@@ -1122,9 +1137,12 @@ class RankScreen(a: MainActivity) : Screen(a) {
                 } else Ui.dialogTexto(act, "FRASE DO SEU PERFIL", "aparece embaixo do seu nome no topo do rank") { v -> Rank.frase = v; carregar() }
             }
         }, 12)
-        // o dono é sempre o 1º: o resto começa no 2º
-        var pos = if (l!!.any { it.dono }) 1 else 0
-        for (r in l) {
+        // o dono é sempre o 1º (se o servidor não mandou o dono e eu sou o dono, o meu cartão entra mesmo assim)
+        val lista = (l ?: emptyList()).let { x ->
+            if (License.isOwner() && x.none { it.dono }) listOf(Rank.Linha(Prefs.apelido.ifEmpty { "dono" }, 0, 0, 0.0, 0, 0, true, 0, true, Rank.frase, estilo = Rank.estilo)) + x else x
+        }
+        var pos = if (lista.any { it.dono }) 1 else 0
+        for (r in lista) {
             if (r.dono) { add(cartaoDono(r), 14); continue }
             pos++
             add(cartao(r, pos), 8)

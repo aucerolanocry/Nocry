@@ -80,6 +80,10 @@ object Efeitos {
         cv.clipPath(path)
         when (tipo) {
             "sangue" -> sangue(cv, l, t, w, h, d, semente, ms)
+            "toxico" -> { sangue(cv, l, t, w, h, d, semente, ms, 0xFF0E5A10.toInt(), 0xFF3DFF3A.toInt(), 0xFFB8FF9A.toInt()); bolhas(cv, l, t, w, h, d, semente, ms) }
+            "raio" -> raio(cv, l, t, w, h, d, semente, ms)
+            "gelo" -> gelo(cv, l, t, w, h, d, semente, ms)
+            "glitch" -> glitch(cv, l, t, w, h, d, semente, ms)
             "inferno" -> inferno(cv, l, b, w, h, d, semente, ms)
             "morte" -> morte(cv, l, t, w, h, d, semente, ms)
         }
@@ -88,8 +92,8 @@ object Efeitos {
     }
 
     /** sangue: uma faixa escorrendo pela borda de cima e gotas que crescem, soltam e caem */
-    private fun sangue(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
-        val escuro = 0xFF5A0008.toInt(); val vivo = 0xFFC4001A.toInt(); val brilho = 0xFFFF4A5A.toInt()
+    private fun sangue(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long,
+                       escuro: Int = 0xFF5A0008.toInt(), vivo: Int = 0xFFC4001A.toInt(), brilho: Int = 0xFFFF4A5A.toInt()) {
         // faixa de cima com a beirada ondulada
         gota.reset()
         gota.moveTo(l, t)
@@ -179,13 +183,182 @@ object Efeitos {
         val tt = ms / 1000f
         // névoa cinza atravessando o cartão
         val nx = l + ((tt * 18f * d + sem * 40f) % (w * 2f)) - w * 0.5f
-        p.shader = RadialGradient(nx, t + h * 0.7f, maxOf(w, h) * 0.6f, Theme.alpha(0xFFBFC4C8.toInt(), 0x22), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        p.shader = RadialGradient(nx, t + h * 0.7f, maxOf(w, h) * 0.6f, Theme.alpha(0xFFBFC4C8.toInt(), (0x22 * forca).toInt().coerceAtMost(0x60)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        cv.drawRect(l, t, l + w, t + h, p)
+        val nx2 = l + w - ((tt * 11f * d + sem * 70f) % (w * 2f)) + w * 0.5f
+        p.shader = RadialGradient(nx2, t + h * 0.3f, maxOf(w, h) * 0.5f, Theme.alpha(0xFF8A8F96.toInt(), (0x18 * forca).toInt().coerceAtMost(0x50)), Color.TRANSPARENT, Shader.TileMode.CLAMP)
         cv.drawRect(l, t, l + w, t + h, p)
         p.shader = null
         // caveira grande no canto de baixo à direita, cortada pela borda
-        val tam = minOf(h * 1.05f, 120f * d)
+        val tam = minOf(h * 1.05f, 120f * d * forca)
         val brilho = 0.35f + 0.65f * (0.5f + 0.5f * sin(tt * 1.6f + sem)).let { it * it }
-        caveira(cv, l + w - tam * 0.38f, t + h - tam * 0.32f, tam, 0xFFE8E2D4.toInt(), 0x1E, 0xFFFF1E2D.toInt(), brilho * 0.55f)
+        caveira(cv, l + w - tam * 0.38f, t + h - tam * 0.32f, tam, 0xFFE8E2D4.toInt(), (0x1E * forca * forca).toInt().coerceAtMost(0x70), 0xFFFF1E2D.toInt(), brilho * (0.55f + 0.3f * (forca - 1f)))
+        // no perfil: caveirinhas subindo pelo cartão
+        if (forca > 1.2f) for (i in 0 until 5) {
+            val per = 5f + 3f * ruido(sem + i)
+            val f = ((tt + ruido(sem + i + 9) * per) % per) / per
+            val x = l + w * (0.1f + 0.6f * ruido(sem + i + 20)) + sin(tt + i) * 8f * d
+            val y = t + h * (1.1f - f * 1.25f)
+            cv.save(); cv.rotate(sin(tt * 0.8f + i) * 15f, x, y)
+            caveira(cv, x, y, (14f + 10f * ruido(i + 3)) * d, 0xFFE8E2D4.toInt(), (sin(f * Math.PI).toFloat() * 0x70).toInt(), 0xFFFF1E2D.toInt(), 0.6f)
+            cv.restore()
+        }
+    }
+
+    /** tóxico: bolhas verdes subindo e estourando */
+    private fun bolhas(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
+        val tt = ms / 1000f
+        p.style = Paint.Style.STROKE
+        for (i in 0 until (8 * forca).toInt()) {
+            val per = 2.2f + 2.5f * ruido(sem + i)
+            val f = ((tt + ruido(sem + i + 5) * per) % per) / per
+            val x = l + w * ruido(sem + i + 11) + sin(tt * 2f + i) * 5f * d
+            val y = t + h * (1.02f - f * 0.9f)
+            val r = (2f + 4f * ruido(i + 2)) * d * (0.6f + 0.4f * f)
+            val estoura = f > 0.9f
+            p.strokeWidth = 1.3f * d
+            p.color = Theme.alpha(0xFF6DFF5A.toInt(), if (estoura) ((1f - f) * 10f * 200).toInt() else 0xC0)
+            cv.drawCircle(x, y, if (estoura) r * (1f + (f - 0.9f) * 12f) else r, p)
+            if (!estoura) {
+                p.style = Paint.Style.FILL
+                p.color = Theme.alpha(0xFFDFFFD0.toInt(), 0x90)
+                cv.drawCircle(x - r * 0.35f, y - r * 0.35f, r * 0.25f, p)
+                p.style = Paint.Style.STROKE
+            }
+        }
+        p.style = Paint.Style.FILL
+        // brilho verde de baixo
+        p.shader = LinearGradient(0f, t + h * 0.6f, 0f, t + h, Color.TRANSPARENT, Theme.alpha(0xFF3DFF3A.toInt(), 0x30), Shader.TileMode.CLAMP)
+        cv.drawRect(l, t + h * 0.6f, l + w, t + h, p)
+        p.shader = null
+    }
+
+    /** raio: relâmpagos estalando no cartão, com brilho roxo/azul e faíscas na borda */
+    private fun raio(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
+        val ciclo = 1400L
+        val n = ms / ciclo
+        val fase = (ms % ciclo) / ciclo.toFloat()
+        // clarão no fundo quando o raio cai
+        if (fase < 0.18f) {
+            p.color = Theme.alpha(0xFFB8A4FF.toInt(), ((1f - fase / 0.18f) * 0x40).toInt())
+            cv.drawRect(l, t, l + w, t + h, p)
+        }
+        p.style = Paint.Style.STROKE
+        p.strokeCap = Paint.Cap.ROUND
+        p.strokeJoin = Paint.Join.ROUND
+        for (k in 0 until 2) {
+            val semente = (n * 7 + k * 13 + sem).toInt()
+            val vida = if (k == 0) fase else (fase + 0.5f) % 1f
+            if (vida > 0.32f) continue
+            val alfa = (1f - vida / 0.32f) * (if ((ms / 45) % 2 == 0L) 1f else 0.6f)   // pisca
+            // caminho em zigue-zague, de cima pra baixo
+            gota.reset()
+            var x = l + w * (0.15f + 0.7f * ruido(semente))
+            var y = t
+            gota.moveTo(x, y)
+            val passos = 9
+            val ramos = ArrayList<FloatArray>()
+            for (i in 1..passos) {
+                y = t + h * i / passos
+                x += (ruido(semente + i * 3) - 0.5f) * w * 0.16f
+                gota.lineTo(x, y)
+                if (i == 3 || i == 6) ramos.add(floatArrayOf(x, y))
+            }
+            for ((lw, al, cor) in listOf(Triple(10f, 0x30, 0xFF7A5CFF.toInt()), Triple(5f, 0x80, 0xFF5AC8FF.toInt()), Triple(1.8f, 0xFF, Color.WHITE))) {
+                p.strokeWidth = lw * d
+                p.color = Theme.alpha(cor, (al * alfa).toInt())
+                cv.drawPath(gota, p)
+            }
+            // galhos
+            p.strokeWidth = 1.4f * d
+            p.color = Theme.alpha(0xFFCFE8FF.toInt(), (0xC0 * alfa).toInt())
+            for ((i, rr) in ramos.withIndex()) {
+                val dir = if (i % 2 == 0) 1f else -1f
+                cv.drawLine(rr[0], rr[1], rr[0] + dir * w * 0.12f, rr[1] + h * 0.12f, p)
+            }
+        }
+        p.style = Paint.Style.FILL
+        // faíscas correndo na borda
+        val tt = ms / 1000f
+        for (i in 0 until 6) {
+            val pos = ((tt * 0.35f + i / 6f) % 1f)
+            val per = 2f * (w + h)
+            var q = pos * per
+            val (x, y) = when {
+                q < w -> l + q to t
+                q < w + h -> { q -= w; l + w to t + q }
+                q < 2 * w + h -> { q -= w + h; l + w - q to t + h }
+                else -> { q -= 2 * w + h; l to t + h - q }
+            }
+            p.shader = RadialGradient(x, y, 6f * d, intArrayOf(Color.WHITE, Theme.alpha(0xFF5AC8FF.toInt(), 0x90), Color.TRANSPARENT), floatArrayOf(0f, 0.3f, 1f), Shader.TileMode.CLAMP)
+            cv.drawCircle(x, y, 6f * d, p)
+        }
+        p.shader = null
+    }
+
+    /** gelo: pingentes pendurados no topo brilhando, cantos congelados e neve caindo */
+    private fun gelo(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
+        val tt = ms / 1000f
+        // cantos congelados
+        for ((cx, cy) in listOf(l to t, l + w to t, l to t + h, l + w to t + h)) {
+            p.shader = RadialGradient(cx, cy, 60f * d, Theme.alpha(0xFFDDF4FF.toInt(), 0x50), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+            cv.drawCircle(cx, cy, 60f * d, p)
+        }
+        // pingentes
+        val n = (w / (14f * d)).toInt().coerceIn(6, 40)
+        for (i in 0 until n) {
+            val x = l + w * (i + 0.5f) / n
+            val comp = (6f + 22f * ruido(sem + i)) * d * forca * 0.8f
+            val lg = (w / n) * (0.6f + 0.3f * ruido(sem + i + 3))
+            gota.reset()
+            gota.moveTo(x - lg / 2f, t); gota.lineTo(x + lg / 2f, t); gota.lineTo(x, t + comp); gota.close()
+            p.shader = LinearGradient(0f, t, 0f, t + comp, Theme.alpha(0xFFFFFFFF.toInt(), 0xD0), Theme.alpha(0xFF8FD8FF.toInt(), 0x50), Shader.TileMode.CLAMP)
+            cv.drawPath(gota, p)
+            // brilho correndo pelos pingentes
+            val luz = ((tt * 0.5f) % 1.4f) * w
+            if (abs(x - l - luz) < lg) {
+                p.shader = null
+                p.color = Theme.alpha(Color.WHITE, 0xE0)
+                cv.drawCircle(x, t + comp * 0.35f, 1.6f * d, p)
+            }
+        }
+        p.shader = null
+        // neve
+        for (i in 0 until (14 * forca).toInt()) {
+            val per = 4f + 4f * ruido(sem + i + 30)
+            val f = ((tt + ruido(sem + i + 50) * per) % per) / per
+            val x = l + w * ruido(sem + i + 70) + sin(tt * 1.3f + i) * 8f * d
+            val y = t + f * h
+            p.color = Theme.alpha(Color.WHITE, (0xD0 * sin(f * Math.PI).toFloat()).toInt())
+            cv.drawCircle(x, y, (1f + 1.6f * ruido(i + 4)) * d, p)
+        }
+    }
+
+    /** glitch: faixas do cartão "pulando" com cor separada (vermelho/ciano) e linhas de tv */
+    private fun glitch(cv: Canvas, l: Float, t: Float, w: Float, h: Float, d: Float, sem: Int, ms: Long) {
+        val bloco = ms / 90
+        val ativo = ruido((bloco / 6).toInt() + sem) > 0.45f
+        // linhas de tv
+        p.color = Theme.alpha(Color.WHITE, 0x0C)
+        var y = t
+        while (y < t + h) { cv.drawRect(l, y, l + w, y + 1f * d, p); y += 3f * d }
+        // faixa de luz descendo
+        val yy = t + ((ms / 2200f) % 1f) * h
+        p.shader = LinearGradient(0f, yy - 16f * d, 0f, yy + 16f * d, intArrayOf(Color.TRANSPARENT, Theme.alpha(0xFF00F0FF.toInt(), 0x22), Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
+        cv.drawRect(l, yy - 16f * d, l + w, yy + 16f * d, p)
+        p.shader = null
+        if (!ativo) return
+        for (i in 0 until 6) {
+            val k = (bloco * 3 + i).toInt()
+            if (ruido(k + sem) < 0.35f) continue
+            val y0 = t + h * ruido(k + 1)
+            val alt = (2f + 12f * ruido(k + 2)) * d
+            val dx = (ruido(k + 3) - 0.5f) * 24f * d
+            p.color = Theme.alpha(0xFFFF1E4E.toInt(), 0x50)
+            cv.drawRect(l + dx - 3f * d, y0, l + w * (0.3f + 0.7f * ruido(k + 4)) + dx - 3f * d, y0 + alt, p)
+            p.color = Theme.alpha(0xFF00F0FF.toInt(), 0x50)
+            cv.drawRect(l + dx + 3f * d, y0 + 1f * d, l + w * (0.2f + 0.8f * ruido(k + 5)) + dx + 3f * d, y0 + alt + 1f * d, p)
+        }
     }
 
     // ---------------------------------------------------------------- fundos animados

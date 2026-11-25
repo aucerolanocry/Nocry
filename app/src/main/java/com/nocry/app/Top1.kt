@@ -41,22 +41,36 @@ object Ouro {
 
 /** estilos do perfil do dono no rank: cores (claro, meio, fundo) e o efeito no cartão */
 object EstiloPerfil {
-    val ids = listOf("ouro", "sangue", "brasa", "morte")
-    fun nome(id: String) = when (id) { "sangue" -> "Sangue"; "brasa" -> "Brasa"; "morte" -> "Morte"; else -> "Ouro" }
+    val ids = listOf("ouro", "sangue", "brasa", "raio", "toxico", "gelo", "glitch", "morte")
+    fun nome(id: String) = when (id) {
+        "sangue" -> "Sangue"; "brasa" -> "Brasa"; "morte" -> "Morte"; "raio" -> "Raio"
+        "toxico" -> "Tóxico"; "gelo" -> "Gelo"; "glitch" -> "Glitch"; else -> "Ouro"
+    }
     fun desc(id: String) = when (id) {
         "sangue" -> "sangue escorrendo pelo cartão"
         "brasa" -> "fogo e brasas subindo"
-        "morte" -> "caveira, névoa e olhos vermelhos"
+        "morte" -> "caveiras, névoa e olhos vermelhos"
+        "raio" -> "relâmpagos estalando e faíscas na borda"
+        "toxico" -> "gosma verde pingando e bolhas estourando"
+        "gelo" -> "pingentes de gelo, cantos congelados e neve"
+        "glitch" -> "tela bugando com cores separadas"
         else -> "luz dourada correndo na borda"
     }
     fun cores(id: String): IntArray = when (id) {
         "sangue" -> intArrayOf(0xFFFF6B78.toInt(), 0xFFE0102A.toInt(), 0xFF7A0012.toInt())
         "brasa" -> intArrayOf(0xFFFFE070.toInt(), 0xFFFF7A1A.toInt(), 0xFFD92A00.toInt())
         "morte" -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFE8E2D4.toInt(), 0xFF9A1020.toInt())
+        "raio" -> intArrayOf(0xFFE6F6FF.toInt(), 0xFF5AC8FF.toInt(), 0xFF7A5CFF.toInt())
+        "toxico" -> intArrayOf(0xFFDFFFD0.toInt(), 0xFF3DFF3A.toInt(), 0xFF0E8A10.toInt())
+        "gelo" -> intArrayOf(0xFFFFFFFF.toInt(), 0xFF9EE4FF.toInt(), 0xFF3A8DFF.toInt())
+        "glitch" -> intArrayOf(0xFFFFFFFF.toInt(), 0xFF00F0FF.toInt(), 0xFFFF1E4E.toInt())
         else -> intArrayOf(Ouro.CLARO, Ouro.MEIO, Ouro.FUNDO)
     }
     /** efeito do Efeitos.kt pra cada estilo ("" = só a luz na borda) */
-    fun efeito(id: String) = when (id) { "sangue" -> "sangue"; "brasa" -> "inferno"; "morte" -> "morte"; else -> "" }
+    fun efeito(id: String) = when (id) {
+        "sangue" -> "sangue"; "brasa" -> "inferno"; "morte" -> "morte"; "raio" -> "raio"
+        "toxico" -> "toxico"; "gelo" -> "gelo"; "glitch" -> "glitch"; else -> ""
+    }
 }
 
 /** efeito animado por cima do cartão do dono (sangue, fogo ou caveira), recortado no formato do cartão */
