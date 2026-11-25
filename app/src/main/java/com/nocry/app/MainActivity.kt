@@ -233,6 +233,7 @@ class MainActivity : Activity() {
                 Ui.estiloBt = intent?.getStringExtra("estilo") ?: ""
                 IntroTop1.lento = intent?.getStringExtra("lento")?.toFloatOrNull() ?: 1f
                 intent?.getStringExtra("tema")?.let { Temas.aplica(Temas.get(it)); bg.aplica() }
+                intent?.getStringExtra("perfil")?.let { Rank.estilo = it }
                 intent?.getStringExtra("cor")?.let { h -> runCatching { Prefs.accent = (0xFF000000 or h.toLong(16)).toInt(); Prefs.accent2 = Prefs.accent } }
             }
             abre(HomeScreen(this))

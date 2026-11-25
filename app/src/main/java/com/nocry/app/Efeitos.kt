@@ -18,7 +18,7 @@ import kotlin.math.sin
  */
 object Efeitos {
     /** qual efeito o tema escolhido põe nos cartões: "morte", "sangue", "inferno" ou "" */
-    val cartao: String get() = when (Prefs.tema) { "morte", "sangue", "inferno" -> Prefs.tema; else -> "" }
+    val cartao: String get() = ""
 
     fun animado(): Boolean = Prefs.anim
 
@@ -67,8 +67,7 @@ object Efeitos {
     private val gota = Path()
 
     /** desenha o efeito do tema dentro do cartão (o "path" já está como recorte). true = precisa de outro quadro */
-    fun noCartao(cv: Canvas, path: Path, l: Float, t: Float, r: Float, b: Float, d: Float, semente: Int): Boolean {
-        val tipo = cartao
+    fun noCartao(cv: Canvas, path: Path, l: Float, t: Float, r: Float, b: Float, d: Float, semente: Int, tipo: String = cartao): Boolean {
         if (tipo.isEmpty()) return false
         val w = r - l; val h = b - t
         if (w < 30f * d || h < 24f * d) return false

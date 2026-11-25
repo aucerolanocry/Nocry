@@ -39,6 +39,43 @@ object Ouro {
     const val FUNDO = 0xFFFFA000.toInt()
 }
 
+/** estilos do perfil do dono no rank: cores (claro, meio, fundo) e o efeito no cartão */
+object EstiloPerfil {
+    val ids = listOf("ouro", "sangue", "brasa", "morte")
+    fun nome(id: String) = when (id) { "sangue" -> "Sangue"; "brasa" -> "Brasa"; "morte" -> "Morte"; else -> "Ouro" }
+    fun desc(id: String) = when (id) {
+        "sangue" -> "sangue escorrendo pelo cartão"
+        "brasa" -> "fogo e brasas subindo"
+        "morte" -> "caveira, névoa e olhos vermelhos"
+        else -> "luz dourada correndo na borda"
+    }
+    fun cores(id: String): IntArray = when (id) {
+        "sangue" -> intArrayOf(0xFFFF6B78.toInt(), 0xFFE0102A.toInt(), 0xFF7A0012.toInt())
+        "brasa" -> intArrayOf(0xFFFFE070.toInt(), 0xFFFF7A1A.toInt(), 0xFFD92A00.toInt())
+        "morte" -> intArrayOf(0xFFFFFFFF.toInt(), 0xFFE8E2D4.toInt(), 0xFF9A1020.toInt())
+        else -> intArrayOf(Ouro.CLARO, Ouro.MEIO, Ouro.FUNDO)
+    }
+    /** efeito do Efeitos.kt pra cada estilo ("" = só a luz na borda) */
+    fun efeito(id: String) = when (id) { "sangue" -> "sangue"; "brasa" -> "inferno"; "morte" -> "morte"; else -> "" }
+}
+
+/** efeito animado por cima do cartão do dono (sangue, fogo ou caveira), recortado no formato do cartão */
+class EfeitoCartao(c: Context, private val tipo: String) : View(c) {
+    private val d = c.resources.displayMetrics.density
+    private val path = Path()
+    init { isClickable = false; isFocusable = false }
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        path.reset()
+        val r = min(Prefs.raio * d, min(w, h) / 2f)
+        path.addRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), r, r, Path.Direction.CW)
+    }
+    override fun onDraw(cv: Canvas) {
+        if (width <= 0) return
+        val mais = Efeitos.noCartao(cv, path, 0f, 0f, width.toFloat(), height.toFloat(), d, 7, tipo)
+        if (mais && isAttachedToWindow) postInvalidateOnAnimation()
+    }
+}
+
 /** anel dourado girando em volta da foto, com 3 brilhos orbitando */
 class AnelGiratorio @JvmOverloads constructor(c: Context, a: AttributeSet? = null) : View(c, a) {
     private val d = c.resources.displayMetrics.density
@@ -49,10 +86,13 @@ class AnelGiratorio @JvmOverloads constructor(c: Context, a: AttributeSet? = nul
     private var sh: SweepGradient? = null
     var espessura = 3f
     var periodo = 2200L
+    /** claro, meio, fundo */
+    var cores = intArrayOf(Ouro.CLARO, Ouro.MEIO, Ouro.FUNDO)
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        pBase.color = Theme.alpha(cores[1], 0x50)
         sh = SweepGradient(w / 2f, h / 2f,
-            intArrayOf(Color.TRANSPARENT, Theme.alpha(Ouro.FUNDO, 0x80), Ouro.MEIO, Color.WHITE, Ouro.MEIO, Color.TRANSPARENT, Color.TRANSPARENT),
+            intArrayOf(Color.TRANSPARENT, Theme.alpha(cores[2], 0x80), cores[1], Color.WHITE, cores[1], Color.TRANSPARENT, Color.TRANSPARENT),
             floatArrayOf(0f, 0.18f, 0.32f, 0.4f, 0.48f, 0.62f, 1f))
     }
 
@@ -79,7 +119,7 @@ class AnelGiratorio @JvmOverloads constructor(c: Context, a: AttributeSet? = nul
             val a = Math.toRadians((-ang * 1.4f + i * 120f).toDouble())
             val x = cx + (r * cos(a)).toFloat()
             val y = cy + (r * sin(a)).toFloat()
-            pBrilho.shader = RadialGradient(x, y, 7f * d, intArrayOf(Color.WHITE, Theme.alpha(Ouro.MEIO, 0x90), Color.TRANSPARENT), floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)
+            pBrilho.shader = RadialGradient(x, y, 7f * d, intArrayOf(Color.WHITE, Theme.alpha(cores[1], 0x90), Color.TRANSPARENT), floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)
             cv.drawCircle(x, y, 7f * d, pBrilho)
         }
         if (isAttachedToWindow) postInvalidateOnAnimation()
@@ -96,6 +136,8 @@ class BordaViva @JvmOverloads constructor(c: Context, a: AttributeSet? = null) :
     private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val pLinha = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Theme.alpha(Ouro.MEIO, 0x40) }
     var raioDp = Prefs.raio.toFloat()
+    /** claro, meio, fundo */
+    var cores = intArrayOf(Ouro.CLARO, Ouro.MEIO, Ouro.FUNDO)
 
     init { isClickable = false; isFocusable = false }
 
@@ -124,6 +166,7 @@ class BordaViva @JvmOverloads constructor(c: Context, a: AttributeSet? = null) :
     override fun onDraw(cv: Canvas) {
         if (tam <= 0f) return
         canvas = cv
+        pLinha.color = Theme.alpha(cores[1], 0x40)
         pLinha.strokeWidth = 1.2f * d
         cv.drawPath(path, pLinha)
         val t = (SystemClock.uptimeMillis() % 3200L) / 3200f
@@ -131,8 +174,8 @@ class BordaViva @JvmOverloads constructor(c: Context, a: AttributeSet? = null) :
         for (k in 0 until 2) {
             val pos = ((t + k * 0.5f) % 1f) * tam
             val comp = tam * 0.16f
-            trecho(pos - comp, pos, 9f * d, Ouro.FUNDO, 0x30)
-            trecho(pos - comp * 0.8f, pos, 4.5f * d, Ouro.MEIO, 0x90)
+            trecho(pos - comp, pos, 9f * d, cores[2], 0x30)
+            trecho(pos - comp * 0.8f, pos, 4.5f * d, cores[1], 0x90)
             trecho(pos - comp * 0.45f, pos, 2f * d, Color.WHITE, 0xFF)
         }
         canvas = null
@@ -144,11 +187,13 @@ class BordaViva @JvmOverloads constructor(c: Context, a: AttributeSet? = null) :
 class TextoBrilho(c: Context) : TextView(c) {
     private val m = Matrix()
     private var sh: LinearGradient? = null
+    /** claro, meio, fundo */
+    var cores = intArrayOf(Ouro.CLARO, Ouro.MEIO, Ouro.FUNDO)
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
         sh = LinearGradient(0f, 0f, w.toFloat().coerceAtLeast(1f), 0f,
-            intArrayOf(Ouro.MEIO, Ouro.MEIO, Color.WHITE, Ouro.CLARO, Ouro.MEIO, Ouro.MEIO),
+            intArrayOf(cores[1], cores[1], Color.WHITE, cores[0], cores[1], cores[1]),
             floatArrayOf(0f, 0.35f, 0.48f, 0.52f, 0.65f, 1f), Shader.TileMode.CLAMP)
     }
 

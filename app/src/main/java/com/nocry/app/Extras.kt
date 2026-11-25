@@ -443,7 +443,7 @@ object Caderno {
 object Rank {
     class Linha(val apelido: String, val vit: Int, val der: Int, val valor: Double, val byp: Int, val seq: Int, val eu: Boolean,
                 val uso: Int = 0, val dono: Boolean = false, val frase: String = "",
-                val jog: Double = 0.0, val salas: Int = 0, val vals: Map<Double, Int> = emptyMap())
+                val jog: Double = 0.0, val salas: Int = 0, val vals: Map<Double, Int> = emptyMap(), val estilo: String = "ouro")
 
     /** tempo com o app aberto (em ms), no total e no mês */
     fun contaUso(ms: Long) {
@@ -455,6 +455,11 @@ object Rank {
         mudou()
     }
     private fun usoMes(): Long = if (Prefs.extraTxt("uso_mes_de") == mesAtual()) Prefs.lerNum("uso_mes") else 0L
+
+    /** estilo do perfil do dono no rank: ouro, sangue, brasa ou morte */
+    var estilo: String
+        get() = Prefs.extraTxt("rank_estilo")?.takeIf { it in EstiloPerfil.ids } ?: "ouro"
+        set(v) { Prefs.extraTxt("rank_estilo", v); mudou() }
 
     /** frase do perfil do dono no rank */
     var frase: String
@@ -496,7 +501,7 @@ object Rank {
                 .put("byp", byp).put("seq", Caderno.sequencia(desde)).put("uso", uso / 60000L)
         }
         val apelido = Prefs.apelido.ifEmpty { License.label() }.ifEmpty { "jogador" }
-        val corpo = JSONObject().put("apelido", apelido).put("frase", frase).put("pers", JSONArray()
+        val corpo = JSONObject().put("apelido", apelido).put("frase", frase).put("estilo", estilo).put("pers", JSONArray()
             .put(per("geral", 0L, Prefs.lerNum("byp_total"), Prefs.lerNum("uso_total")))
             .put(per(mesAtual(), Caderno.inicioDoMes(), bypMes(), usoMes())))
         if (Comunidade.x(c, "rk_enviar", corpo)?.optBoolean("ok") != true) pendente = true
@@ -512,7 +517,7 @@ object Rank {
                 o.optDouble("jog", 0.0), o.optInt("salas"), try {
                     val v = JSONObject(o.optString("vals", "{}"))
                     v.keys().asSequence().mapNotNull { k -> k.toDoubleOrNull()?.let { it to v.optInt(k) } }.toMap()
-                } catch (_: Throwable) { emptyMap() })
+                } catch (_: Throwable) { emptyMap() }, o.optString("estilo").ifEmpty { "ouro" })
         } }
     }
 }
@@ -975,7 +980,7 @@ class RankScreen(a: MainActivity) : Screen(a) {
         Bg.io {
             if (!BuildConfig.PREVIEW) try { Rank.enviar(act, forcar = true) } catch (_: Throwable) {}
             val l = if (BuildConfig.PREVIEW) listOf(
-                Rank.Linha("Aucerola", 42, 7, 380.0, 120, 9, true, 900, true, "o mais brabo do NOCRY", 520.0, 49, mapOf(3.5 to 20, 10.0 to 15)),
+                Rank.Linha("Aucerola", 42, 7, 380.0, 120, 9, true, 900, true, "o mais brabo do NOCRY", 520.0, 49, mapOf(3.5 to 20, 10.0 to 15), Rank.estilo),
                 Rank.Linha("Kauã", 30, 12, 210.0, 80, 5, false, 600, jog = 300.0, salas = 42),
                 Rank.Linha("Lipe", 22, 9, 150.0, 40, 3, false, 420, jog = 210.0, salas = 31))
             else try { Rank.lista(act, if (mes) Rank.mesAtual() else "geral", por) } catch (_: Throwable) { null }
@@ -1054,19 +1059,21 @@ class RankScreen(a: MainActivity) : Screen(a) {
         val foto = FotoPerfil(c)
         foto.fixa = fotoDono(r)
         // foto com o anel dourado girando em volta
+        val cores = EstiloPerfil.cores(r.estilo)
         val ff = android.widget.FrameLayout(c)
-        ff.addView(AnelGiratorio(c), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        ff.addView(AnelGiratorio(c).also { it.cores = cores }, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         ff.addView(foto, android.widget.FrameLayout.LayoutParams(Ui.dp(c, 62), Ui.dp(c, 62), Gravity.CENTER))
         topo.addView(ff, LinearLayout.LayoutParams(Ui.dp(c, 84), Ui.dp(c, 84)).also { it.rightMargin = Ui.dp(c, 12) })
         val col = Ui.vbox(c)
         val linha1 = Ui.hbox(c)
         linha1.gravity = Gravity.CENTER_VERTICAL
-        linha1.addView(Ui.icone(c, R.drawable.ic_crown, 0xFFFFD54A.toInt(), 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 6) })
-        linha1.addView(Ui.text(c, "TOP 1", 11f, 0xFFFFD54A.toInt(), true, mono = true).also { it.letterSpacing = 0.2f })
+        linha1.addView(Ui.icone(c, R.drawable.ic_crown, cores[1], 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 6) })
+        linha1.addView(Ui.text(c, "TOP 1", 11f, cores[1], true, mono = true).also { it.letterSpacing = 0.2f })
         linha1.addView(View(c), LinearLayout.LayoutParams(Ui.dp(c, 8), 1))
         linha1.addView(Ui.selo(c, "DONO", Ui.RED, true))
         col.addView(linha1)
         val nome = TextoBrilho(c)
+        nome.cores = cores
         nome.text = r.apelido.uppercase()
         nome.textSize = 24f
         nome.typeface = Ui.text(c, "x", 24f, Ui.TEXT, true).typeface
@@ -1078,10 +1085,17 @@ class RankScreen(a: MainActivity) : Screen(a) {
         k.addView(numeros(r, true), Ui.lp(top = 14, c = c))
         if (r.seq >= 2) k.addView(Ui.text(c, "${r.seq} vitórias seguidas · ${r.der} derrotas", 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
         Ui.clique(k) { detalhes(r) }
-        // luz dourada correndo pela borda + o cartão pulsando de leve
+        // fundo do cartão → efeito do estilo (sangue, fogo, caveira) → conteúdo → luz correndo na borda
         val moldura = android.widget.FrameLayout(c)
+        val mm = android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        val fundo = View(c)
+        fundo.background = k.background
+        k.background = null
+        moldura.addView(fundo, mm)
+        val ef = EstiloPerfil.efeito(r.estilo)
+        if (ef.isNotEmpty()) moldura.addView(EfeitoCartao(c, ef), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         moldura.addView(k, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        moldura.addView(BordaViva(c), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        moldura.addView(BordaViva(c).also { it.cores = cores }, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         pulsar(moldura)
         return moldura
     }
@@ -1101,8 +1115,12 @@ class RankScreen(a: MainActivity) : Screen(a) {
             erro -> { add(Ui.dica(c, "Sem internet agora. Toque pra tentar de novo.", Ui.Dica.AVISO).also { v -> Ui.clique(v) { carregar() } }, 14); return }
             l.isNullOrEmpty() -> { add(Ui.dica(c, "Ninguém pontuou ainda nesse período. As vitórias entram sozinhas pelo Caderno.", Ui.Dica.INFO), 14); return }
         }
-        if (License.isOwner()) add(Ui.button(c, "editar meu perfil do rank", Ui.Kind.GHOST, R.drawable.ic_crown) {
-            Ui.dialogTexto(act, "FRASE DO SEU PERFIL", "aparece embaixo do seu nome no topo do rank") { v -> Rank.frase = v; carregar() }
+        if (License.isOwner() || BuildConfig.PREVIEW) add(Ui.button(c, "editar meu perfil do rank", Ui.Kind.GHOST, R.drawable.ic_crown) {
+            Ui.dialogEscolha(act, "MEU PERFIL DO RANK", listOf("Estilo: " + EstiloPerfil.nome(Rank.estilo), "Frase embaixo do nome")) { o ->
+                if (o == 0) Ui.dialogEscolha(act, "ESTILO DO PERFIL", EstiloPerfil.ids.map { EstiloPerfil.nome(it) + " · " + EstiloPerfil.desc(it) }) { i ->
+                    Rank.estilo = EstiloPerfil.ids[i]; carregar()
+                } else Ui.dialogTexto(act, "FRASE DO SEU PERFIL", "aparece embaixo do seu nome no topo do rank") { v -> Rank.frase = v; carregar() }
+            }
         }, 12)
         // o dono é sempre o 1º: o resto começa no 2º
         var pos = if (l!!.any { it.dono }) 1 else 0

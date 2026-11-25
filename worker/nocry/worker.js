@@ -253,7 +253,7 @@ async function init(env) {
     try { await env.DB.prepare("ALTER TABLE devices ADD COLUMN " + col).run(); } catch (e) { /* já existe */ }
   }
   // rank: tempo de app (minutos) e a frase do perfil do dono
-  for (const col of ["uso INTEGER NOT NULL DEFAULT 0", "frase TEXT", "jog REAL NOT NULL DEFAULT 0", "salas INTEGER NOT NULL DEFAULT 0", "vals TEXT"]) {
+  for (const col of ["uso INTEGER NOT NULL DEFAULT 0", "frase TEXT", "jog REAL NOT NULL DEFAULT 0", "salas INTEGER NOT NULL DEFAULT 0", "vals TEXT", "estilo TEXT"]) {
     try { await env.DB.prepare("ALTER TABLE rank ADD COLUMN " + col).run(); } catch (e) { /* já existe */ }
   }
   ready = true;
@@ -527,6 +527,7 @@ async function extrasRoute(req, env, ip) {
     const apelido = clean(b.apelido, 24).trim() || "jogador";
     const dono = a.rec.role === "owner";
     const frase = dono ? clean(b.frase, 60).trim() : "";
+    const estilo = dono && ["ouro", "sangue", "brasa", "morte"].includes(String(b.estilo)) ? String(b.estilo) : "ouro";
     const num = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
     const real = (v) => Math.max(0, Math.min(1e7, Math.round((Number(v) || 0) * 100) / 100));
     const linhas = [];
@@ -543,9 +544,9 @@ async function extrasRoute(req, env, ip) {
       const per = String(x.per || "");
       if (per !== "geral" && !/^20\d\d-\d\d$/.test(per)) continue;
       linhas.push(env.DB.prepare(
-        "INSERT INTO rank (key, dev, per, apelido, vit, der, valor, byp, seq, t, uso, frase, jog, salas, vals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-        "ON CONFLICT(key, dev, per) DO UPDATE SET apelido = excluded.apelido, vit = excluded.vit, der = excluded.der, valor = excluded.valor, byp = excluded.byp, seq = excluded.seq, t = excluded.t, uso = excluded.uso, frase = excluded.frase, jog = excluded.jog, salas = excluded.salas, vals = excluded.vals"
-      ).bind(key, dev, per, apelido, num(x.vit, 100000), num(x.der, 100000), real(x.valor), num(x.byp, 1000000), num(x.seq, 10000), now, num(x.uso, 10000000), frase, real(x.jog), num(x.salas, 100000), vals(x)));
+        "INSERT INTO rank (key, dev, per, apelido, vit, der, valor, byp, seq, t, uso, frase, jog, salas, vals, estilo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        "ON CONFLICT(key, dev, per) DO UPDATE SET apelido = excluded.apelido, vit = excluded.vit, der = excluded.der, valor = excluded.valor, byp = excluded.byp, seq = excluded.seq, t = excluded.t, uso = excluded.uso, frase = excluded.frase, jog = excluded.jog, salas = excluded.salas, vals = excluded.vals, estilo = excluded.estilo"
+      ).bind(key, dev, per, apelido, num(x.vit, 100000), num(x.der, 100000), real(x.valor), num(x.byp, 1000000), num(x.seq, 10000), now, num(x.uso, 10000000), frase, real(x.jog), num(x.salas, 100000), vals(x), estilo));
     }
     if (linhas.length) await env.DB.batch(linhas);
     return json({ ok: true });
@@ -556,7 +557,7 @@ async function extrasRoute(req, env, ip) {
     const ordem = b.por === "byp" ? "r.byp DESC, r.vit DESC" : b.por === "valor" ? "r.valor DESC, r.vit DESC" : b.por === "uso" ? "r.uso DESC, r.vit DESC" : b.por === "jog" ? "r.jog DESC, r.vit DESC" : "r.vit DESC, r.valor DESC";
     // o dono fica sempre em 1º (com o perfil especial); o resto segue a ordem escolhida
     const rows = (await env.DB.prepare(
-      "SELECT r.key, r.dev, r.apelido, r.vit, r.der, r.valor, r.byp, r.seq, r.uso, r.frase, r.jog, r.salas, r.vals, (r.key = 'OWNER' OR k.role = 'owner') AS dono " +
+      "SELECT r.key, r.dev, r.apelido, r.vit, r.der, r.valor, r.byp, r.seq, r.uso, r.frase, r.jog, r.salas, r.vals, r.estilo, (r.key = 'OWNER' OR k.role = 'owner') AS dono " +
       "FROM rank r LEFT JOIN keys k ON k.key = r.key WHERE r.per = ? AND (r.vit > 0 OR r.der > 0 OR r.byp > 0 OR r.uso > 0 OR r.key = 'OWNER' OR k.role = 'owner') " +
       "ORDER BY dono DESC, " + ordem + " LIMIT 60"
     ).bind(per).all()).results;
@@ -564,7 +565,7 @@ async function extrasRoute(req, env, ip) {
     const lista = [];
     for (const r of rows) {
       if (r.dono) { if (jaDono) continue; jaDono = true; }
-      lista.push({ apelido: r.apelido, vit: r.vit, der: r.der, valor: r.valor, byp: r.byp, seq: r.seq, uso: r.uso || 0, dono: !!r.dono, frase: r.dono ? (r.frase || "") : "", jog: r.jog || 0, salas: r.salas || 0, vals: r.vals || "{}", eu: r.key === key && r.dev === dev });
+      lista.push({ apelido: r.apelido, vit: r.vit, der: r.der, valor: r.valor, byp: r.byp, seq: r.seq, uso: r.uso || 0, dono: !!r.dono, frase: r.dono ? (r.frase || "") : "", jog: r.jog || 0, salas: r.salas || 0, vals: r.vals || "{}", estilo: r.dono ? (r.estilo || "ouro") : "", eu: r.key === key && r.dev === dev });
       if (lista.length >= 50) break;
     }
     return json({ ok: true, lista });

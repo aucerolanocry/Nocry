@@ -29,7 +29,7 @@ shot() { # nome tela [aba] [demo]
   if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
   adb shell am force-stop $PKG
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
-  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" ${INICIO:+--es inicio $INICIO} ${ESTILO:+--es estilo $ESTILO} ${COR:+--es cor $COR} ${TEMA:+--es tema $TEMA} >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" ${INICIO:+--es inicio $INICIO} ${ESTILO:+--es estilo $ESTILO} ${COR:+--es cor $COR} ${TEMA:+--es tema $TEMA} ${PERFIL:+--es perfil $PERFIL} >/dev/null
   sleep 7
   adb exec-out screencap -p > "$OUT/cru/${nome}_1.png"
   for i in 2 3 4 5; do
@@ -71,7 +71,7 @@ shot 24_caderno caderno
 shot 25_partidas partidas
 shot 27_eventos eventos
 shot 28_amigos amigos
-for t in morte sangue inferno; do TEMA=$t; shot 37_tema_${t} home; done; TEMA=""
+for e in ouro sangue brasa morte; do PERFIL=$e; shot 38_perfil_${e} rank; done; PERFIL=""
 # rank: a entrada do top 1 é animada, então tira várias fotos seguidas
 if [ -z "${TELAS:-}" ] || echo " $TELAS " | grep -q " 36_rank "; then
   # entrada 6x mais lenta (só no teste) e uma foto por segundo
