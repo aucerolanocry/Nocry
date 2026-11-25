@@ -62,7 +62,7 @@ object Ui {
     @JvmStatic var estiloBt = ""
     private val compacto get() = estiloBt.isNotEmpty()
     /** fundo dos botões no estilo sólido: cor do tema clarinha, sem borda */
-    fun solido(c: Context, raio: Int): Drawable = shape(c, Theme.alpha(Theme.accent, 0x2E), raio)
+    fun solido(c: Context, raio: Int): Drawable = shape(c, Theme.alpha(Theme.accent, 0x48), raio)
 
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density * fator(c) + 0.5f).toInt()
 
