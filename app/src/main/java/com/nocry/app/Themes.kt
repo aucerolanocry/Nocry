@@ -109,7 +109,7 @@ object Temas {
         Tema("bronze", "Bronze", "Rank: começo da temporada", 0xFFE0A070.toInt(), 0xFF8C4A2F.toInt(), 0xFF0D0805.toInt(), "solido", "bigs", 6, 1, 45, 80, "brasas"),
         Tema("diamante", "Diamante", "Rank: brilho de cristal", 0xFF8FE3FF.toInt(), 0xFFB388FF.toInt(), 0xFF050814.toInt(), "vidro", "russo", 16, 1, 65, 55, "neve"),
         Tema("mestre", "Mestre", "Rank: roxo e vermelho", 0xFFFF4D6D.toInt(), 0xFFB14DFF.toInt(), 0xFF0B0512.toInt(), "hud", "russo", 2, 2, 70, 75, "noite"),
-        Tema("graomestre", "Grão-Mestre", "Rank: o topo, fogo e ouro", 0xFFFFD36B.toInt(), 0xFFFF5A1F.toInt(), 0xFF0A0604.toInt(), "hud", "orbitron", 2, 2, 80, 78, "brasas", true)
+        Tema("graomestre", "Grão-Mestre", "Rank: o topo, fogo e ouro", 0xFFFFD36B.toInt(), 0xFFFF5A1F.toInt(), 0xFF0A0604.toInt(), "hud", "orbitron", 2, 2, 80, 78, "brasas", true),
         // temas animados: fundo vivo + efeito nos cartões (dá pra trocar o efeito e a força em Estúdio › Efeitos)
         Tema("t_inferno", "Inferno", "Chamas lambendo os cartões", 0xFFFF7A1A.toInt(), 0xFFFF2A00.toInt(), 0xFF0A0402.toInt(), "hud", "russo", 2, 2, 80, 78, "inferno", efeito = "inferno", blur = 0),
         Tema("t_sangue", "Sangue", "Escorrendo pelos cartões", 0xFFFF2337.toInt(), 0xFF8A0014.toInt(), 0xFF0A0203.toInt(), "solido", "gloock", 12, 1, 55, 82, "sangue", efeito = "sangue", blur = 0),
