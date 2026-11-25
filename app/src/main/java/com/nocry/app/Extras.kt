@@ -1096,7 +1096,7 @@ class RankScreen(a: MainActivity) : Screen(a) {
         val c = act
         cabecalho(titulo, "Quem mais ganhou e quem mais usou bypass entre todo mundo do Nocry. Aparece o seu apelido do Estúdio.")
         add(Ui.segmento(c, listOf("Este mês", "Geral"), if (mes) 0 else 1) { mes = it == 0; carregar() }, 14)
-        add(Ui.segmento(c, listOf("Vitórias", "Ganho", "Jogado", "Bypass", "Tempo"), when (por) { "valor" -> 1; "jog" -> 2; "byp" -> 3; "uso" -> 4; else -> 0 }) {
+        add(Ui.segmento(c, listOf("Vitória", "Ganho", "Jogado", "Bypass", "Tempo"), when (por) { "valor" -> 1; "jog" -> 2; "byp" -> 3; "uso" -> 4; else -> 0 }) {
             por = when (it) { 1 -> "valor"; 2 -> "jog"; 3 -> "byp"; 4 -> "uso"; else -> "vit" }; carregar()
         }, 8)
         add(Ui.text(c, "Toque numa pessoa pra ver todos os valores que ela jogou.", 10f, Ui.MUTED), 6)
@@ -1109,8 +1109,9 @@ class RankScreen(a: MainActivity) : Screen(a) {
         if (License.isOwner()) add(Ui.button(c, "editar meu perfil do rank", Ui.Kind.GHOST, R.drawable.ic_crown) {
             Ui.dialogTexto(act, "FRASE DO SEU PERFIL", "aparece embaixo do seu nome no topo do rank") { v -> Rank.frase = v; carregar() }
         }, 12)
-        var pos = 0
-        for (r in l!!) {
+        // o dono é sempre o 1º: o resto começa no 2º
+        var pos = if (l!!.any { it.dono }) 1 else 0
+        for (r in l) {
             if (r.dono) { add(cartaoDono(r), 14); continue }
             pos++
             add(cartao(r, pos), 8)
