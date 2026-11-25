@@ -58,6 +58,12 @@ object Ui {
         return fatorTela
     }
 
+    /** estilo dos botões em teste: "" = atual, "1" compacto, "2" lista, "3" sólido */
+    @JvmStatic var estiloBt = ""
+    private val compacto get() = estiloBt.isNotEmpty()
+    /** fundo dos botões no estilo sólido: cor do tema clarinha, sem borda */
+    fun solido(c: Context, raio: Int): Drawable = shape(c, Theme.alpha(Theme.accent, 0x2E), raio)
+
     fun dp(c: Context, v: Int): Int = (v * c.resources.displayMetrics.density * fator(c) + 0.5f).toInt()
 
     /** o texto encolhe ate caber em uma linha so (titulos grandes dos cartoes, que nao podem quebrar) */
@@ -307,7 +313,9 @@ object Ui {
             val ac = icone(c, ico, Theme.alpha(Theme.accent, 0xDD), 12)
             r.addView(ac, LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)).also { it.leftMargin = dp(c, 6) })
         }
-        r.setPadding(dp(c, if (clicavel && ico != 0) 10 else 7), dp(c, 9), dp(c, if (clicavel && ico != 0) 8 else 7), dp(c, 9))
+        val pv = if (compacto) 6 else 9
+        if (estiloBt == "3") r.background = if (clicavel) ripple(c, solido(c, raioPilula())) else solido(c, raioPilula())
+        r.setPadding(dp(c, if (clicavel && ico != 0) 10 else 7), dp(c, pv), dp(c, if (clicavel && ico != 0) 8 else 7), dp(c, pv))
         r.contentDescription = "$nome $valor"
         return r
     }
@@ -767,9 +775,15 @@ object Ui {
         val tp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         if (ico != 0) tp.leftMargin = dp(c, 8)
         l.addView(t, tp)
-        l.background = ripple(c, bg, Botao(c, tipo, mascara = true))
-        l.setPadding(ph, dp(c, 14), ph, dp(c, 14))
-        l.minimumHeight = dp(c, 52)
+        l.background = ripple(c, if (estiloBt == "3" && kind != Kind.PRIMARY) solido(c, raioPilula()) else bg, Botao(c, tipo, mascara = true))
+        if (compacto) {
+            t.textSize = 11.5f
+            l.setPadding(ph, dp(c, 10), ph, dp(c, 10))
+            l.minimumHeight = dp(c, 42)
+        } else {
+            l.setPadding(ph, dp(c, 14), ph, dp(c, 14))
+            l.minimumHeight = dp(c, 52)
+        }
         clique(l, onClick)
         if (kind == Kind.PRIMARY && Prefs.brilho > 0 && Build.VERSION.SDK_INT >= 28) {
             l.elevation = dp(c, 4 + Prefs.brilho / 12).toFloat()
@@ -782,17 +796,18 @@ object Ui {
     /** linha de menu: icone, titulo, descricao curta e setinha */
     fun row(c: Context, titulo: String, sub: String, ico: Int = 0, onClick: () -> Unit): View {
         val r = hbox(c)
-        r.background = ripple(c, glass(c), Painel(c, mascara = true))
+        r.background = ripple(c, if (estiloBt == "3") solido(c, Prefs.raio) else glass(c), Painel(c, mascara = true))
         val p = dp(c, 14)
-        r.setPadding(p, dp(c, 12), p, dp(c, 12))
+        val tamI = if (compacto) 34 else 40
+        r.setPadding(p, dp(c, if (compacto) 9 else 12), p, dp(c, if (compacto) 9 else 12))
         if (ico != 0) {
-            val ib = caixaIcone(c, ico)
-            val ip = LinearLayout.LayoutParams(dp(c, 40), dp(c, 40))
+            val ib = caixaIcone(c, ico, tamDp = tamI)
+            val ip = LinearLayout.LayoutParams(dp(c, tamI), dp(c, tamI))
             ip.rightMargin = dp(c, 12)
             r.addView(ib, ip)
         }
         val col = vbox(c)
-        col.addView(nome(c, titulo, 14.5f))
+        col.addView(nome(c, titulo, if (compacto) 13.5f else 14.5f))
         if (sub.isNotEmpty()) {
             val s = text(c, sub, 11.5f, MUTED)
             s.setPadding(0, dp(c, 2), 0, 0)
@@ -951,13 +966,14 @@ object Ui {
 
     /** quadrado da grade do inicio: icone, nome, descricao e o estado numa pilula no rodape */
     fun tile(c: Context, ico: Int, titulo: String, desc: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
+        if (estiloBt == "2") return tileLinha(c, ico, titulo, estado, ligado, onClick)
         val on = ligado == true
         val col = vbox(c)
-        col.background = ripple(c, glass(c, ligado = on), Painel(c, mascara = true))
-        val p = dp(c, 14)
+        col.background = ripple(c, if (estiloBt == "3" && !on) solido(c, Prefs.raio) else glass(c, ligado = on), Painel(c, mascara = true))
+        val p = dp(c, if (compacto) 12 else 14)
         col.setPadding(p, p, p, p)
-        col.minimumHeight = dp(c, 140)
-        col.addView(caixaIcone(c, ico, on, 38))
+        col.minimumHeight = dp(c, if (compacto) 108 else 140)
+        col.addView(caixaIcone(c, ico, on, if (compacto) 32 else 38))
         // nome numa linha so (encolhe um pouco se precisar): quebrado em 2 linhas o quadrado ficava torto
         col.addView(text(c, titulo, 13f, TEXT, true).also { umaLinha(it, 10) }, lp(top = 12, c = c))
         if (desc.isNotEmpty()) {
@@ -975,6 +991,25 @@ object Ui {
         return col
     }
 
+    /** estilo 2: o modo vira um botão baixinho (ícone, nome e estado do lado) */
+    private fun tileLinha(c: Context, ico: Int, titulo: String, estado: String, ligado: Boolean?, onClick: () -> Unit): View {
+        val on = ligado == true
+        val r = hbox(c)
+        r.gravity = Gravity.CENTER_VERTICAL
+        r.background = ripple(c, glass(c, ligado = on), Painel(c, mascara = true))
+        r.setPadding(dp(c, 10), dp(c, 10), dp(c, 10), dp(c, 10))
+        r.addView(caixaIcone(c, ico, on, 30), LinearLayout.LayoutParams(dp(c, 30), dp(c, 30)).also { it.rightMargin = dp(c, 8) })
+        val col = vbox(c)
+        col.addView(text(c, titulo, 11.5f, TEXT, true).also { umaLinha(it, 8) })
+        val e = text(c, estado, 9f, if (on) OK else MUTED, true, mono = true)
+        e.maxLines = 1; e.ellipsize = android.text.TextUtils.TruncateAt.END
+        col.addView(e, lp(top = 2, c = c))
+        r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        r.contentDescription = "$titulo, $estado"
+        clique(r, onClick)
+        return r
+    }
+
     /**
      * cartao grande do primeiro modo do inicio: icone, nome, descricao, estado e um botao rapido na direita
      * (ex.: LIGAR). Tocar no cartao abre a tela do modo; tocar no botao faz a acao sem sair do inicio.
@@ -984,10 +1019,11 @@ object Ui {
         val on = ligado == true
         val r = hbox(c)
         r.background = ripple(c, glass(c, forte = true, ligado = on), Painel(c, mascara = true))
-        r.setPadding(dp(c, 16), dp(c, 16), dp(c, 14), dp(c, 16))
-        r.addView(caixaIcone(c, ico, on, 48), LinearLayout.LayoutParams(dp(c, 48), dp(c, 48)).also { it.rightMargin = dp(c, 14) })
+        val ti = if (compacto) 40 else 48
+        r.setPadding(dp(c, 16), dp(c, if (compacto) 12 else 16), dp(c, 14), dp(c, if (compacto) 12 else 16))
+        r.addView(caixaIcone(c, ico, on, ti), LinearLayout.LayoutParams(dp(c, ti), dp(c, ti)).also { it.rightMargin = dp(c, 14) })
         val col = vbox(c)
-        col.addView(text(c, titulo, 17f, TEXT, true).also { umaLinha(it, 11) })
+        col.addView(text(c, titulo, if (compacto) 15f else 17f, TEXT, true).also { umaLinha(it, 11) })
         if (desc.isNotEmpty()) col.addView(text(c, desc, 10.5f, MUTED).also { it.maxLines = 2; it.ellipsize = android.text.TextUtils.TruncateAt.END }, lp(top = 2, c = c))
         col.addView(pilulaEstado(c, estado, ligado), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = dp(c, 8) })
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -999,8 +1035,8 @@ object Ui {
             b.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
             if (primario && Theme.sobreGrad() != Color.WHITE) b.setShadowLayer(0f, 0f, 0f, 0)
             b.background = ripple(c, Botao(c, tipo), Botao(c, tipo, mascara = true))
-            b.setPadding(dp(c, 16), dp(c, 10), dp(c, 16), dp(c, 10))
-            b.minimumHeight = dp(c, 42)
+            b.setPadding(dp(c, 16), dp(c, if (compacto) 8 else 10), dp(c, 16), dp(c, if (compacto) 8 else 10))
+            b.minimumHeight = dp(c, if (compacto) 36 else 42)
             b.minimumWidth = dp(c, 76)
             clique(b, onBotao)
             r.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = dp(c, 10) })
