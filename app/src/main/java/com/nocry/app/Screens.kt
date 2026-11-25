@@ -85,37 +85,29 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             Atalho(R.drawable.ic_gamepad, "Partidas", Partida.jogando) { act.abre(PartidasScreen(act)) }
         )
         fun ponto(): View = View(c).also { it.background = Ui.shape(c, Ui.WARN, 99) }
-        // grade de 3 por linha, botões baixinhos
+        // opção C: uma fila só com os 5 atalhos, ícone em cima e nome embaixo
         val box = Ui.vbox(c)
-        var i = 0
-        while (i < lista.size) {
-            val linha = Ui.hbox(c)
-            // 5 botões: 3 em cima e 2 embaixo, cada um com metade da largura (sem buraco vazio)
-            val porLinha = if (lista.size - i == 2) 2 else 3
-            for (j in 0 until porLinha) {
-                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                if (j > 0) lp.leftMargin = Ui.dp(c, 6)
-                val a = lista.getOrNull(i + j)
-                if (a == null) { linha.addView(View(c), lp); continue }
-                val cel = android.widget.FrameLayout(c)
-                val col = Ui.vbox(c)
-                col.gravity = Gravity.CENTER
-                col.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x1A), 99, Theme.alpha(android.graphics.Color.WHITE, 0x70), 1))
-                // pequeno: ícone e nome lado a lado, numa pílula baixinha
-                col.orientation = LinearLayout.HORIZONTAL
-                col.setPadding(Ui.dp(c, 6), Ui.dp(c, 8), Ui.dp(c, 6), Ui.dp(c, 8))
-                col.addView(Ui.icone(c, a.ico, Ui.TEXT, 15), LinearLayout.LayoutParams(Ui.dp(c, 15), Ui.dp(c, 15)).also { it.rightMargin = Ui.dp(c, 6) })
-                val t = Ui.text(c, a.nome, 10f, Ui.TEXT, true, mono = true)
-                Ui.umaLinha(t, 8)
-                col.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                Ui.clique(col) { a.abre() }
-                cel.addView(col, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                if (a.alerta) cel.addView(ponto(), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 10), Ui.dp(c, 10), Gravity.TOP or Gravity.END).also { it.topMargin = Ui.dp(c, 3); it.rightMargin = Ui.dp(c, 6) })
-                linha.addView(cel, lp)
-            }
-            box.addView(linha, Ui.lp(top = if (i == 0) 0 else 6, c = c))
-            i += porLinha
+        val linha = Ui.hbox(c)
+        lista.forEachIndexed { j, a ->
+            val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            if (j > 0) lp.leftMargin = Ui.dp(c, 6)
+            val cel = android.widget.FrameLayout(c)
+            val col = Ui.vbox(c)
+            col.gravity = Gravity.CENTER
+            col.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x1A), Ui.raioPeq(16), Theme.alpha(android.graphics.Color.WHITE, 0x70), 1))
+            col.setPadding(Ui.dp(c, 2), Ui.dp(c, 10), Ui.dp(c, 2), Ui.dp(c, 9))
+            col.addView(Ui.icone(c, a.ico, Ui.TEXT, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)))
+            val t = Ui.text(c, a.nome, 9f, Ui.TEXT, true)
+            t.gravity = Gravity.CENTER
+            Ui.umaLinha(t, 7)
+            col.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 5) })
+            col.contentDescription = a.nome
+            Ui.clique(col) { a.abre() }
+            cel.addView(col, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            if (a.alerta) cel.addView(ponto(), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 9), Ui.dp(c, 9), Gravity.TOP or Gravity.END).also { it.topMargin = Ui.dp(c, 5); it.rightMargin = Ui.dp(c, 5) })
+            linha.addView(cel, lp)
         }
+        box.addView(linha)
         return box
     }
     private fun ultimaLinha(): String = NLog.ultima()
@@ -397,30 +389,35 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         // ---------------- botões fixos: colocam TOQUE RÁPIDO e MEET no menu do topo do celular ----------------
         run {
             fun fixo(rot: String, ico: Int, meet: Boolean): View {
-                // pílula limpa: ícone + nome. Verde = já está no menu (toque de novo tira)
+                // opção C: ícone + nome + chavinha. Ligada = está no menu do topo
                 val ja = MenuRapido.noMenu(meet)
-                val cor = if (ja) Ui.OK else Ui.MUTED
                 val b = Ui.hbox(c)
-                b.gravity = Gravity.CENTER
-                b.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x1A), 99, Theme.alpha(android.graphics.Color.WHITE, 0x70), 1))
-                b.setPadding(Ui.dp(c, 6), Ui.dp(c, 8), Ui.dp(c, 6), Ui.dp(c, 8))
-                b.addView(Ui.icone(c, ico, cor, 15), LinearLayout.LayoutParams(Ui.dp(c, 15), Ui.dp(c, 15)).also { it.rightMargin = Ui.dp(c, 6) })
-                b.addView(Ui.text(c, rot, 10f, Ui.TEXT, true).also { it.maxLines = 1 })
+                b.gravity = Gravity.CENTER_VERTICAL
+                b.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x1A), Ui.raioPeq(16), Theme.alpha(android.graphics.Color.WHITE, 0x70), 1))
+                b.setPadding(Ui.dp(c, 12), Ui.dp(c, 7), Ui.dp(c, 8), Ui.dp(c, 7))
+                b.addView(Ui.icone(c, ico, if (ja) Ui.OK else Ui.TEXT, 16), LinearLayout.LayoutParams(Ui.dp(c, 16), Ui.dp(c, 16)).also { it.rightMargin = Ui.dp(c, 7) })
+                val t = Ui.text(c, rot, 10f, Ui.TEXT, true)
+                Ui.umaLinha(t, 8)
+                b.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                val sw = Ui.interruptor(c, ja) { MenuRapido.alternar(act, meet) { redesenha() } }
+                sw.scaleX = 0.82f; sw.scaleY = 0.82f
+                b.addView(sw)
                 b.contentDescription = if (ja) "tirar $rot do menu do topo" else "colocar $rot no menu do topo"
                 Ui.clique(b) { MenuRapido.alternar(act, meet) { redesenha() } }
                 return b
             }
+            fun titulo(s: String) = Ui.text(c, s, 9.5f, Ui.MUTED, true)
+            add(titulo("Menu do topo"), 12)
             val l = Ui.hbox(c)
-            l.gravity = Gravity.CENTER_VERTICAL
-            l.addView(Ui.text(c, "Menu do topo", 9.5f, Ui.MUTED), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 8) })
-            l.addView(fixo("Toque rápido", R.drawable.ic_bolt, false), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.25f))
+            l.addView(fixo("Toque rápido", R.drawable.ic_bolt, false), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.15f))
             l.addView(fixo("Meet", R.drawable.ic_video, true),
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
-            add(l, 10)
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 7) })
+            add(l, 6)
+            add(titulo("Atalhos"), 12)
         }
 
         // ---------------- atalhos dos extras (pequenos, logo abaixo do bot) ----------------
-        add(atalhosExtras(c), 10)
+        add(atalhosExtras(c), 6)
 
         // ---------------- modos: o primeiro grande, o resto em grade de 2 ----------------
         val editar = Ui.text(c, "Editar ›", 10.5f, Ui.MUTED, true, mono = true)
