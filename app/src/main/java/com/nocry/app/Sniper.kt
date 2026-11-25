@@ -124,6 +124,10 @@ class SSala(val id: String, val nome: String, val org: String, val guildId: Stri
     @Volatile var somenteLeitura = false
     /** saiu "aposta confirmada": a sala fica no painel até a org encerrar (aí some 3 min depois) ou você tirar */
     @Volatile var apostaOk = false
+    /** a pessoa ligou o go automático nessa sala: botão de go que a org mandar, o app clica sozinho */
+    @Volatile var goAuto = false
+    /** a org já mandou botão de go nessa sala (null = ainda não sabe) */
+    @Volatile var temGo: Boolean? = null
     /** confirmada (aposta ou você tocou em confirmar): só some quando a org encerrar */
     val protegida: Boolean get() = apostaOk || confirmada
     val vistos: MutableSet<String> = ConcurrentHashMap.newKeySet()
@@ -165,6 +169,22 @@ object Sniper {
     private val CANCELADA = listOf(Regex("(partida|aposta|sala|fila) (foi )?(cancelad|encerrad|finalizad|expirad)"), Regex("foi cancelad"),
         Regex("tempo (esgotado|expirou|acabou)"), Regex("expirou"), Regex("nao confirm(ou|aram) (a tempo|em)"))
     private val PALAVRAS_SAIR = listOf("SAIR", "CANCEL")
+    /** botão de "go" que algumas orgs mandam na sala (GO, PRONTO, INICIAR...) */
+    private val PALAVRAS_GO = listOf("GO", "PRONTO", "INICIAR", "COMECAR", "COMEÇAR", "READY", "START", "BORA", "LIBERAR")
+
+    fun ehBotaoGo(label: String): Boolean {
+        val l = label.uppercase()
+        if ("CONFIRM" in l || "ACEIT" in l || PALAVRAS_SAIR.any { it in l }) return false
+        return PALAVRAS_GO.any { p -> Regex("(^|[^A-ZÀ-Ü])" + Regex.escape(p) + "([^A-ZÀ-Ü]|$)").containsMatchIn(l) }
+    }
+
+    /** orgs que já mostraram botão de go (fica salvo: na próxima sala já sabe) */
+    fun orgTemGo(org: String): Boolean = org.isNotBlank() && (Prefs.extraTxt("go_orgs") ?: "").split('|').contains(org)
+    private fun marcaOrgGo(org: String) {
+        if (org.isBlank() || orgTemGo(org)) return
+        val l = (Prefs.extraTxt("go_orgs") ?: "").split('|').filter { it.isNotBlank() } + org
+        Prefs.extraTxt("go_orgs", l.takeLast(100).joinToString("|"))
+    }
     /** sala já confirmada: a org avisou que a partida/aposta acabou (fila não conta: "fila encerrada" sai quando a fila enche) */
     private val FIM_PARTIDA = listOf(Regex("(partida|aposta|sala) (foi )?(cancelad|encerrad|finalizad|conclu)"), Regex("foi cancelad"),
         Regex("(sala|partida|ticket|canal) (sera|vai ser) (fechad|encerrad|apagad|deletad)"))
@@ -1636,6 +1656,20 @@ object Sniper {
         s.ultimoId = maior(s.ultimoId, m.id)
         s.ultima = agora()
         conhecerPessoas(s, m)
+        if (m.autorBot && m.botoes.any { ehBotaoGo(it.label) }) {
+            s.temGo = true
+            marcaOrgGo(s.org)
+            if (s.goAuto && !s.encerrada) {
+                val b = m.botoes.firstOrNull { !it.desativado && ehBotaoGo(it.label) }
+                val d = dc
+                if (b != null && d != null) {
+                    val n = registrarClique("sala", s.id, s.org, "${b.label.uppercase()} (go automático) na sala ${numeroSala(s.id)} (${s.org})")
+                    val r = d.clicar(m, b, n)
+                    diag("go automático ${b.label} sala ${s.nome} -> ${r.codigo}")
+                    if (r.ok) log("ganhou", "go automático · sala ${numeroSala(s.id)} (${s.org})")
+                }
+            }
+        }
         if (!m.autorBot) s.respondida = true
         s.inativa = false
         if (!vazia(m)) synchronized(s.chat) {
@@ -1847,6 +1881,42 @@ object Sniper {
             if (s.encerrada) { log("erro", "a sala ${numeroSala(s.id)} já foi encerrada pela org"); return@naFila }
             if (clicarConfirmar(s)) log("ganhou", "confirmado na sala ${numeroSala(s.id)}")
             else log("erro", "sala ${numeroSala(s.id)}: botão de confirmar não encontrado ou desativado · botões: ${ultimosBotoes.ifEmpty { "nenhum" }}")
+        }
+    }
+
+    /**
+     * botão "go automático" da sala: procura o botão de go que a org mandou e clica. Fica ligado: se a org mandar
+     * outro botão de go nessa sala, clica sozinho. Sem botão de go, avisa (resposta vai no [fim]).
+     */
+    fun goAutomatico(ligar: Boolean, fim: (String) -> Unit) {
+        naFila {
+            val s = salaAtual() ?: run { fim("Nenhuma sala aberta"); return@naFila }
+            if (!ligar) { s.goAuto = false; mudou(); fim("Go automático desligado nessa sala"); return@naFila }
+            if (s.encerrada) { fim("A org já fechou essa sala"); return@naFila }
+            val d = dc ?: run { fim("O bot está desconectado"); return@naFila }
+            val (ms, _) = d.historico(s.id, 50, null, s.guildId)
+            var desativado = false
+            for (m in ms) for (b in m.botoes) {
+                if (!ehBotaoGo(b.label)) continue
+                s.temGo = true
+                marcaOrgGo(s.org)
+                if (b.desativado) { desativado = true; continue }
+                val n = registrarClique("sala", s.id, s.org, "${b.label.uppercase()} (go) na sala ${numeroSala(s.id)} (${s.org})")
+                val r = d.clicar(m, b, n)
+                diag("go ${b.label} sala ${s.nome} -> ${r.codigo}${if (!r.ok) " " + r.corpo.take(200) else ""}")
+                if (r.ok) {
+                    s.goAuto = true
+                    mudou()
+                    log("ganhou", "go dado na sala ${numeroSala(s.id)} (${s.org})")
+                    fim("GO DADO! Se a org mandar outro botão de go, eu clico sozinho")
+                    return@naFila
+                }
+            }
+            when {
+                desativado -> { s.goAuto = true; mudou(); fim("O botão de go ainda está travado. Quando a org liberar, eu clico sozinho") }
+                orgTemGo(s.org) -> { s.goAuto = true; mudou(); fim("O botão de go ainda não apareceu nessa sala. Quando aparecer, eu clico sozinho") }
+                else -> { s.temGo = false; mudou(); fim("Essa sala não tem go automático") }
+            }
         }
     }
 

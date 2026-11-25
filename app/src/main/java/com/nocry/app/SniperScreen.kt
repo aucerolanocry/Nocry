@@ -784,7 +784,7 @@ class SniperScreen(a: MainActivity) : Screen(a) {
 
     private fun assinaturaAcoes(): String {
         val s = salaAtual()
-        return "${s?.id}|${s?.protegida}|${s?.encerrada}|${Sniper.salas.size}"
+        return "${s?.id}|${s?.protegida}|${s?.encerrada}|${Sniper.salas.size}|${s?.goAuto}|${s?.temGo}"
     }
 
     private fun acoes(b: LinearLayout) {
@@ -801,6 +801,19 @@ class SniperScreen(a: MainActivity) : Screen(a) {
             Ui.dialogConfirma(c, "CANCELAR SALA", "Ele clica em cancelar/sair na sala e volta a procurar nessa org.", "CANCELAR") { Sniper.cancelar() }
         }, pesoUm(8))
         b.addView(linha)
+        // go automático: clica no botão de go que a org manda (e nos próximos dessa sala)
+        if (sa != null) {
+            val ligado = sa.goAuto
+            val rot = when {
+                ligado -> "go automático ligado"
+                sa.temGo == false && !Sniper.orgTemGo(sa.org) -> "go automático (essa sala não tem)"
+                else -> "dar go automático"
+            }
+            b.addView(Ui.button(c, rot, if (ligado) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_play) {
+                Ui.toast(act, if (ligado) "desligando..." else "procurando o botão de go...")
+                Sniper.goAutomatico(!ligado) { msg -> Bg.ui { Ui.toast(act, msg) } }
+            }, Ui.lp(top = 8, c = c))
+        }
         val tirar = Ui.text(c, "tirar essa sala do painel", 11f, Ui.MUTED, true, mono = true)
         tirar.gravity = Gravity.CENTER
         tirar.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 2))
