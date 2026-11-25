@@ -252,6 +252,10 @@ async function init(env) {
   for (const col of colunasNovas) {
     try { await env.DB.prepare("ALTER TABLE devices ADD COLUMN " + col).run(); } catch (e) { /* já existe */ }
   }
+  // rank: tempo de app (minutos) e a frase do perfil do dono
+  for (const col of ["uso INTEGER NOT NULL DEFAULT 0", "frase TEXT"]) {
+    try { await env.DB.prepare("ALTER TABLE rank ADD COLUMN " + col).run(); } catch (e) { /* já existe */ }
+  }
   ready = true;
 }
 
@@ -521,6 +525,8 @@ async function extrasRoute(req, env, ip) {
   // ---- rank (vitórias, R$, bypass) — o app manda os números dele; ninguém vê mensagens nem pix
   if (op === "rk_enviar") {
     const apelido = clean(b.apelido, 24).trim() || "jogador";
+    const dono = a.rec.role === "owner";
+    const frase = dono ? clean(b.frase, 60).trim() : "";
     const num = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
     const real = (v) => Math.max(0, Math.min(1e7, Math.round((Number(v) || 0) * 100) / 100));
     const linhas = [];
@@ -528,9 +534,9 @@ async function extrasRoute(req, env, ip) {
       const per = String(x.per || "");
       if (per !== "geral" && !/^20\d\d-\d\d$/.test(per)) continue;
       linhas.push(env.DB.prepare(
-        "INSERT INTO rank (key, dev, per, apelido, vit, der, valor, byp, seq, t) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-        "ON CONFLICT(key, dev, per) DO UPDATE SET apelido = excluded.apelido, vit = excluded.vit, der = excluded.der, valor = excluded.valor, byp = excluded.byp, seq = excluded.seq, t = excluded.t"
-      ).bind(key, dev, per, apelido, num(x.vit, 100000), num(x.der, 100000), real(x.valor), num(x.byp, 1000000), num(x.seq, 10000), now));
+        "INSERT INTO rank (key, dev, per, apelido, vit, der, valor, byp, seq, t, uso, frase) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        "ON CONFLICT(key, dev, per) DO UPDATE SET apelido = excluded.apelido, vit = excluded.vit, der = excluded.der, valor = excluded.valor, byp = excluded.byp, seq = excluded.seq, t = excluded.t, uso = excluded.uso, frase = excluded.frase"
+      ).bind(key, dev, per, apelido, num(x.vit, 100000), num(x.der, 100000), real(x.valor), num(x.byp, 1000000), num(x.seq, 10000), now, num(x.uso, 10000000), frase));
     }
     if (linhas.length) await env.DB.batch(linhas);
     return json({ ok: true });
@@ -538,11 +544,20 @@ async function extrasRoute(req, env, ip) {
   if (op === "rk_lista") {
     const per = String(b.per || "geral");
     if (per !== "geral" && !/^20\d\d-\d\d$/.test(per)) return json({ ok: false, reason: "per" });
-    const ordem = b.por === "byp" ? "byp DESC, vit DESC" : b.por === "valor" ? "valor DESC, vit DESC" : "vit DESC, valor DESC";
+    const ordem = b.por === "byp" ? "r.byp DESC, r.vit DESC" : b.por === "valor" ? "r.valor DESC, r.vit DESC" : b.por === "uso" ? "r.uso DESC, r.vit DESC" : "r.vit DESC, r.valor DESC";
+    // o dono fica sempre em 1º (com o perfil especial); o resto segue a ordem escolhida
     const rows = (await env.DB.prepare(
-      "SELECT key, dev, apelido, vit, der, valor, byp, seq FROM rank WHERE per = ? AND (vit > 0 OR der > 0 OR byp > 0) ORDER BY " + ordem + " LIMIT 50"
+      "SELECT r.key, r.dev, r.apelido, r.vit, r.der, r.valor, r.byp, r.seq, r.uso, r.frase, (r.key = 'OWNER' OR k.role = 'owner') AS dono " +
+      "FROM rank r LEFT JOIN keys k ON k.key = r.key WHERE r.per = ? AND (r.vit > 0 OR r.der > 0 OR r.byp > 0 OR r.uso > 0 OR r.key = 'OWNER' OR k.role = 'owner') " +
+      "ORDER BY dono DESC, " + ordem + " LIMIT 60"
     ).bind(per).all()).results;
-    const lista = rows.map((r) => ({ apelido: r.apelido, vit: r.vit, der: r.der, valor: r.valor, byp: r.byp, seq: r.seq, eu: r.key === key && r.dev === dev }));
+    let jaDono = false;
+    const lista = [];
+    for (const r of rows) {
+      if (r.dono) { if (jaDono) continue; jaDono = true; }
+      lista.push({ apelido: r.apelido, vit: r.vit, der: r.der, valor: r.valor, byp: r.byp, seq: r.seq, uso: r.uso || 0, dono: !!r.dono, frase: r.dono ? (r.frase || "") : "", eu: r.key === key && r.dev === dev });
+      if (lista.length >= 50) break;
+    }
     return json({ ok: true, lista });
   }
 

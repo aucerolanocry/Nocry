@@ -586,8 +586,11 @@ class MainActivity : Activity() {
         aoResultado?.invoke(requestCode, resultCode, data)
     }
 
+    private var usoDesde = 0L
+
     override fun onResume() {
         super.onResume()
+        usoDesde = android.os.SystemClock.elapsedRealtime()
         naFrente = true
         bg.retoma()
         try { Conquistas.marcaDia() } catch (_: Throwable) {}
@@ -628,6 +631,7 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        if (usoDesde > 0) { try { Rank.contaUso(android.os.SystemClock.elapsedRealtime() - usoDesde) } catch (_: Throwable) {}; usoDesde = 0 }
         naFrente = false
         // saiu da tela: no painel passa a aparecer "2º plano" (ou some, se nada estiver rodando)
         Presenca.naTela = false

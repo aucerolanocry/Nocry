@@ -441,7 +441,26 @@ object Caderno {
 // Rank: vitórias, R$ e bypass de todo mundo. O app manda só os números (nada de mensagem ou pix)
 // =====================================================================================
 object Rank {
-    class Linha(val apelido: String, val vit: Int, val der: Int, val valor: Double, val byp: Int, val seq: Int, val eu: Boolean)
+    class Linha(val apelido: String, val vit: Int, val der: Int, val valor: Double, val byp: Int, val seq: Int, val eu: Boolean,
+                val uso: Int = 0, val dono: Boolean = false, val frase: String = "")
+
+    /** tempo com o app aberto (em ms), no total e no mês */
+    fun contaUso(ms: Long) {
+        if (ms <= 0 || ms > 12 * 3600_000L) return
+        Prefs.gravaNum("uso_total", Prefs.lerNum("uso_total") + ms)
+        val m = mesAtual()
+        if (Prefs.extraTxt("uso_mes_de") != m) { Prefs.extraTxt("uso_mes_de", m); Prefs.gravaNum("uso_mes", 0) }
+        Prefs.gravaNum("uso_mes", Prefs.lerNum("uso_mes") + ms)
+        mudou()
+    }
+    private fun usoMes(): Long = if (Prefs.extraTxt("uso_mes_de") == mesAtual()) Prefs.lerNum("uso_mes") else 0L
+
+    /** frase do perfil do dono no rank */
+    var frase: String
+        get() = Prefs.extraTxt("rank_frase") ?: ""
+        set(v) { Prefs.extraTxt("rank_frase", v.trim().take(60)); mudou() }
+
+    fun tempo(min: Int): String = if (min >= 60) "${min / 60}h${if (min % 60 > 0) " ${min % 60}min" else ""}" else "${min}min"
 
     fun mesAtual(): String = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
 
@@ -465,16 +484,16 @@ object Rank {
         if (!forcar && System.currentTimeMillis() - ult < 120_000L) return
         pendente = false
         Prefs.gravaNum("rank_env", System.currentTimeMillis())
-        fun per(nome: String, desde: Long, byp: Long): JSONObject {
+        fun per(nome: String, desde: Long, byp: Long, uso: Long): JSONObject {
             val r = Caderno.resumo(desde)
             val ganho = Caderno.itens().filter { it.t >= desde && it.res == "g" }.sumOf { it.valor }
             return JSONObject().put("per", nome).put("vit", r.ganhou).put("der", r.perdeu).put("valor", ganho)
-                .put("byp", byp).put("seq", Caderno.sequencia(desde))
+                .put("byp", byp).put("seq", Caderno.sequencia(desde)).put("uso", uso / 60000L)
         }
         val apelido = Prefs.apelido.ifEmpty { License.label() }.ifEmpty { "jogador" }
-        val corpo = JSONObject().put("apelido", apelido).put("pers", JSONArray()
-            .put(per("geral", 0L, Prefs.lerNum("byp_total")))
-            .put(per(mesAtual(), Caderno.inicioDoMes(), bypMes())))
+        val corpo = JSONObject().put("apelido", apelido).put("frase", frase).put("pers", JSONArray()
+            .put(per("geral", 0L, Prefs.lerNum("byp_total"), Prefs.lerNum("uso_total")))
+            .put(per(mesAtual(), Caderno.inicioDoMes(), bypMes(), usoMes())))
         if (Comunidade.x(c, "rk_enviar", corpo)?.optBoolean("ok") != true) pendente = true
     }
 
@@ -483,7 +502,8 @@ object Rank {
         if (!j.optBoolean("ok")) return null
         val a = j.optJSONArray("lista") ?: return emptyList()
         return (0 until a.length()).mapNotNull { i -> a.optJSONObject(i)?.let { o ->
-            Linha(o.optString("apelido"), o.optInt("vit"), o.optInt("der"), o.optDouble("valor", 0.0), o.optInt("byp"), o.optInt("seq"), o.optBoolean("eu"))
+            Linha(o.optString("apelido"), o.optInt("vit"), o.optInt("der"), o.optDouble("valor", 0.0), o.optInt("byp"), o.optInt("seq"), o.optBoolean("eu"),
+                o.optInt("uso"), o.optBoolean("dono"), o.optString("frase"))
         } }
     }
 }
@@ -946,13 +966,82 @@ class RankScreen(a: MainActivity) : Screen(a) {
         }
     }
 
+    /** 4 números lado a lado: vitórias, R$, bypass e tempo de app */
+    private fun numeros(r: Rank.Linha, claro: Boolean): View {
+        val c = act
+        fun cel(v: String, rot: String, cor: Int): View {
+            val b = Ui.vbox(c)
+            b.gravity = Gravity.CENTER
+            b.background = Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, if (claro) 0x1C else 0x0E), Ui.raioPeq(12))
+            b.setPadding(Ui.dp(c, 4), Ui.dp(c, 7), Ui.dp(c, 4), Ui.dp(c, 7))
+            b.addView(Ui.text(c, v, 12.5f, cor, true).also { Ui.umaLinha(it, 8); it.gravity = Gravity.CENTER })
+            b.addView(Ui.text(c, rot, 8f, Ui.MUTED, true, mono = true).also { Ui.umaLinha(it, 6); it.gravity = Gravity.CENTER }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 2, c = c))
+            return b
+        }
+        val l = Ui.hbox(c)
+        val itens = listOf(
+            cel("${r.vit}", "vitórias", Ui.OK),
+            cel("R$ " + String.format(Locale("pt", "BR"), "%.0f", r.valor), "ganho", Ui.OK),
+            cel("${r.byp}", "bypass", Ui.TEXT),
+            cel(Rank.tempo(r.uso), "no app", Ui.TEXT))
+        itens.forEachIndexed { i, v -> l.addView(v, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i > 0) it.leftMargin = Ui.dp(c, 6) }) }
+        return l
+    }
+
+    private fun cartao(r: Rank.Linha, pos: Int): View {
+        val c = act
+        val k = Ui.card(c, ligado = r.eu)
+        val h = Ui.hbox(c)
+        h.gravity = Gravity.CENTER_VERTICAL
+        val cor = when (pos) { 1 -> 0xFFFFD54A.toInt(); 2 -> 0xFFD7DCE6.toInt(); 3 -> 0xFFE0A26A.toInt(); else -> Ui.MUTED }
+        h.addView(Ui.text(c, "${pos}º", if (pos <= 3) 18f else 14f, cor, true, mono = true), LinearLayout.LayoutParams(Ui.dp(c, 40), ViewGroup.LayoutParams.WRAP_CONTENT))
+        val col = Ui.vbox(c)
+        col.addView(Ui.text(c, r.apelido + if (r.eu) " (você)" else "", 14f, Ui.TEXT, true).also { t -> Ui.umaLinha(t, 10) })
+        col.addView(Ui.text(c, "${r.der} derrotas" + (if (r.seq >= 2) " · ${r.seq} vitórias seguidas" else ""), 10f, Ui.MUTED), Ui.lp(top = 2, c = c))
+        h.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        k.addView(h)
+        k.addView(numeros(r, false), Ui.lp(top = 10, c = c))
+        return k
+    }
+
+    /** o perfil do dono: sempre em 1º, com foto, coroa, nome em degradê e frase */
+    private fun cartaoDono(r: Rank.Linha): View {
+        val c = act
+        val k = Ui.card(c, forte = true, ligado = true)
+        k.setPadding(Ui.dp(c, 16), Ui.dp(c, 16), Ui.dp(c, 16), Ui.dp(c, 16))
+        val topo = Ui.hbox(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        val foto = FotoPerfil(c)
+        if (!r.eu) foto.fixa = try { android.graphics.BitmapFactory.decodeResource(c.resources, R.drawable.perfil_padrao) } catch (_: Throwable) { null }
+        val ff = android.widget.FrameLayout(c)
+        ff.background = Ui.shape(c, 0, 99, 0xFFFFD54A.toInt(), 2)
+        ff.setPadding(Ui.dp(c, 3), Ui.dp(c, 3), Ui.dp(c, 3), Ui.dp(c, 3))
+        ff.addView(foto, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        topo.addView(ff, LinearLayout.LayoutParams(Ui.dp(c, 66), Ui.dp(c, 66)).also { it.rightMargin = Ui.dp(c, 14) })
+        val col = Ui.vbox(c)
+        val linha1 = Ui.hbox(c)
+        linha1.gravity = Gravity.CENTER_VERTICAL
+        linha1.addView(Ui.icone(c, R.drawable.ic_crown, 0xFFFFD54A.toInt(), 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 6) })
+        linha1.addView(Ui.text(c, "TOP 1", 11f, 0xFFFFD54A.toInt(), true, mono = true).also { it.letterSpacing = 0.2f })
+        linha1.addView(View(c), LinearLayout.LayoutParams(Ui.dp(c, 8), 1))
+        linha1.addView(Ui.selo(c, "DONO", Ui.RED, true))
+        col.addView(linha1)
+        col.addView(Ui.gradTexto(c, r.apelido, 24f).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 4, c = c))
+        col.addView(Ui.text(c, r.frase.ifBlank { "criador do NOCRY" }, 11f, Ui.TEXT).also { it.maxLines = 2 }, Ui.lp(top = 2, c = c))
+        topo.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        k.addView(topo)
+        k.addView(numeros(r, true), Ui.lp(top = 14, c = c))
+        if (r.seq >= 2) k.addView(Ui.text(c, "${r.seq} vitórias seguidas · ${r.der} derrotas", 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
+        return k
+    }
+
     override fun render() {
         limpa()
         val c = act
         cabecalho(titulo, "Quem mais ganhou e quem mais usou bypass entre todo mundo do Nocry. Aparece o seu apelido do Estúdio.")
         add(Ui.segmento(c, listOf("Este mês", "Geral"), if (mes) 0 else 1) { mes = it == 0; carregar() }, 14)
-        add(Ui.segmento(c, listOf("Vitórias", "R$ ganho", "Bypass"), when (por) { "valor" -> 1; "byp" -> 2; else -> 0 }) {
-            por = when (it) { 1 -> "valor"; 2 -> "byp"; else -> "vit" }; carregar()
+        add(Ui.segmento(c, listOf("Vitórias", "R$", "Bypass", "Tempo"), when (por) { "valor" -> 1; "byp" -> 2; "uso" -> 3; else -> 0 }) {
+            por = when (it) { 1 -> "valor"; 2 -> "byp"; 3 -> "uso"; else -> "vit" }; carregar()
         }, 8)
         val l = linhas
         when {
@@ -960,24 +1049,14 @@ class RankScreen(a: MainActivity) : Screen(a) {
             erro -> { add(Ui.dica(c, "Sem internet agora. Toque pra tentar de novo.", Ui.Dica.AVISO).also { v -> Ui.clique(v) { carregar() } }, 14); return }
             l.isNullOrEmpty() -> { add(Ui.dica(c, "Ninguém pontuou ainda nesse período. As vitórias entram sozinhas pelo Caderno.", Ui.Dica.INFO), 14); return }
         }
-        l!!.forEachIndexed { i, r ->
-            val k = Ui.card(c, ligado = r.eu)
-            val h = Ui.hbox(c)
-            h.gravity = Gravity.CENTER_VERTICAL
-            val pos = Ui.text(c, if (i < 3) listOf("1º", "2º", "3º")[i] else "${i + 1}º", if (i < 3) 18f else 14f, if (i < 3) Ui.WARN else Ui.MUTED, true, mono = true)
-            h.addView(pos, LinearLayout.LayoutParams(Ui.dp(c, 40), ViewGroup.LayoutParams.WRAP_CONTENT))
-            val col = Ui.vbox(c)
-            col.addView(Ui.text(c, r.apelido + if (r.eu) " (você)" else "", 14f, Ui.TEXT, true).also { t -> Ui.umaLinha(t, 10) })
-            val sub = "${r.vit} vitórias · ${r.der} derrotas" + (if (r.seq >= 3) " · ${r.seq} seguidas" else "")
-            col.addView(Ui.text(c, sub, 10.5f, Ui.MUTED), Ui.lp(top = 2, c = c))
-            h.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            val dir = Ui.vbox(c)
-            dir.gravity = Gravity.END
-            dir.addView(Ui.text(c, "R$ " + String.format(Locale("pt", "BR"), "%.2f", r.valor), 13f, Ui.OK, true))
-            dir.addView(Ui.text(c, "${r.byp} bypass", 10f, Ui.MUTED, true, mono = true), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 2, c = c))
-            h.addView(dir)
-            k.addView(h)
-            add(k, 8)
+        if (License.isOwner()) add(Ui.button(c, "editar meu perfil do rank", Ui.Kind.GHOST, R.drawable.ic_crown) {
+            Ui.dialogTexto(act, "FRASE DO SEU PERFIL", "aparece embaixo do seu nome no topo do rank") { v -> Rank.frase = v; carregar() }
+        }, 12)
+        var pos = 0
+        for (r in l!!) {
+            if (r.dono) { add(cartaoDono(r), 14); continue }
+            pos++
+            add(cartao(r, pos), 8)
         }
         add(Ui.text(c, "Atualiza sozinho quando você ganha, perde ou usa bypass.", 10.5f, Ui.MUTED), 10)
     }
@@ -1341,10 +1420,12 @@ class FotoPerfil(c: Context) : View(c) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val borda = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val m = android.graphics.Matrix()
+    /** foto de outra pessoa (ex.: o dono no rank); sem isso, mostra a sua */
+    var fixa: android.graphics.Bitmap? = null
 
     override fun onDraw(cv: Canvas) {
         super.onDraw(cv)
-        val b = Perfil.foto(context) ?: return
+        val b = fixa ?: Perfil.foto(context) ?: return
         val w = width.toFloat(); val h = height.toFloat()
         val r = minOf(w, h) / 2f
         val esc = (2 * r) / minOf(b.width, b.height)
