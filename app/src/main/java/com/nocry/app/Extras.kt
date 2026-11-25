@@ -1034,6 +1034,13 @@ class RankScreen(a: MainActivity) : Screen(a) {
     }
 
     /** o perfil do dono: sempre em 1º, com foto, coroa, nome em degradê e frase */
+    /** a entrada do top 1 aparece uma vez cada vez que abre o rank */
+    private var introFeita = false
+
+    /** quem vê o próprio perfil: a foto dele; os outros: a arte do dono */
+    private fun fotoDono(r: Rank.Linha): android.graphics.Bitmap? =
+        if (r.eu) Perfil.foto(act) else try { android.graphics.BitmapFactory.decodeResource(act.resources, R.drawable.perfil_padrao) } catch (_: Throwable) { null }
+
     private fun cartaoDono(r: Rank.Linha): View {
         val c = act
         val k = Ui.card(c, forte = true, ligado = true)
@@ -1041,12 +1048,13 @@ class RankScreen(a: MainActivity) : Screen(a) {
         val topo = Ui.hbox(c)
         topo.gravity = Gravity.CENTER_VERTICAL
         val foto = FotoPerfil(c)
-        if (!r.eu) foto.fixa = try { android.graphics.BitmapFactory.decodeResource(c.resources, R.drawable.perfil_padrao) } catch (_: Throwable) { null }
+        foto.fixa = fotoDono(r)
+        // foto com o anel dourado girando em volta
         val ff = android.widget.FrameLayout(c)
-        ff.background = Ui.shape(c, 0, 99, 0xFFFFD54A.toInt(), 2)
-        ff.setPadding(Ui.dp(c, 3), Ui.dp(c, 3), Ui.dp(c, 3), Ui.dp(c, 3))
-        ff.addView(foto, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        topo.addView(ff, LinearLayout.LayoutParams(Ui.dp(c, 66), Ui.dp(c, 66)).also { it.rightMargin = Ui.dp(c, 14) })
+        ff.addView(AnelGiratorio(c), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        ff.addView(foto, android.widget.FrameLayout.LayoutParams(Ui.dp(c, 62), Ui.dp(c, 62), Gravity.CENTER))
+        Ui.clique(ff) { IntroTop1.mostrar(act, fotoDono(r), r.apelido, r.frase) }
+        topo.addView(ff, LinearLayout.LayoutParams(Ui.dp(c, 84), Ui.dp(c, 84)).also { it.rightMargin = Ui.dp(c, 12) })
         val col = Ui.vbox(c)
         val linha1 = Ui.hbox(c)
         linha1.gravity = Gravity.CENTER_VERTICAL
@@ -1055,14 +1063,28 @@ class RankScreen(a: MainActivity) : Screen(a) {
         linha1.addView(View(c), LinearLayout.LayoutParams(Ui.dp(c, 8), 1))
         linha1.addView(Ui.selo(c, "DONO", Ui.RED, true))
         col.addView(linha1)
-        col.addView(Ui.gradTexto(c, r.apelido, 24f).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 4, c = c))
+        val nome = TextoBrilho(c)
+        nome.text = r.apelido.uppercase()
+        nome.textSize = 24f
+        nome.typeface = Ui.text(c, "x", 24f, Ui.TEXT, true).typeface
+        Ui.umaLinha(nome, 14)
+        col.addView(nome, Ui.lp(top = 4, c = c))
         col.addView(Ui.text(c, r.frase.ifBlank { "criador do NOCRY" }, 11f, Ui.TEXT).also { it.maxLines = 2 }, Ui.lp(top = 2, c = c))
         topo.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         k.addView(topo)
         k.addView(numeros(r, true), Ui.lp(top = 14, c = c))
         if (r.seq >= 2) k.addView(Ui.text(c, "${r.seq} vitórias seguidas · ${r.der} derrotas", 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 8, c = c))
         Ui.clique(k) { detalhes(r) }
-        return k
+        // luz dourada correndo pela borda + o cartão pulsando de leve
+        val moldura = android.widget.FrameLayout(c)
+        moldura.addView(k, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        moldura.addView(BordaViva(c), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        pulsar(moldura)
+        if (!introFeita) {
+            introFeita = true
+            moldura.post { IntroTop1.mostrar(act, fotoDono(r), r.apelido, r.frase) }
+        }
+        return moldura
     }
 
     override fun render() {
