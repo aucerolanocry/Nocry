@@ -100,7 +100,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                 val cel = android.widget.FrameLayout(c)
                 val col = Ui.vbox(c)
                 col.gravity = Gravity.CENTER
-                col.background = Ui.ripple(c, Ui.glass(c, 99))
+                col.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x1A), 99, Theme.alpha(android.graphics.Color.WHITE, 0x70), 1))
                 // pequeno: ícone e nome lado a lado, numa pílula baixinha
                 col.orientation = LinearLayout.HORIZONTAL
                 col.setPadding(Ui.dp(c, 6), Ui.dp(c, 8), Ui.dp(c, 6), Ui.dp(c, 8))
@@ -401,11 +401,11 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                 val ja = MenuRapido.noMenu(meet)
                 val cor = if (ja) Ui.OK else Ui.MUTED
                 val b = Ui.hbox(c)
-                b.gravity = Gravity.CENTER_VERTICAL
-                b.background = Ui.ripple(c, Ui.peca(c, 99, borda = if (ja) 0x40 else 0x18))
-                b.setPadding(Ui.dp(c, 9), Ui.dp(c, 5), Ui.dp(c, 11), Ui.dp(c, 5))
-                b.addView(Ui.icone(c, ico, cor, 12), LinearLayout.LayoutParams(Ui.dp(c, 12), Ui.dp(c, 12)).also { it.rightMargin = Ui.dp(c, 5) })
-                b.addView(Ui.text(c, rot, 9.5f, if (ja) Ui.TEXT else Ui.MUTED, true).also { it.maxLines = 1; it.letterSpacing = 0.04f })
+                b.gravity = Gravity.CENTER
+                b.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x1A), 99, Theme.alpha(android.graphics.Color.WHITE, 0x70), 1))
+                b.setPadding(Ui.dp(c, 6), Ui.dp(c, 8), Ui.dp(c, 6), Ui.dp(c, 8))
+                b.addView(Ui.icone(c, ico, cor, 15), LinearLayout.LayoutParams(Ui.dp(c, 15), Ui.dp(c, 15)).also { it.rightMargin = Ui.dp(c, 6) })
+                b.addView(Ui.text(c, rot, 10f, Ui.TEXT, true).also { it.maxLines = 1 })
                 b.contentDescription = if (ja) "tirar $rot do menu do topo" else "colocar $rot no menu do topo"
                 Ui.clique(b) { MenuRapido.alternar(act, meet) { redesenha() } }
                 return b
@@ -413,9 +413,9 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             val l = Ui.hbox(c)
             l.gravity = Gravity.CENTER_VERTICAL
             l.addView(Ui.text(c, "Menu do topo", 9.5f, Ui.MUTED), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 8) })
-            l.addView(fixo("Toque rápido", R.drawable.ic_bolt, false))
+            l.addView(fixo("Toque rápido", R.drawable.ic_bolt, false), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.25f))
             l.addView(fixo("Meet", R.drawable.ic_video, true),
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 6) })
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
             add(l, 10)
         }
 
