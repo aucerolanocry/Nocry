@@ -345,13 +345,12 @@ class MainActivity : Activity() {
 
         // losango em degrade antes do titulo (aparece nas abas, onde nao tem botao de voltar). Era uma barrinha
         // em pe, que no tema claro/prata parecia a letra "I" grudada no titulo ("I CONEXÃO")
-        val marca = View(this)
-        marca.background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(Theme.accent, Theme.accent2)).also { it.cornerRadius = Ui.dp(this, 2).toFloat() }
-        marca.rotation = 45f
+        // ícone da tela antes do título (combina com o assunto: wi-fi na conexão, pincel no estúdio...)
+        val marca = Ui.icone(this, R.drawable.ic_home, Theme.mix(Theme.accent, Color.WHITE, 0.2f), 20)
         marcaTopo = marca
-        val mp = LinearLayout.LayoutParams(Ui.dp(this, 9), Ui.dp(this, 9))
-        mp.rightMargin = Ui.dp(this, 13)
-        mp.leftMargin = Ui.dp(this, 7)
+        val mp = LinearLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20))
+        mp.rightMargin = Ui.dp(this, 10)
+        mp.leftMargin = Ui.dp(this, 4)
         t.addView(marca, mp)
 
         barra = Ui.text(this, "NOCRY", 22f, Ui.TEXT, true)
@@ -543,6 +542,7 @@ class MainActivity : Activity() {
         barra.invalidate()
         voltar.visibility = if (pilha.size > 1) View.VISIBLE else View.GONE
         marcaTopo.visibility = if (pilha.size > 1) View.GONE else View.VISIBLE
+        (marcaTopo as? android.widget.ImageView)?.setImageResource(Ui.iconeDe(s.titulo) ?: R.drawable.ic_home)
         topo.visibility = if (s.semBarra && pilha.size == 1) View.GONE else View.VISIBLE
         preencheNav()
     }

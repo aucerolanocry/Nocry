@@ -309,18 +309,21 @@ class SniperScreen(a: MainActivity) : Screen(a) {
         val col = Ui.vbox(c)
         col.gravity = Gravity.CENTER_HORIZONTAL
         // ripple pra dar o toque e deixar claro que é clicável
-        col.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, if (aceso) 0x10 else 0x08), Ui.raioPeq(14),
-            if (aceso) Theme.alpha(Theme.accent, 0x77) else Theme.alpha(android.graphics.Color.WHITE, 0x1C), 1))
+        // cara de botão: tem coisa = verde aceso; vazio = cinza
+        col.background = Ui.ripple(c, Ui.shape(c, if (aceso) Theme.alpha(Ui.OK, 0x22) else Theme.alpha(android.graphics.Color.WHITE, 0x10), Ui.raioPeq(14),
+            if (aceso) Theme.alpha(Ui.OK, 0xC0) else Theme.alpha(android.graphics.Color.WHITE, 0x55), 2))
         col.setPadding(Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 12))
         val cab = Ui.hbox(c)
         cab.gravity = Gravity.CENTER
-        cab.addView(Ui.icone(c, ico, if (aceso) Theme.accent else Ui.MUTED, 12))
+        cab.addView(Ui.icone(c, ico, if (aceso) Ui.OK else Ui.MUTED, 12))
         val r = Ui.text(c, rotulo, 9f, Ui.MUTED, true, mono = true)
         r.letterSpacing = 0.08f
         cab.addView(r, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 5) })
         // setinha: avisa que dá pra tocar e abrir
-        cab.addView(Ui.icone(c, R.drawable.ic_chevron, Theme.alpha(Theme.accent, 0xAA), 9),
-            LinearLayout.LayoutParams(Ui.dp(c, 11), Ui.dp(c, 11)).also { it.leftMargin = Ui.dp(c, 3) })
+        val seta = android.widget.FrameLayout(c)
+        seta.background = Ui.shape(c, if (aceso) Ui.OK else Theme.alpha(android.graphics.Color.WHITE, 0x66), 99)
+        seta.addView(Ui.icone(c, R.drawable.ic_chevron, 0xFF0D0F14.toInt(), 9), android.widget.FrameLayout.LayoutParams(Ui.dp(c, 9), Ui.dp(c, 9), Gravity.CENTER))
+        cab.addView(seta, LinearLayout.LayoutParams(Ui.dp(c, 15), Ui.dp(c, 15)).also { it.leftMargin = Ui.dp(c, 5) })
         col.addView(cab, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val v = if (aceso) Ui.gradTexto(c, valor, 22f) else Ui.text(c, valor, 22f, Ui.TEXT, true)
         v.gravity = Gravity.CENTER

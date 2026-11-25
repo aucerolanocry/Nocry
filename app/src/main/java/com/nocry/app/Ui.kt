@@ -216,17 +216,54 @@ object Ui {
         return t
     }
 
-    /** titulo de secao: marquinha no degrade do tema, o nome e uma linha fina que some pra direita */
+    /** ícone que combina com o título (seção ou tela); null = não achou, usa o losango */
+    fun iconeDe(titulo: String): Int? {
+        val t = titulo.lowercase()
+        return when {
+            "menu do topo" in t -> R.drawable.ic_bolt
+            "atalho" in t -> R.drawable.ic_sparkle
+            "modo" in t -> R.drawable.ic_gamepad
+            "sala" in t || "bot" in t -> R.drawable.ic_crown
+            "partida" in t || "free fire" in t -> R.drawable.ic_gamepad
+            "testar" in t || "passo" in t -> R.drawable.ic_check
+            "conquista" in t || "rank" in t -> R.drawable.ic_stat
+            "key" in t -> R.drawable.ic_key
+            "erro" in t -> R.drawable.ic_warn
+            "amig" in t || "esperando" in t || "pedido" in t -> R.drawable.ic_user
+            "nível" in t || "nivel" in t || "tipo" in t || "ajuste" in t -> R.drawable.ic_sliders
+            "link" in t -> R.drawable.ic_globe
+            "staff" in t || "sobre" in t || "ajuda" in t -> R.drawable.ic_info
+            "volume" in t -> R.drawable.ic_volume
+            "conex" in t -> R.drawable.ic_wifi
+            "otimiza" in t -> R.drawable.ic_chip
+            "bypass" in t -> R.drawable.ic_shield
+            "estúdio" in t || "estudio" in t || "visual" in t -> R.drawable.ic_brush
+            "log" in t || "registro" in t || "caderno" in t -> R.drawable.ic_log
+            "evento" in t -> R.drawable.ic_sparkle
+            "recurso" in t || "atualiza" in t -> R.drawable.ic_download
+            "competitivo" in t || "toque" in t -> R.drawable.ic_bolt
+            "início" in t || "inicio" in t -> R.drawable.ic_home
+            else -> null
+        }
+    }
+
+    /** titulo de secao: ícone que combina com o assunto, o nome e uma linha fina que some pra direita */
     fun secao(c: Context, s: String, direita: View? = null): View {
         val r = hbox(c)
-        // losango no degrade (igual ao do titulo da tela): a barrinha em pe parecia a letra "I" ("I MODOS")
-        val m = View(c)
-        m.background = Botao(c, "grad", 1)
-        m.rotation = 45f
-        val mp = LinearLayout.LayoutParams(dp(c, 6), dp(c, 6))
-        mp.leftMargin = dp(c, 2)
-        mp.rightMargin = dp(c, 10)
-        r.addView(m, mp)
+        r.gravity = Gravity.CENTER_VERTICAL
+        val ic = iconeDe(s)
+        if (ic != null) {
+            r.addView(icone(c, ic, Theme.mix(Theme.accent, Color.WHITE, 0.25f), 14), LinearLayout.LayoutParams(dp(c, 14), dp(c, 14)).also { it.rightMargin = dp(c, 8) })
+        } else {
+            // sem ícone que combine: losango no degrade
+            val m = View(c)
+            m.background = Botao(c, "grad", 1)
+            m.rotation = 45f
+            val mp = LinearLayout.LayoutParams(dp(c, 6), dp(c, 6))
+            mp.leftMargin = dp(c, 2)
+            mp.rightMargin = dp(c, 10)
+            r.addView(m, mp)
+        }
         r.addView(label(c, s))
         val linha = View(c)
         linha.background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
@@ -290,10 +327,11 @@ object Ui {
         val r = hbox(c)
         r.gravity = Gravity.CENTER
         // clicável ganha borda de destaque + ripple pra ficar claro que dá pra tocar
-        r.background = if (clicavel)
-            ripple(c, shape(c, Theme.alpha(Theme.accent, 0x2C), raioPilula(), Theme.alpha(Theme.accent, 0xD0), 2))
-        else peca(c, raioPilula(), 0x8C)
         val cor = when (ok) { true -> OK; false -> BAD; null -> WARN }
+        // clicável: fundo e borda na cor do estado (verde ligado, vermelho desligado, amarelo atenção)
+        r.background = if (clicavel)
+            ripple(c, shape(c, Theme.alpha(cor, 0x24), raioPilula(), Theme.alpha(cor, 0xC8), 2))
+        else peca(c, raioPilula(), 0x8C)
         val dot = View(c)
         dot.background = shape(c, cor, 4)
         val dp2 = LinearLayout.LayoutParams(dp(c, 7), dp(c, 7))
@@ -318,8 +356,8 @@ object Ui {
             umaLinha(t, 7)
             // botãozinho redondo na ponta, com o ícone na cor de contraste do tema: deixa claro que dá pra tocar
             val bola = FrameLayout(c)
-            bola.background = shape(c, Theme.alpha(Theme.accent, 0xE6), 99)
-            bola.addView(icone(c, ico, Theme.sobreGrad(), 10), FrameLayout.LayoutParams(dp(c, 10), dp(c, 10), Gravity.CENTER))
+            bola.background = shape(c, cor, 99)
+            bola.addView(icone(c, ico, 0xFF0D0F14.toInt(), 10), FrameLayout.LayoutParams(dp(c, 10), dp(c, 10), Gravity.CENTER))
             r.addView(bola, LinearLayout.LayoutParams(dp(c, 18), dp(c, 18)).also { it.leftMargin = dp(c, 4) })
         } else r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val pv = if (compacto) 6 else 9
