@@ -286,7 +286,7 @@ private class FundoTop1(c: Context, private val inicio: Long) : View(c) {
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0f) return
         val agora = SystemClock.uptimeMillis()
-        val ms = agora - inicio
+        val ms = ((agora - inicio) / IntroTop1.lento).toLong()
         val dt = if (ultimo == 0L) 0f else ((agora - ultimo) / 1000f).coerceAtMost(0.05f)
         ultimo = agora
         val cx = w / 2f; val cy = h * 0.4f
@@ -401,6 +401,8 @@ private class FundoTop1(c: Context, private val inicio: Long) : View(c) {
  */
 object IntroTop1 {
     @Volatile private var abrindo = false
+    /** só nos prints de teste: deixa a entrada mais lenta pra dar pra fotografar cada parte */
+    @JvmStatic var lento = 1f
 
     /** deixa o som pronto antes (chamado quando o rank abre) */
     fun preparar() = SomTop1.preparar()
@@ -496,7 +498,7 @@ object IntroTop1 {
         val quadro = object : android.view.Choreographer.FrameCallback {
             override fun doFrame(n: Long) {
                 if (camada.parent == null) return
-                val ms = SystemClock.uptimeMillis() - inicio
+                val ms = ((SystemClock.uptimeMillis() - inicio) / lento).toLong()
                 // tremida: cresce antes da explosão, forte na explosão, menor no carimbo
                 val amp = when {
                     ms < Tempo.BOOM -> 3f * (ms / Tempo.BOOM.toFloat()).let { x -> x * x }

@@ -231,6 +231,7 @@ class MainActivity : Activity() {
             if (BuildConfig.PREVIEW) {
                 Prefs.extraTxt("inicio_estilo", intent?.getStringExtra("inicio") ?: "")
                 Ui.estiloBt = intent?.getStringExtra("estilo") ?: ""
+                IntroTop1.lento = intent?.getStringExtra("lento")?.toFloatOrNull() ?: 1f
                 intent?.getStringExtra("cor")?.let { h -> runCatching { Prefs.accent = (0xFF000000 or h.toLong(16)).toInt(); Prefs.accent2 = Prefs.accent } }
             }
             abre(HomeScreen(this))
