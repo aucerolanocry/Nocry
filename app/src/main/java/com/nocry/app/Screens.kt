@@ -396,24 +396,24 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         run {
             val l = Ui.hbox(c)
             fun fixo(rot: String, chave: String, ico: Int, meet: Boolean): View {
+                // pilulinha: + TOQUE RÁPIDO (ainda não está no menu) ou ✓ TOQUE RÁPIDO (já está)
                 val ja = Prefs.lerNum(chave) == 2L
                 val b = Ui.hbox(c)
-                b.gravity = Gravity.CENTER_VERTICAL
-                b.background = Ui.ripple(c, Ui.glass(c, ligado = ja))
-                b.setPadding(Ui.dp(c, 12), Ui.dp(c, 10), Ui.dp(c, 12), Ui.dp(c, 10))
-                b.addView(Ui.icone(c, ico, if (ja) Theme.accent else Ui.TEXT, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 10) })
-                val col = Ui.vbox(c)
-                col.addView(Ui.text(c, rot, 12f, Ui.TEXT, true, mono = true).also { Ui.umaLinha(it, 9) })
-                col.addView(Ui.text(c, if (ja) "NO MENU ✓" else "+ ADICIONAR AO MENU", 9.5f, if (ja) Ui.OK else Ui.MUTED, true, mono = true).also { Ui.umaLinha(it, 7) })
-                b.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                b.gravity = Gravity.CENTER
+                b.background = Ui.ripple(c, Ui.peca(c, 99, borda = if (ja) 0x55 else 0x1F))
+                b.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6))
+                b.addView(Ui.icone(c, ico, if (ja) Ui.OK else Ui.TEXT, 13), LinearLayout.LayoutParams(Ui.dp(c, 13), Ui.dp(c, 13)).also { it.rightMargin = Ui.dp(c, 6) })
+                b.addView(Ui.text(c, (if (ja) "✓ " else "+ ") + rot, 10f, if (ja) Ui.OK else Ui.TEXT, true, mono = true).also { it.maxLines = 1 })
                 b.contentDescription = "colocar $rot no menu rápido"
                 Ui.clique(b) { MenuRapido.adicionar(act, meet) { redesenha() } }
                 return b
             }
-            l.addView(fixo("TOQUE RÁPIDO", "tile_dica", R.drawable.ic_bolt, false), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            l.gravity = Gravity.CENTER_VERTICAL
+            l.addView(Ui.text(c, "MENU DO TOPO", 9.5f, Ui.MUTED, true, mono = true), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 8) })
+            l.addView(fixo("TOQUE RÁPIDO", "tile_dica", R.drawable.ic_bolt, false))
             l.addView(fixo("MEET", "tile_dica_meet", R.drawable.ic_video, true),
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 10) })
-            add(l, 12)
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 6) })
+            add(l, 10)
         }
 
         // ---------------- atalhos dos extras (pequenos, logo abaixo do bot) ----------------
