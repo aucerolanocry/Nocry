@@ -1144,6 +1144,22 @@ class SniperScreen(a: MainActivity) : Screen(a) {
                 p.addView(tx, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 7) })
                 p.contentDescription = "copiar $rot"
                 Ui.clique(p) { copiar(valor, "$rot copiado") }
+                if (rot == "chave pix") {
+                    // chave pix: ao lado, o botão do QR code / copia e cola (com o valor da sala)
+                    val lin = Ui.hbox(c)
+                    lin.gravity = Gravity.CENTER_VERTICAL
+                    lin.addView(p)
+                    val q = Ui.hbox(c)
+                    q.gravity = Gravity.CENTER_VERTICAL
+                    q.background = p.background.constantState?.newDrawable()?.mutate() ?: p.background
+                    q.setPadding(Ui.dp(c, 10), Ui.dp(c, 7), Ui.dp(c, 10), Ui.dp(c, 7))
+                    q.addView(texto("QR", 11.5f, corTexto, true))
+                    q.contentDescription = "QR code do pix"
+                    Ui.clique(q) { Pix.mostrar(act, valor, salaAtual()?.fila?.let { Caderno.valorDe(it) } ?: 0.0) }
+                    lin.addView(q, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 6) })
+                    col.addView(lin, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 6) })
+                    continue
+                }
                 col.addView(p, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 6) })
             }
             b.addView(col, solto(2))

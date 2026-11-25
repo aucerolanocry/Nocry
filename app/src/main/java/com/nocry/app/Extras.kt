@@ -973,3 +973,187 @@ class AmigosScreen(a: MainActivity) : Screen(a) {
         }
     }
 }
+
+// =====================================================================================
+// Foto de perfil (no topo do início). Padrão: a arte do NOCRY; dá pra trocar pela galeria
+// =====================================================================================
+object Perfil {
+    const val REQ = 7401
+    private fun arquivo(c: Context) = java.io.File(c.filesDir, "perfil.jpg")
+    @Volatile private var cache: android.graphics.Bitmap? = null
+    @Volatile var versao = 0
+
+    fun foto(c: Context): android.graphics.Bitmap? {
+        cache?.let { return it }
+        val f = arquivo(c)
+        val b = try {
+            if (f.exists()) android.graphics.BitmapFactory.decodeFile(f.path)
+            else android.graphics.BitmapFactory.decodeResource(c.resources, R.drawable.perfil_padrao)
+        } catch (_: Throwable) { null }
+        cache = b
+        return b
+    }
+
+    fun personalizada(c: Context) = arquivo(c).exists()
+
+    fun padrao(c: Context) {
+        try { arquivo(c).delete() } catch (_: Throwable) {}
+        cache = null
+        versao++
+    }
+
+    /** recorta no meio (quadrado), diminui pra 512 e guarda */
+    fun salvar(c: Context, u: android.net.Uri): Boolean {
+        return try {
+            val op = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            c.contentResolver.openInputStream(u)?.use { android.graphics.BitmapFactory.decodeStream(it, null, op) }
+            var amostra = 1
+            while (op.outWidth / (amostra * 2) >= 512 && op.outHeight / (amostra * 2) >= 512) amostra *= 2
+            val b = c.contentResolver.openInputStream(u)?.use {
+                android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = amostra })
+            } ?: return false
+            val lado = minOf(b.width, b.height)
+            val q = android.graphics.Bitmap.createBitmap(b, (b.width - lado) / 2, (b.height - lado) / 2, lado, lado)
+            val f = android.graphics.Bitmap.createScaledBitmap(q, 512, 512, true)
+            java.io.FileOutputStream(arquivo(c)).use { f.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
+            cache = f
+            versao++
+            true
+        } catch (_: Throwable) { false }
+    }
+
+    /** toque na foto: trocar ou voltar pra padrão */
+    fun menu(act: MainActivity, depois: () -> Unit) {
+        val ops = if (personalizada(act)) listOf("Trocar foto", "Voltar pra foto padrão") else listOf("Trocar foto")
+        Ui.dialogEscolha(act, "FOTO DE PERFIL", ops) { i ->
+            if (i == 1) { padrao(act); depois(); return@dialogEscolha }
+            val it = Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
+            act.aoResultado = { req, res, data ->
+                val u = data?.data
+                if (req == REQ && res == android.app.Activity.RESULT_OK && u != null) {
+                    Bg.io {
+                        val ok = salvar(act.applicationContext, u)
+                        Bg.ui { Ui.toast(act, if (ok) "FOTO TROCADA" else "não consegui abrir essa imagem"); depois() }
+                    }
+                }
+            }
+            try {
+                @Suppress("DEPRECATION")
+                act.startActivityForResult(it, REQ)
+            } catch (_: Throwable) { Ui.toast(act, "nenhum app de galeria encontrado") }
+        }
+    }
+}
+
+/** a foto redonda com borda no tom do tema */
+class FotoPerfil(c: Context) : View(c) {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val borda = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val m = android.graphics.Matrix()
+
+    override fun onDraw(cv: Canvas) {
+        super.onDraw(cv)
+        val b = Perfil.foto(context) ?: return
+        val w = width.toFloat(); val h = height.toFloat()
+        val r = minOf(w, h) / 2f
+        val esc = (2 * r) / minOf(b.width, b.height)
+        m.reset()
+        m.setScale(esc, esc)
+        m.postTranslate((w - b.width * esc) / 2f, (h - b.height * esc) / 2f)
+        val sh = android.graphics.BitmapShader(b, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        sh.setLocalMatrix(m)
+        p.shader = sh
+        cv.drawCircle(w / 2f, h / 2f, r, p)
+        borda.strokeWidth = Ui.dp(context, 2).toFloat()
+        borda.color = Theme.alpha(Theme.accent, 0xAA)
+        cv.drawCircle(w / 2f, h / 2f, r - borda.strokeWidth / 2f, borda)
+    }
+}
+
+// =====================================================================================
+// Pix: QR code e "copia e cola" de qualquer chave (e-mail, CPF, CNPJ, telefone ou aleatória)
+// =====================================================================================
+object Pix {
+    private fun soDig(s: String) = s.filter { it.isDigit() }
+
+    private fun cpfValido(d: String): Boolean {
+        if (d.length != 11 || d.all { it == d[0] }) return false
+        fun dv(n: Int): Int { var s = 0; for (i in 0 until n) s += (d[i] - '0') * (n + 1 - i); val r = s * 10 % 11; return if (r == 10) 0 else r }
+        return dv(9) == d[9] - '0' && dv(10) == d[10] - '0'
+    }
+
+    /** deixa a chave no formato que o banco aceita */
+    fun normaliza(k0: String): String {
+        val k = k0.trim()
+        if ("@" in k) return k.lowercase()
+        if (Regex("(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$").matches(k)) return k.lowercase()
+        val d = soDig(k)
+        if (d.length == 14) return d                                        // CNPJ
+        if (k.startsWith("+")) return "+$d"
+        if (d.length == 11 && !k.startsWith("(") && cpfValido(d)) return d   // CPF
+        if (d.length in 10..11) return "+55$d"                              // celular com DDD
+        if (d.length in 12..13 && d.startsWith("55")) return "+$d"
+        return k
+    }
+
+    private fun campo(id: String, v: String) = id + String.format(Locale.US, "%02d", v.length) + v
+
+    private fun crc16(s: String): String {
+        var crc = 0xFFFF
+        for (b in s.toByteArray(Charsets.UTF_8)) {
+            crc = crc xor ((b.toInt() and 0xFF) shl 8)
+            repeat(8) { crc = if (crc and 0x8000 != 0) (crc shl 1) xor 0x1021 else crc shl 1 }
+            crc = crc and 0xFFFF
+        }
+        return String.format(Locale.US, "%04X", crc)
+    }
+
+    /** o texto do "pix copia e cola" (o banco mostra o nome de verdade de quem recebe) */
+    fun copiaECola(chave: String, valor: Double): String {
+        val conta = campo("00", "br.gov.bcb.pix") + campo("01", normaliza(chave))
+        var s = campo("00", "01") + campo("26", conta) + campo("52", "0000") + campo("53", "986")
+        if (valor > 0) s += campo("54", String.format(Locale.US, "%.2f", valor))
+        s += campo("58", "BR") + campo("59", "PIX") + campo("60", "BRASIL") + campo("62", campo("05", "***")) + "6304"
+        return s + crc16(s)
+    }
+
+    fun qr(texto: String, tam: Int): android.graphics.Bitmap? = try {
+        val m = com.google.zxing.qrcode.QRCodeWriter().encode(texto, com.google.zxing.BarcodeFormat.QR_CODE, tam, tam,
+            mapOf(com.google.zxing.EncodeHintType.MARGIN to 1))
+        val b = android.graphics.Bitmap.createBitmap(tam, tam, android.graphics.Bitmap.Config.ARGB_8888)
+        for (x in 0 until tam) for (y in 0 until tam) b.setPixel(x, y, if (m[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+        b
+    } catch (_: Throwable) { null }
+
+    /** janela com o QR, o valor e os botões de copiar */
+    fun mostrar(c: Context, chave: String, valor: Double) {
+        val payload = copiaECola(chave, valor)
+        val box = Ui.vbox(c)
+        box.gravity = Gravity.CENTER_HORIZONTAL
+        box.setPadding(Ui.dp(c, 20), Ui.dp(c, 12), Ui.dp(c, 20), Ui.dp(c, 4))
+        val tam = Ui.dp(c, 240)
+        val img = android.widget.ImageView(c)
+        img.setImageBitmap(qr(payload, tam))
+        img.setBackgroundColor(android.graphics.Color.WHITE)
+        val pad = Ui.dp(c, 8)
+        img.setPadding(pad, pad, pad, pad)
+        box.addView(img, LinearLayout.LayoutParams(tam + 2 * pad, tam + 2 * pad))
+        box.addView(Ui.text(c, "Chave: " + normaliza(chave), 12f, Ui.TEXT, true), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 12, c = c))
+        box.addView(Ui.text(c, if (valor > 0) "Valor: " + Caderno.dinheiro(valor).removePrefix("+") + " (o da sala)" else "Sem valor: você digita no banco", 11.5f, Ui.MUTED),
+            Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 4, c = c))
+        box.addView(Ui.text(c, "Confira o nome de quem recebe no app do banco antes de pagar.", 10.5f, Ui.MUTED), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 8, c = c))
+        fun copia(t: String, aviso: String) {
+            try {
+                (c.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("pix", t))
+                Ui.toast(c, aviso)
+            } catch (_: Throwable) {}
+        }
+        android.app.AlertDialog.Builder(c, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+            .setTitle("PIX")
+            .setView(box)
+            .setPositiveButton("COPIAR CHAVE") { _, _ -> copia(normaliza(chave), "CHAVE PIX COPIADA") }
+            .setNeutralButton("COPIA E COLA") { _, _ -> copia(payload, "PIX COPIA E COLA COPIADO") }
+            .setNegativeButton("FECHAR", null)
+            .show()
+    }
+}

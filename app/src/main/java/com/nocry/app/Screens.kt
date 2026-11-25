@@ -70,7 +70,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Erros.novos(),
     Comp.ligado(), ocupadoComp,
     Update.adiada(act),
-    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica")
+    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica"), Perfil.versao
 ).joinToString("|")
 
     private class Atalho(val ico: Int, val nome: String, val alerta: Boolean, val abre: () -> Unit)
@@ -235,10 +235,11 @@ class HomeScreen(a: MainActivity) : Screen(a) {
 
         // ---------------- cabecalho: losango, NOCRY e cargo ----------------
         val cab = Ui.hbox(c)
-        val mk = View(c)
-        mk.background = Botao(c, "grad", 1)
-        mk.rotation = 45f
-        cab.addView(mk, LinearLayout.LayoutParams(Ui.dp(c, 9), Ui.dp(c, 9)).also { it.leftMargin = Ui.dp(c, 3); it.rightMargin = Ui.dp(c, 12) })
+        cab.gravity = Gravity.CENTER_VERTICAL
+        // foto de perfil (padrão: a arte do NOCRY). Toque pra trocar
+        val foto = FotoPerfil(c)
+        Ui.clique(foto) { Perfil.menu(act) { redesenha() } }
+        cab.addView(foto, LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)).also { it.rightMargin = Ui.dp(c, 12) })
         val col = Ui.vbox(c)
         val marca = Ui.gradTexto(c, "NOCRY", 17f)
         marca.letterSpacing = 0.24f

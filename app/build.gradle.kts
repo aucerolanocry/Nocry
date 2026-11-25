@@ -89,4 +89,6 @@ dependencies {
     implementation("androidx.core:core:1.13.1")
     // SNIPER (só dono): conexão com o Discord (gateway + API)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // QR code do pix
+    implementation("com.google.zxing:core:3.5.3")
 }
