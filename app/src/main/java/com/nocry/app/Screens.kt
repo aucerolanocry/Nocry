@@ -392,22 +392,30 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             add(linhaBot, 12)
         }
 
-        // ---------------- novidade: bloco NOCRY no menu rápido (some depois de adicionar ou dispensar) ----------------
+        // ---------------- menu rápido: botõezinhos pra colocar TOQUE RÁPIDO e MEET no menu do topo ----------------
         if (Prefs.lerNum("tile_dica") == 0L || Prefs.lerNum("tile_dica_meet") == 0L) {
-            val k = Ui.card(c, ligado = true)
-            val topo = Ui.hbox(c)
-            topo.gravity = Gravity.CENTER_VERTICAL
-            topo.addView(Ui.icone(c, R.drawable.ic_bolt, Ui.TEXT, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 8) })
-            topo.addView(Ui.text(c, "NOVO · MENU RÁPIDO", 10.5f, Ui.TEXT, true, mono = true))
-            k.addView(topo)
-            k.addView(Ui.text(c, "Coloque os botões no menu que desce do topo da tela: NOCRY liga e desliga o competitivo, e Meet abre o link do Google Meet que mandaram no bot. Sem abrir o app.", 12.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
-            val bts = Ui.hbox(c)
-            if (Prefs.lerNum("tile_dica") == 0L) bts.addView(Ui.button(c, "nocry", Ui.Kind.PRIMARY, R.drawable.ic_bolt) { MenuRapido.adicionar(act, false) { redesenha() } }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            if (Prefs.lerNum("tile_dica_meet") == 0L) bts.addView(Ui.button(c, "meet", Ui.Kind.PRIMARY, R.drawable.ic_video) { MenuRapido.adicionar(act, true) { redesenha() } },
-                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (bts.childCount > 0) it.leftMargin = Ui.dp(c, 8) })
-            k.addView(bts, Ui.lp(top = 12, c = c))
-            k.addView(Ui.button(c, "agora não", Ui.Kind.GHOST) { Prefs.gravaNum("tile_dica", 1L); Prefs.gravaNum("tile_dica_meet", 1L); redesenha() }, Ui.lp(top = 8, c = c))
-            add(k, 12)
+            val l = Ui.hbox(c)
+            l.gravity = Gravity.CENTER_VERTICAL
+            l.addView(Ui.text(c, "MENU RÁPIDO", 10.5f, Ui.MUTED, true, mono = true), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 8) })
+            fun chip(rot: String, ico: Int, acao: () -> Unit): View {
+                val b = Ui.hbox(c)
+                b.gravity = Gravity.CENTER
+                b.background = Ui.ripple(c, Ui.peca(c, 99))
+                b.setPadding(Ui.dp(c, 10), Ui.dp(c, 7), Ui.dp(c, 12), Ui.dp(c, 7))
+                b.addView(Ui.icone(c, ico, Ui.TEXT, 14), LinearLayout.LayoutParams(Ui.dp(c, 14), Ui.dp(c, 14)).also { it.rightMargin = Ui.dp(c, 6) })
+                b.addView(Ui.text(c, rot, 10.5f, Ui.TEXT, true, mono = true).also { it.maxLines = 1 })
+                Ui.clique(b) { acao() }
+                return b
+            }
+            if (Prefs.lerNum("tile_dica") == 0L) l.addView(chip("+ TOQUE RÁPIDO", R.drawable.ic_bolt) { MenuRapido.adicionar(act, false) { redesenha() } },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 6) })
+            if (Prefs.lerNum("tile_dica_meet") == 0L) l.addView(chip("+ MEET", R.drawable.ic_video) { MenuRapido.adicionar(act, true) { redesenha() } })
+            l.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
+            val x = Ui.icone(c, R.drawable.ic_xcircle, Ui.MUTED, 18)
+            x.contentDescription = "não mostrar mais"
+            Ui.clique(x) { Prefs.gravaNum("tile_dica", 1L); Prefs.gravaNum("tile_dica_meet", 1L); redesenha() }
+            l.addView(x, LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)))
+            add(l, 12)
         }
 
         // ---------------- atalhos dos extras (pequenos, logo abaixo do bot) ----------------

@@ -461,8 +461,8 @@ class CompTile : TileService() {
         val t = qsTile ?: return
         val on = try { Comp.ligado() } catch (_: Throwable) { false }
         t.state = if (on) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
-        t.label = "NOCRY"
-        if (Build.VERSION.SDK_INT >= 29) t.subtitle = if (on) "Competitivo" else "Desligado"
+        t.label = "TOQUE RÁPIDO"
+        if (Build.VERSION.SDK_INT >= 29) t.subtitle = if (on) "LIGADO" else "DESLIGADO"
         t.updateTile()
     }
 
@@ -536,8 +536,8 @@ class MeetTile : TileService() {
         super.onStartListening()
         val t = qsTile ?: return
         t.state = Tile.STATE_INACTIVE
-        t.label = "Meet"
-        if (Build.VERSION.SDK_INT >= 29) t.subtitle = if (Meet.recente() != null) "link da sala" else "abrir"
+        t.label = "MEET"
+        if (Build.VERSION.SDK_INT >= 29) t.subtitle = if (Meet.recente() != null) "LINK DA SALA" else "ABRIR"
         t.updateTile()
     }
 
@@ -569,7 +569,7 @@ object MenuRapido {
     /** meet = true: o bloco do Google Meet; false: o do modo competitivo */
     fun adicionar(act: MainActivity, meet: Boolean, depois: () -> Unit) {
         val chave = if (meet) "tile_dica_meet" else "tile_dica"
-        val nome = if (meet) "Meet" else "NOCRY"
+        val nome = if (meet) "MEET" else "TOQUE RÁPIDO"
         if (Build.VERSION.SDK_INT >= 33) {
             try {
                 val sb = act.getSystemService(android.app.StatusBarManager::class.java)
