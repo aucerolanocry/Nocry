@@ -615,9 +615,9 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val topo = Ui.hbox(c)
         val ring = RingView(c)
         val rw = FrameLayout(c)
-        val tamAnel = Ui.dp(c, 84)
+        val tamAnel = Ui.dp(c, if (pro) 66 else 84)
         rw.addView(ring, FrameLayout.LayoutParams(tamAnel, tamAnel))
-        val num = Ui.text(c, "$ok/$total", 20f, Ui.TEXT, true, mono = true)
+        val num = Ui.text(c, "$ok/$total", if (pro) 16f else 20f, Ui.TEXT, true, mono = true)
         num.gravity = Gravity.CENTER
         rw.addView(num, FrameLayout.LayoutParams(tamAnel, tamAnel))
         topo.addView(rw, LinearLayout.LayoutParams(tamAnel, tamAnel))
@@ -626,7 +626,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         val info = Ui.vbox(c)
         info.addView(Ui.label(c, "status do sistema"))
         val titulo2 = when (ok) { total -> "Pronto"; 0 -> "Conecte"; else -> "Quase lá" }
-        info.addView((if (ok == total) Ui.gradTexto(c, titulo2, 27f) else Ui.text(c, titulo2, 27f, Ui.TEXT, true)).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 2, c = c))
+        val tamTit = if (pro) 23f else 27f
+        info.addView((if (ok == total) Ui.gradTexto(c, titulo2, tamTit) else Ui.text(c, titulo2, tamTit, Ui.TEXT, true)).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 2, c = c))
         val precisa = Prefs.precisaServico()
         info.addView(Ui.text(c, if (NocryService.rodando) "monitores rodando" else if (precisa) "monitores iniciando" else "nenhum monitor ligado", 10.5f, Ui.MUTED, mono = true), Ui.lp(top = 2, c = c))
         val ip = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -660,7 +661,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             redesenha()
         }
         val falta = !adb || !perm
-        if ((jeito.isNotEmpty() || novo.isNotEmpty()) && !falta) {
+        if ((jeito.isNotEmpty() || novo.isNotEmpty() || pro) && !falta) {
             // conexão vira um botãozinho redondo no fim da fila das pílulas
             val fila = Ui.hbox(c)
             fila.gravity = Gravity.CENTER_VERTICAL
@@ -673,8 +674,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             fila.addView(wifi, LinearLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 34)).also { it.leftMargin = Ui.dp(c, 8) })
             hero.addView(fila, Ui.lp(top = 14, c = c))
         } else hero.addView(Ui.chips(c, pAdb, pPerm, pVol), Ui.lp(top = 16, c = c))
-        hero.addView(Ui.text(c, "toque nos botões acima pra ligar ou desligar", 9.5f, Ui.MUTED, true).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 6, c = c))
-        if ((jeito.isEmpty() && novo.isEmpty()) || falta) hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "abrir conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
+        if (!pro) hero.addView(Ui.text(c, "toque nos botões acima pra ligar ou desligar", 9.5f, Ui.MUTED, true).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 6, c = c))
+        if ((jeito.isEmpty() && novo.isEmpty() && !pro) || falta) hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "abrir conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
         add(hero, 16)
 
         // ---------------- jogar: abre o Free Fire direto daqui ----------------
@@ -812,7 +813,46 @@ class HomeScreen(a: MainActivity) : Screen(a) {
 
     // ---------------- jeitos de arrumar o início com o visual de sempre (só na prévia do CI) ----------------
     /** "Q" Jogar e Bot lado a lado no topo, "R" separado por assunto, "S" grade de quadradinhos iguais */
-    private val org get() = Ui.estiloBt.takeIf { it == "Q" || it == "R" || it == "S" } ?: ""
+    private val org get() = Ui.estiloBt.takeIf { it == "Q" || it == "R" || it == "S" || it == "T" || it == "U" } ?: ""
+    /** T e U: jeito profissional — status mais enxuto em cima e tudo agrupado por assunto */
+    private val pro get() = org == "T" || org == "U"
+
+    /** ação rápida (estilo app de banco): botão redondo com ícone, nome e estado embaixo. A principal é cheia */
+    private fun acaoRapida(c: android.content.Context, ico: Int, nome: String, estado: String, on: Boolean?, principal: Boolean = false, acao: () -> Unit): View {
+        val col = Ui.vbox(c)
+        col.gravity = Gravity.CENTER_HORIZONTAL
+        val bola = FrameLayout(c)
+        val ligado = on == true
+        val fundo = when {
+            principal -> Ui.shape(c, 0xFFF2F3F7.toInt(), 99)
+            ligado -> Ui.shape(c, Theme.alpha(Ui.OK, 0x26), 99, Theme.alpha(Ui.OK, 0xB0), 1)
+            else -> Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x1A), 99, Theme.alpha(android.graphics.Color.WHITE, 0x70), 1)
+        }
+        bola.background = Ui.ripple(c, fundo, Ui.shape(c, android.graphics.Color.WHITE, 99))
+        bola.addView(Ui.icone(c, ico, if (principal) 0xFF14161E.toInt() else if (ligado) Ui.OK else Ui.TEXT, 22), FrameLayout.LayoutParams(Ui.dp(c, 22), Ui.dp(c, 22), Gravity.CENTER))
+        col.addView(bola, LinearLayout.LayoutParams(Ui.dp(c, 54), Ui.dp(c, 54)))
+        col.addView(Ui.text(c, nome, 10f, Ui.TEXT, true).also { it.gravity = Gravity.CENTER; Ui.umaLinha(it, 7) }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 8, c = c))
+        col.addView(Ui.text(c, estado, 8f, if (ligado) Ui.OK else Ui.MUTED, true, mono = true).also { it.gravity = Gravity.CENTER; Ui.umaLinha(it, 6) }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 2, c = c))
+        col.contentDescription = "$nome, $estado"
+        Ui.clique(col) { acao() }
+        return col
+    }
+
+    /** botão principal pequeno (igual ao LIGAR/JOGAR dos cartões de sempre) */
+    private fun botaoPrincipal(c: android.content.Context, txt: String, acao: () -> Unit): View {
+        val b = Ui.text(c, txt.uppercase(), 12.5f, Ui.corSobreGrande(), true, mono = true)
+        b.gravity = Gravity.CENTER
+        b.maxLines = 1
+        b.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
+        if (Ui.corSobreGrande() != android.graphics.Color.WHITE) b.setShadowLayer(0f, 0f, 0f, 0)
+        b.background = Ui.ripple(c, Botao(c, "grad"), Botao(c, "grad", mascara = true))
+        b.setPadding(Ui.dp(c, 16), Ui.dp(c, 10), Ui.dp(c, 16), Ui.dp(c, 10))
+        b.minimumHeight = Ui.dp(c, 42)
+        b.minimumWidth = Ui.dp(c, 76)
+        b.contentDescription = txt
+        Ui.clique(b) { acao() }
+        return b
+    }
 
     private fun jogarOuAvisa(ff: String?) { if (ff != null) jogar(ff) else Ui.toast(act, "Free Fire não instalado") }
     private fun nomeDoFf(ff: String?) = if (ff == Const.FF_MAX) "Free Fire MAX" else "Free Fire"
@@ -890,6 +930,60 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                 add(atalhosExtras(c), 8)
                 add(linhaFixos(c), 8)
                 add(ultimaAcao(c), 14)
+            }
+            // T: ações rápidas num cartão só (jogar, bot, competitivo, conexão), depois modos, atalhos e menu do topo
+            "T" -> {
+                val ff = pacoteFf()
+                val adbOn = Adb.connected
+                val compOn = Comp.ligado()
+                val card = Ui.hbox(c)
+                card.background = Ui.glass(c)
+                card.setPadding(Ui.dp(c, 6), Ui.dp(c, 16), Ui.dp(c, 6), Ui.dp(c, 14))
+                listOf(
+                    acaoRapida(c, R.drawable.ic_play, "Jogar", if (Otm.status().first) "otimizado" else "abrir jogo", null, principal = true) { jogarOuAvisa(ff) },
+                    acaoRapida(c, R.drawable.ic_crown, "Bot de fila", if (Sniper.buscando) "buscando" else "desligado", Sniper.buscando) { act.abre(SniperScreen(act)) },
+                    acaoRapida(c, comp?.ico ?: R.drawable.ic_gamepad, "Competitivo", if (ocupadoComp) "..." else if (compOn) "ligado" else "desligado", compOn) { alternaComp() },
+                    acaoRapida(c, R.drawable.ic_wifi, "Conexão", if (adbOn) "adb ligado" else "adb off", adbOn) { act.irAba(1) }
+                ).forEach { card.addView(it, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)) }
+                add(Ui.secao(c, "ações rápidas"), 6)
+                add(card, 8)
+                if (resto.isNotEmpty()) { add(Ui.secao(c, "modos", linkEditar(c)), 22); gradeModos(c, resto) }
+                add(Ui.secao(c, "atalhos"), 22)
+                add(atalhosExtras(c), 8)
+                add(Ui.secao(c, "menu do topo"), 18)
+                add(linhaFixos(c), 8)
+                add(ultimaAcao(c), 16)
+            }
+            // U: "central da partida" — jogo, competitivo, otimização e bot num cartão só; o resto em quadradinhos
+            "U" -> {
+                val ff = pacoteFf()
+                val (est, onFf) = estadoFf()
+                val cab = Ui.hbox(c)
+                cab.gravity = Gravity.CENTER_VERTICAL
+                cab.setPadding(0, Ui.dp(c, 14), 0, Ui.dp(c, 14))
+                cab.addView(Ui.caixaIcone(c, R.drawable.ic_gamepad, onFf, 44), LinearLayout.LayoutParams(Ui.dp(c, 44), Ui.dp(c, 44)).also { it.rightMargin = Ui.dp(c, 12) })
+                val col = Ui.vbox(c)
+                col.addView(Ui.text(c, nomeDoFf(ff), 16f, Ui.TEXT, true).also { Ui.umaLinha(it, 10) })
+                col.addView(Ui.pilulaEstado(c, est, onFf), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 6) })
+                cab.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                cab.addView(botaoPrincipal(c, "jogar") { jogarOuAvisa(ff) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 10) })
+                val linhas = mutableListOf<View>(cab)
+                comp?.let { a -> val i = info(a); linhas += linhaLista(c, a.ico, a.nome, if (ocupadoComp) "..." else i.estado, i.ligado, chave(c, i.ligado == true) { alternaComp() }) { i.abrir() } }
+                resto.firstOrNull { it.id == "otm" }?.let { a -> val i = info(a); linhas += linhaLista(c, a.ico, a.nome, i.estado, i.ligado) { i.abrir() } }
+                linhas += linhaLista(c, R.drawable.ic_crown, "Bot de fila", subBot(), Sniper.buscando) { act.abre(SniperScreen(act)) }
+                add(Ui.secao(c, "partida"), 6)
+                add(grupoLinhas(c, linhas), 8)
+                val ferr = resto.filter { it.id != "otm" }
+                if (ferr.isNotEmpty()) {
+                    add(Ui.secao(c, "ferramentas", linkEditar(c)), 22)
+                    ferr.map { a -> val i = info(a); quadradinho(c, a.ico, a.nome, i.estado, i.ligado) { i.abrir() } }
+                        .chunked(3).forEach { g -> add(linhaIgual(c, g[0], g.getOrElse(1) { View(c) }, g.getOrElse(2) { View(c) }, gap = 8), 8) }
+                }
+                add(Ui.secao(c, "atalhos"), 22)
+                add(atalhosExtras(c), 8)
+                add(Ui.secao(c, "menu do topo"), 18)
+                add(linhaFixos(c), 8)
+                add(ultimaAcao(c), 16)
             }
             // S: jogar em cima e todo o resto em quadradinhos iguais, 3 por linha (tipo menu de jogo)
             else -> {
