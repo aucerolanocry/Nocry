@@ -62,6 +62,42 @@ async function chaveValida(env, keyHeader) {
   return true;
 }
 
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// lista de releases guardada na memória do servidor por 10 min: menos perguntas pro GitHub = menos "HTTP 500"
+let memo = { t: 0, releases: null };
+
+function acharId(releases, arquivo) {
+  for (const release of releases || []) {
+    const asset = (release.assets || []).find((a) => a.name === arquivo);
+    if (asset) return asset.id;
+  }
+  return null;
+}
+
+async function acharAsset(headers, arquivo) {
+  if (memo.releases && Date.now() - memo.t < 600000) {
+    const id = acharId(memo.releases, arquivo);
+    if (id) return { id };
+  }
+  // o GitHub às vezes falha por um instante: tenta 3 vezes antes de desistir
+  let res = null;
+  for (let t = 0; t < 3; t++) {
+    res = await fetch("https://api.github.com/repos/aucerolanocry/ff-installer/releases?per_page=100", { headers });
+    if (res.ok || res.status < 500) break;
+    await espera(500 * (t + 1));
+  }
+  if (!res.ok) {
+    // GitHub fora, mas a lista guardada (mesmo velha) ainda serve
+    const velho = memo.releases ? acharId(memo.releases, arquivo) : null;
+    return velho ? { id: velho } : { erro: res.status };
+  }
+  const releases = await res.json();
+  memo = { t: Date.now(), releases };
+  const id = acharId(releases, arquivo);
+  return id ? { id } : { erro: 404 };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -82,41 +118,48 @@ export default {
       "User-Agent": "Cloudflare-Worker",
     };
 
-    const resReleases = await fetch("https://api.github.com/repos/aucerolanocry/ff-installer/releases", { headers });
-    if (!resReleases.ok) {
-      return new Response("Erro ao buscar releases no GitHub", { status: 500 });
+    const achado = await acharAsset(headers, arquivo);
+    if (!achado.id) {
+      if (achado.erro === 404) return new Response("Arquivo nao encontrado no GitHub", { status: 404 });
+      return new Response("Erro ao buscar releases no GitHub", { status: 503 });
     }
 
-    const releases = await resReleases.json();
-    let assetId = null;
-    for (const release of releases) {
-      if (release.assets) {
-        const asset = release.assets.find((a) => a.name === arquivo);
-        if (asset) {
-          assetId = asset.id;
-          break;
-        }
-      }
-    }
-    if (!assetId) {
-      return new Response("Arquivo nao encontrado no GitHub", { status: 404 });
+    // repassa o "continuar de onde parou" (Range) pro GitHub: a internet caiu no meio e o app não recomeça do zero
+    const h2 = {
+      Authorization: `Bearer ${env.GITHUB_TOKEN}`,
+      Accept: "application/octet-stream",
+      "User-Agent": "Cloudflare-Worker",
+    };
+    const range = request.headers.get("Range");
+    if (range) h2.Range = range;
+
+    const githubUrl = `https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/${achado.id}`;
+    let response = null;
+    for (let t = 0; t < 3; t++) {
+      response = await fetch(githubUrl, { headers: h2, redirect: "follow" });
+      if (response.ok || response.status < 500) break;
+      await espera(500 * (t + 1));
     }
 
-    const githubUrl = `https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/${assetId}`;
-    const response = await fetch(githubUrl, {
-      headers: {
-        Authorization: `Bearer ${env.GITHUB_TOKEN}`,
-        Accept: "application/octet-stream",
-        "User-Agent": "Cloudflare-Worker",
-      },
-      redirect: "follow",
+    if (response.status === 416) {
+      const cr = response.headers.get("Content-Range");
+      return new Response(null, { status: 416, headers: cr ? { "Content-Range": cr } : {} });
+    }
+    if (response.status !== 200 && response.status !== 206) {
+      // antes ia "200" com o texto do erro dentro, e o app salvava isso como se fosse a pasta
+      return new Response("Erro ao baixar o arquivo do GitHub", { status: 502 });
+    }
+
+    // tamanho do arquivo vai junto: a barra de progresso do app mostra a porcentagem
+    const out = new Headers({
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${arquivo}"`,
+      "Accept-Ranges": "bytes",
     });
-
-    return new Response(response.body, {
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Disposition": `attachment; filename="${arquivo}"`,
-      },
-    });
+    for (const k of ["Content-Length", "Content-Range", "ETag", "Last-Modified"]) {
+      const v = response.headers.get(k);
+      if (v) out.set(k, v);
+    }
+    return new Response(response.body, { status: response.status, headers: out });
   },
 };

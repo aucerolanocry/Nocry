@@ -75,12 +75,28 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
         }
 
         // ---------------- pastas do ff escolhido ----------------
-        val hero = Ui.hero(c, R.drawable.ic_download, "pastas do $nomeFf",
-            if (tudo) "Tudo instalado" else if (pastaA || pastaB) "Falta uma" else "Nada instalado", if (tudo) true else if (pastaA || pastaB) null else false,
-            if (tudo) "O bypass já pode aplicar e restaurar." else "Instale as duas abaixo.")
+        // pasta na fila (ou sendo trocada por uma nova): o arquivo antigo ainda está no celular, mas não dá pra dizer
+        // "tudo instalado" enquanto ela está instalando — antes o título dizia isso e o quadradinho dizia "NA FILA"
+        val filaA = Instalador.naFila(ff, "suja")
+        val filaB = Instalador.naFila(ff, "limpa")
+        val instalandoAqui = filaA || filaB
+        val titulo = when {
+            instalandoAqui -> "Instalando"
+            tudo -> "Tudo instalado"
+            pastaA || pastaB -> "Falta uma"
+            else -> "Nada instalado"
+        }
+        val sub = when {
+            instalandoAqui -> "Espere terminar: " + listOfNotNull(if (filaA) "pasta suja" else null, if (filaB) "pasta limpa" else null).joinToString(" e ") +
+                (if (filaA && filaB) " estão" else " está") + " sendo instalada" + (if (filaA && filaB) "s." else ".")
+            tudo -> "O bypass já pode aplicar e restaurar."
+            else -> "Instale as duas abaixo."
+        }
+        val hero = Ui.hero(c, R.drawable.ic_download, "pastas do $nomeFf", titulo,
+            if (instalandoAqui) null else if (tudo) true else if (pastaA || pastaB) null else false, sub)
         hero.addView(Ui.chips(c,
-            Ui.chip(c, "SUJA (XIT)", if (Instalador.naFila(ff, "suja")) "NA FILA" else if (pastaA) "INSTALADA" else "FALTA", if (Instalador.naFila(ff, "suja")) null else pastaA),
-            Ui.chip(c, "LIMPA", if (Instalador.naFila(ff, "limpa")) "NA FILA" else if (pastaB) "INSTALADA" else "FALTA", if (Instalador.naFila(ff, "limpa")) null else pastaB)
+            Ui.chip(c, "SUJA (XIT)", if (filaA) rotuloFila("suja") else if (pastaA) "INSTALADA" else "FALTA", if (filaA) null else pastaA),
+            Ui.chip(c, "LIMPA", if (filaB) rotuloFila("limpa") else if (pastaB) "INSTALADA" else "FALTA", if (filaB) null else pastaB)
         ), Ui.lp(top = 16, c = c))
         add(hero, if (ocupado || Instalador.resultado.isNotEmpty()) 18 else 12)
 
@@ -109,10 +125,14 @@ class RecursosScreen(a: MainActivity, ffInicial: String = "normal") : Screen(a) 
         add(SegundoPlano.grupo(act) { redesenha() }, 18)
     }
 
+    /** a pasta que está sendo instalada agora diz "INSTALANDO"; as outras da fila, "NA FILA" */
+    private fun rotuloFila(tipo: String): String =
+        if (Instalador.atual?.let { it.ff == ff && it.tipo == tipo } == true) "INSTALANDO" else "NA FILA"
+
     private fun itemPasta(tipo: String, titulo: String, sub: String, instalada: Boolean): View {
         val c = act
         val naFila = Instalador.naFila(ff, tipo)
-        val valor = if (naFila) "NA FILA" else if (instalada) "INSTALADA" else "FALTA"
+        val valor = if (naFila) rotuloFila(tipo) else if (instalada) "INSTALADA" else "FALTA"
         val cor = if (naFila) Ui.WARN else if (instalada) Ui.OK else null
         return Ui.itemEstado(c, titulo, sub, R.drawable.ic_download, valor, cor, if (naFila) null else ({
             if (instalada) {
