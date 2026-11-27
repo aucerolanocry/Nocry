@@ -556,7 +556,11 @@ object IA {
     fun estado(c: Context): JSONObject {
         val ff = Prefs.bypassFf
         val (a, b) = try { Downloader.pastasInstaladas(ff) } catch (_: Throwable) { Pair(false, false) }
-        val logs = try { Sentinela.limpa(NLog.text().takeLast(1500)) ?: "" } catch (_: Throwable) { "" }
+        // o log da própria escuta (silêncio, "não entendi", microfone ocupado) é normal: não manda pra IA,
+        // senão ela acha que o app está com erro e fica falando disso / rodando "verificar" sem você pedir
+        val logs = try {
+            Sentinela.limpa(NLog.text().lines().filterNot { it.contains("escuta:") || it.contains("segundo plano não ligou") }.joinToString("\n").takeLast(1500)) ?: ""
+        } catch (_: Throwable) { "" }
         return JSONObject()
             .put("bypass", if (Prefs.bypassAtivo || Prefs.bypassVolAtivo) "ligado (${Prefs.bypassGatilho})" else "desligado")
             .put("bot", if (Sniper.buscando) "buscando" else if (Sniper.conectado) "conectado, sem buscar" else "desligado")
@@ -888,6 +892,8 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
     /** o microfone: toca = ela fica ouvindo sem parar (até com o app minimizado); toca de novo = para.
      *  Sem reconhecimento de voz no celular, usa a janela do Google */
     fun ouvir() {
+        // enquanto ela fala, tocar no microfone interrompe e ela já te escuta
+        if (SessaoIA.interromper()) { redesenha(); return }
         SessaoIA.alternar(act) { ouvirJanela() }
         redesenha()
     }

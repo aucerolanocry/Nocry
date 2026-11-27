@@ -171,6 +171,9 @@ object SessaoIA {
     /** quando você faz uma pausa, fecha a escuta e executa na hora (o Google costuma ignorar o tempo de silêncio do pedido) */
     private var fecharPorPausa: Runnable? = null
     private var ultimaParcial = ""
+    /** o que ela está falando agora (pra não confundir a própria voz com você ao interromper) */
+    private var falandoTexto = ""
+    private var errosNaFala = 0
     /** cada escuta tem um número: resposta atrasada de uma escuta velha é ignorada
      *  (era isso + reaproveitar o reconhecedor antigo que dava "não deu pra ouvir agora") */
     private var sessao = 0
@@ -308,7 +311,7 @@ object SessaoIA {
         val f = FrameLayout(a)
         val b = BordaIA(a)
         f.addView(b, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        val (pil, o, t) = criaPilula(a) { if (a.atual() !is AssistenteScreen) a.abre(AssistenteScreen(a)) }
+        val (pil, o, t) = criaPilula(a) { if (!interromper() && a.atual() !is AssistenteScreen) a.abre(AssistenteScreen(a)) }
         val idSb = a.resources.getIdentifier("status_bar_height", "dimen", "android")
         val topo = (if (idSb > 0) a.resources.getDimensionPixelSize(idSb) else Ui.dp(a, 24)) + Ui.dp(a, 8)
         f.addView(pil, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP).also {
@@ -340,16 +343,23 @@ object SessaoIA {
         else -> "código $e"
     }
 
-    private fun ouvinte(id: Int) = object : RecognitionListener {
-        fun velho() = id != sessao || estado != Estado.OUVINDO
+    private fun ouvinte(id: Int, durante: Boolean = false) = object : RecognitionListener {
+        fun velho() = id != sessao || !(estado == Estado.OUVINDO || (durante && estado == Estado.FALANDO))
         override fun onReadyForSpeech(params: Bundle?) { if (!velho()) texto("Ouvindo...") }
         override fun onBeginningOfSpeech() {}
         override fun onRmsChanged(rmsdB: Float) { if (!velho()) borda?.nivel = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() { if (!velho()) borda?.nivel = 0f }
-        override fun onError(error: Int) { if (!velho()) aoErro(error) }
+        override fun onError(error: Int) {
+            if (velho()) return
+            // escutando enquanto ela fala: erro ou silêncio só recomeça a escuta (sem aviso)
+            if (estado == Estado.FALANDO) { if (++errosNaFala < 6) main.postDelayed({ if (id == sessao && estado == Estado.FALANDO) escutarDuranteFala() }, 500); return }
+            aoErro(error)
+        }
         override fun onResults(results: Bundle?) {
             if (velho()) return
+            // ainda falando = só ouviu a própria voz: continua escutando pra você poder interromper
+            if (estado == Estado.FALANDO) { main.postDelayed({ if (id == sessao && estado == Estado.FALANDO) escutarDuranteFala() }, 250); return }
             fecharPorPausa?.let { main.removeCallbacks(it) }
             // se o resultado final vier vazio, aproveita o que ela já tinha entendido (pra nunca sumir o que você falou)
             val fala = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
@@ -357,8 +367,9 @@ object SessaoIA {
             ultimaParcial = ""
             errosSeguidos = 0
             // fora da tela da IA, corta barulho de fundo (pedaço curtinho ou de confiança baixa). Na tela, pega tudo.
-            val conf = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)?.firstOrNull() ?: 1f
-            val ruido = !naTelaIAagora() && (fala.length < 3 || conf in 0f..0.3f)
+            // confiança 0 (ou negativa) quer dizer "não informada": o Google manda assim quase sempre, então não conta
+            val conf = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)?.firstOrNull() ?: -1f
+            val ruido = !naTelaIAagora() && (PalavrasChave.limpa(fala).length < 3 || (conf > 0f && conf < 0.15f))
             if (fala.isBlank() || ruido) { if (ligada) deNovo(120) else parar(); return }
             decidir(fala)
         }
@@ -366,6 +377,14 @@ object SessaoIA {
             if (velho()) return
             val p = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
             if (p.isBlank()) return
+            if (estado == Estado.FALANDO) {
+                // você falou por cima dela (e não é a voz dela no microfone): ela para e te escuta
+                if (eco(p) || PalavrasChave.limpa(p).length < 3) return
+                cortarFala()
+                estado = Estado.OUVINDO
+                borda?.estado = 0
+                orbe?.ativo = true
+            }
             ultimaParcial = p
             texto("“$p”", notif = false)
             // parou de falar por ~2s depois de já ter dito algo: fecha e executa (não fica esperando sem fim)
@@ -393,7 +412,7 @@ object SessaoIA {
         // o Google às vezes dá "não entendi" mesmo tendo entendido algo: aproveita o que ela captou
         if (nada && ultimaParcial.trim().length >= 3) {
             val p = ultimaParcial.trim(); ultimaParcial = ""
-            if (naTelaIAagora()) { decidir(p); return }
+            decidir(p); return
         }
         if (!nada) NLog.add("ia", "escuta: erro $error (${nomeErro(error)})")
         if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
@@ -483,8 +502,9 @@ object SessaoIA {
         // 4) fora da tela: comandos que ela entende sozinha (liga o bypass, abre o jogo...)
         val ps = Comandos.entender(fala).filter { it.acao != "pesquisar" && it.acao != "youtube" }
         if (ps.isNotEmpty()) { responder(fala, fala, true); return }
-        // conversa de fundo (sem o nome dela): ignora e continua ouvindo
-        texto("Ouvindo...")
+        // conversa de fundo (sem o nome dela): não responde, mas mostra que ouviu e como chamar
+        NLog.add("ia", "ouvi sem o nome: $fala")
+        texto("Ouvi: \"${fala.take(40)}\". Pra conversar, me chame: ${nomeChamada}")
         deNovo(100)
     }
 
@@ -542,7 +562,54 @@ object SessaoIA {
         }
         fimFala = f
         main.postDelayed(f, maxOf(4000L, r.length * 85L))
+        falandoTexto = r
+        errosNaFala = 0
         Voz.falar(r)
+        // enquanto ela fala, continua escutando: se você falar por cima, ela para e faz o novo pedido
+        if (ligada) main.postDelayed({ if (estado == Estado.FALANDO) escutarDuranteFala() }, 600)
+    }
+
+    /** escuta enquanto ela fala (pra você poder interromper) */
+    private fun escutarDuranteFala() {
+        val a = ctx ?: act?.applicationContext ?: return
+        if (estado != Estado.FALANDO || !ligada) return
+        sessao++
+        val id = sessao
+        ultimaParcial = ""
+        try {
+            trocarReconhecedor()
+            val s = SpeechRecognizer.createSpeechRecognizer(a)
+            s.setRecognitionListener(ouvinte(id, durante = true))
+            sr = s
+            s.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+                .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, a.packageName))
+        } catch (_: Throwable) {}
+    }
+
+    /** é a voz dela voltando pelo microfone? (as palavras ouvidas estão quase todas no que ela está falando) */
+    private fun eco(ouvido: String): Boolean {
+        val dela = PalavrasChave.limpa(falandoTexto).split(" ").filter { it.length > 1 }.toSet()
+        val ws = PalavrasChave.limpa(ouvido).split(" ").filter { it.length > 1 }
+        if (ws.isEmpty()) return true
+        return ws.count { it in dela }.toFloat() / ws.size >= 0.6f
+    }
+
+    /** para a fala dela na hora */
+    private fun cortarFala() {
+        Voz.aoTerminar = null
+        fimFala?.let { main.removeCallbacks(it) }
+        Voz.parar()
+    }
+
+    /** tocou no microfone (ou na pílula) enquanto ela fala: ela para e já te escuta */
+    fun interromper(): Boolean {
+        if (estado != Estado.FALANDO) return false
+        cortarFala()
+        if (ligada) ouvir() else parar()
+        return true
     }
 
     /** só na prévia do CI: mostra a luz ouvindo, pensando e falando (sem microfone) pra tirar print e vídeo */
