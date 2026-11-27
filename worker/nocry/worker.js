@@ -656,6 +656,9 @@ async function extrasRoute(req, env, ip) {
       r = await falarEleven(env, vozId, texto, "eleven_flash_v2_5");
     }
     if (!r.ok) {
+      // guarda o motivo (só o aviso da ElevenLabs, nunca a chave) pra dar pra ver o que aconteceu
+      let det = ""; try { det = (await r.text()).slice(0, 400); } catch (e) {}
+      await anotaVoz(env, "falar " + vozId + " -> " + r.status + " " + det);
       // a voz sumiu da conta: esquece e procura de novo na próxima
       if (r.status === 404 || r.status === 400) { try { await env.DB.prepare("DELETE FROM ia_cfg WHERE k = 'voz_id'").run(); } catch (e) {} }
       return json({ ok: false, reason: "voz_erro", status: r.status });
@@ -1236,19 +1239,27 @@ function falarEleven(env, vozId, texto, modelo) {
   });
 }
 
+// anota o último problema da voz (pra conferir pelo banco)
+async function anotaVoz(env, msg) {
+  try {
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS ia_cfg (k TEXT PRIMARY KEY, v TEXT)").run();
+    await env.DB.prepare("INSERT INTO ia_cfg (k, v) VALUES ('voz_erro', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v").bind(new Date().toISOString() + " " + String(msg).slice(0, 700)).run();
+  } catch (e) {}
+}
+
 // coloca uma voz da biblioteca da ElevenLabs na conta (precisa do dono dela, achado pela busca)
 async function adicionarDaBiblioteca(env, voz) {
   const H = { "xi-api-key": env.ELEVENLABS_API_KEY };
   try {
     const r = await fetch("https://api.elevenlabs.io/v1/shared-voices?" + new URLSearchParams({ page_size: "30", search: voz.nome }).toString(), { headers: H });
-    if (!r.ok) return null;
+    if (!r.ok) { await anotaVoz(env, "buscar " + voz.nome + " -> " + r.status + " " + (await r.text()).slice(0, 300)); return null; }
     const j = await r.json();
     const v = (j.voices || []).find((x) => x.voice_id === voz.id);
-    if (!v) return null;
+    if (!v) { await anotaVoz(env, "buscar " + voz.nome + " -> não achou"); return null; }
     const a = await fetch("https://api.elevenlabs.io/v1/voices/add/" + encodeURIComponent(v.public_owner_id) + "/" + encodeURIComponent(v.voice_id), {
       method: "POST", headers: { ...H, "content-type": "application/json" }, body: JSON.stringify({ new_name: "NOCRY " + voz.nome }),
     });
-    if (!a.ok) return null;
+    if (!a.ok) { await anotaVoz(env, "colocar " + voz.nome + " -> " + a.status + " " + (await a.text()).slice(0, 300)); return null; }
     const k = await a.json();
     const id = k.voice_id || null;
     if (id) { vozCache = { id, t: Date.now() }; try { await env.DB.prepare("INSERT INTO ia_cfg (k, v) VALUES ('voz_id', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v").bind(id).run(); } catch (e) {} }
