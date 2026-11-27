@@ -645,15 +645,15 @@ async function extrasRoute(req, env, ip) {
     } catch (e) {
       return json({ ok: false, reason: "voz_erro" });
     }
-    if (!r.ok && vozId === VOZ_ANIME.id && (r.status === 404 || r.status === 400)) {
+    if (!r.ok && vozId === VOZ_ANIME.id && r.status === 404) {
       // a Kurumin ainda não está na conta: coloca ela lá pela biblioteca e fala de novo
       const novo = await adicionarDaBiblioteca(env, VOZ_ANIME);
       if (novo) r = await falarEleven(env, novo, texto);
       else vozCache = { falhou: VOZ_ANIME.id, t: 0 };
     }
     if (!r.ok && (r.status === 400 || r.status === 422) && !env.ELEVENLABS_MODELO) {
-      // o modelo novo não está liberado no plano: usa o rápido
-      r = await falarEleven(env, vozId, texto, "eleven_flash_v2_5");
+      // o modelo não aceitou: tenta o multilíngue
+      r = await falarEleven(env, vozId, texto, "eleven_multilingual_v2");
     }
     if (!r.ok) {
       // guarda o motivo (só o aviso da ElevenLabs, nunca a chave) pra dar pra ver o que aconteceu
@@ -1230,12 +1230,12 @@ async function apiRoute(req, env, ip, op) {
 }
 
 // ---------------------------------------------------------------- entrada
-// fala o texto com a voz (mp3). O modelo eleven_v4 é o mais natural; ELEVENLABS_MODELO troca, se precisar
+// fala o texto com a voz (mp3). Modelo rápido (metade dos créditos); ELEVENLABS_MODELO troca, se precisar
 function falarEleven(env, vozId, texto, modelo) {
   return fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(vozId) + "?output_format=mp3_22050_32", {
     method: "POST",
     headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
-    body: JSON.stringify({ text: texto, model_id: modelo || env.ELEVENLABS_MODELO || "eleven_v4", language_code: "pt", voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.5 } }),
+    body: JSON.stringify({ text: texto, model_id: modelo || env.ELEVENLABS_MODELO || "eleven_flash_v2_5", language_code: "pt", voice_settings: { stability: 0.45, similarity_boost: 0.85, style: 0.3 } }),
   });
 }
 
@@ -1271,8 +1271,9 @@ async function adicionarDaBiblioteca(env, voz) {
 // Sem isso, o servidor procura sozinho na biblioteca da ElevenLabs uma voz de anime feminina fofa,
 // coloca na conta uma vez (nome "NOCRY Anime") e guarda o código no banco (não procura de novo).
 let vozCache = null;
-// a voz escolhida pro app: Kurumin (menina de anime japonesa, fofa e kawaii), falando português
-const VOZ_ANIME = { id: "UiDW9qKjB9LaJDdoINsZ", nome: "Kurumin" };
+// a voz do app: "NOCRY IA", criada na conta do dono (garota jovem, fofa e kawaii no jeito de falar).
+// Voz criada na própria conta funciona no plano grátis (as da biblioteca não funcionam pelo app no grátis).
+const VOZ_ANIME = { id: "hTAoRSUb0n9uEIyTmgsY", nome: "NOCRY IA" };
 
 async function vozPadrao(env) {
   if (env.ELEVENLABS_VOZ) return env.ELEVENLABS_VOZ;
