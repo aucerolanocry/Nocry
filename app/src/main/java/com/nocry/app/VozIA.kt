@@ -367,6 +367,7 @@ object SessaoIA {
             return
         }
         errosSeguidos++
+        sessao++   // o reconhecedor velho pode avisar mais um erro ao ser fechado: esse aviso é ignorado
         trocarReconhecedor()
         if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) texto("Sem internet pra entender a voz... tentando de novo")
         else if (error == SpeechRecognizer.ERROR_AUDIO) texto("Microfone ocupado (outro app usando)... tentando de novo")
