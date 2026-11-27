@@ -8,7 +8,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # voz anime da IA (ElevenLabs): se as duas chaves estiverem guardadas aqui, vão pro servidor (nunca aparecem no log)
+      - name: Conferir chaves da voz da IA
+        env:
+          V_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          V_VOZ: ${{ secrets.ELEVENLABS_VOZ }}
+        run: |
+          if [ -n "$V_KEY" ] && [ -n "$V_VOZ" ]; then echo "VOZ_OK=1" >> "$GITHUB_ENV"; echo "voz da nuvem: chaves encontradas"; else echo "voz da nuvem: sem chaves (a IA usa a voz do celular)"; fi
+      - name: Publicar worker "nocry" (com a voz da nuvem)
+        if: env.VOZ_OK == '1'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: "worker/nocry"
+          command: deploy
+          secrets: |
+            ELEVENLABS_API_KEY
+            ELEVENLABS_VOZ
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOZ: ${{ secrets.ELEVENLABS_VOZ }}
       - name: Publicar worker "nocry"
+        if: env.VOZ_OK != '1'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}

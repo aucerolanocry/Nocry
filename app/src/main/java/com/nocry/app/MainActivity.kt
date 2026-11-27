@@ -244,6 +244,7 @@ class MainActivity : Activity() {
             avisoAtualizou()
             if (intent?.getStringExtra("abrir") == "sniper") abre(SniperScreen(this))
             else abreExtra(intent?.getStringExtra("abrir"))
+            if (intent?.getBooleanExtra("ia_ouvir", false) == true) iaOuvir()
         } else mostraGate()
     }
 
@@ -487,9 +488,15 @@ class MainActivity : Activity() {
 
     override fun onNewIntent(i: android.content.Intent) {
         super.onNewIntent(i)
+        if (i.getBooleanExtra("ia_ouvir", false) && !gate) { iaOuvir(); return }
         if (i.getStringExtra("abrir") == "sniper" && !gate && pilha.lastOrNull() !is SniperScreen) {
             abre(SniperScreen(this))
         } else if (!gate) abreExtra(i.getStringExtra("abrir"))
+    }
+
+    /** bloco "IA NOCRY" do menu do topo: abre já ouvindo (a luz aparece dentro do app) */
+    private fun iaOuvir() {
+        android.os.Handler(mainLooper).postDelayed({ SessaoIA.iniciar(this) { abre(AssistenteScreen(this)) } }, 500)
     }
 
     /** notificação dos extras (staff respondeu, evento novo, amigo chamou, fim de partida) */
@@ -609,6 +616,10 @@ class MainActivity : Activity() {
         naFrente = true
         bg.retoma()
         try { Conquistas.marcaDia() } catch (_: Throwable) {}
+        try {
+            if (Prefs.lerNum("ia_fundo", 0L) == 1L && !IaFundoService.ativo &&
+                checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) IaFundoService.ligar(this) {}
+        } catch (_: Throwable) {}
         val updPendente = Update.pendente(applicationContext)
         if (updPendente != null) mostraUpdateGate(updPendente)
         else if (intro == null && !gate && !License.valid()) mostraGate()

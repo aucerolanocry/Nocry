@@ -17,6 +17,8 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- IA por voz: ouvir sem a janela do Google (a luz em volta da tela) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- IA em segundo plano: ouvir com o app minimizado (só voz, nada por cima dos outros apps) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- IA: "cria um alarme às 7h" -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- pedido de "bateria sem restricao" (o Android nao fecha o app em segundo plano) -->
@@ -117,6 +119,24 @@
         <receiver
             android:name=".PairReceiver"
             android:exported="false" />
+
+        <!-- IA em segundo plano (fala pela notificação ou pelo bloco do menu do topo) -->
+        <service
+            android:name=".IaFundoService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- bloco "IA NOCRY" no menu do topo: toque e fale -->
+        <service
+            android:name=".IaTile"
+            android:exported="true"
+            android:icon="@drawable/ic_ia"
+            android:label="IA NOCRY"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- agenda da IA ("desliga o bot em 5 minutos"): faz mesmo com o app fechado -->
         <receiver

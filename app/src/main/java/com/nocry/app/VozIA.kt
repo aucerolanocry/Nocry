@@ -31,8 +31,12 @@ import android.widget.TextView
 // com uma pílula no topo mostrando o microfone. Fica por cima de qualquer tela do app (início, bot...).
 // =====================================================================================
 
-/** cores da luz da IA (ciano, lilás, rosa, dourado) */
-private val CORES_IA = intArrayOf(0xFF7FE7FF.toInt(), 0xFFB388FF.toInt(), 0xFFFF7EDB.toInt(), 0xFFFFC46B.toInt(), 0xFF7FE7FF.toInt())
+/** cores da luz da IA: seguem o tema (no tema sangue fica vermelha, no vidro fica clara...) */
+private fun coresIA(): IntArray {
+    val a = Theme.accent
+    val b = Theme.accent2
+    return intArrayOf(a, Theme.mix(a, b, 0.5f), b, Theme.mix(a, Color.WHITE, 0.45f), a)
+}
 
 /** a luz que contorna a tela: gira, pulsa com a voz e some devagar quando a IA para */
 class BordaIA(c: Context) : View(c) {
@@ -54,7 +58,7 @@ class BordaIA(c: Context) : View(c) {
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
-        sombra = SweepGradient(w / 2f, h / 2f, CORES_IA, null)
+        sombra = SweepGradient(w / 2f, h / 2f, coresIA(), null)
     }
 
     override fun onDraw(cv: Canvas) {
@@ -103,7 +107,7 @@ class OrbeMic(c: Context, private val tamDp: Int) : View(c) {
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
-        giro = SweepGradient(w / 2f, h / 2f, CORES_IA, null)
+        giro = SweepGradient(w / 2f, h / 2f, coresIA(), null)
         brilho.shader = RadialGradient(w / 2f, h / 2f, w / 2f, intArrayOf(Theme.alpha(Color.WHITE, 0x55), Color.TRANSPARENT), null, Shader.TileMode.CLAMP)
     }
 
@@ -153,6 +157,8 @@ object SessaoIA {
     private val main = Handler(Looper.getMainLooper())
     private var sr: SpeechRecognizer? = null
     private var act: MainActivity? = null
+    /** contexto pra ouvir e falar (o do app, que vale dentro e fora do NOCRY) */
+    private var ctx: Context? = null
     private var camada: FrameLayout? = null
     private var borda: BordaIA? = null
     private var orbe: OrbeMic? = null
@@ -177,22 +183,30 @@ object SessaoIA {
             return
         }
         Voz.init(a)
+        ctx = a.applicationContext
         mostra(a)
         semOuvir = 0
         ouvir()
     }
 
-    private fun mostra(a: MainActivity) {
-        if (camada?.parent != null) { borda?.sumindo = false; return }
-        val raiz = a.window.decorView as? ViewGroup ?: return
-        val f = FrameLayout(a)
-        val b = BordaIA(a)
-        f.addView(b, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        // pílula do topo: microfone + o que está acontecendo + fechar
+    /** segundo plano (NOCRY minimizado): só voz, nada aparece por cima dos outros apps.
+     *  O que está acontecendo aparece na notificação ("ouvindo", "pensando", "falando"). */
+    fun iniciarFundo(c: Context) {
+        val app = c.applicationContext
+        ctx = app
+        // se o app estiver aberto na frente, usa a luz dentro dele
+        act = null
+        Voz.init(app)
+        semOuvir = 0
+        ouvir()
+    }
+
+    /** a pílula do topo: microfone + o que está acontecendo + botão de parar */
+    private fun criaPilula(a: Context, aoTocar: () -> Unit): Triple<View, OrbeMic, TextView> {
         val pil = LinearLayout(a)
         pil.orientation = LinearLayout.HORIZONTAL
         pil.gravity = Gravity.CENTER_VERTICAL
-        pil.background = Ui.shape(a, Theme.alpha(0xFF0B0B12.toInt(), 0xE8), 99, Theme.alpha(Color.WHITE, 0x40), 1)
+        pil.background = Ui.shape(a, Theme.alpha(0xFF0B0B12.toInt(), 0xE8), 99, Theme.alpha(Theme.accent, 0x90), 1)
         pil.setPadding(Ui.dp(a, 6), Ui.dp(a, 6), Ui.dp(a, 14), Ui.dp(a, 6))
         pil.elevation = Ui.dp(a, 8).toFloat()
         val o = OrbeMic(a, 34)
@@ -206,8 +220,17 @@ object SessaoIA {
         x.contentDescription = "parar a IA"
         x.setOnClickListener { parar() }
         pil.addView(x, LinearLayout.LayoutParams(Ui.dp(a, 22), Ui.dp(a, 22)))
-        // tocar na pílula: abre a conversa
-        pil.setOnClickListener { if (a.atual() !is AssistenteScreen) a.abre(AssistenteScreen(a)) }
+        pil.setOnClickListener { aoTocar() }
+        return Triple(pil, o, t)
+    }
+
+    private fun mostra(a: MainActivity) {
+        if (camada?.parent != null) { borda?.sumindo = false; return }
+        val raiz = a.window.decorView as? ViewGroup ?: return
+        val f = FrameLayout(a)
+        val b = BordaIA(a)
+        f.addView(b, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val (pil, o, t) = criaPilula(a) { if (a.atual() !is AssistenteScreen) a.abre(AssistenteScreen(a)) }
         val idSb = a.resources.getIdentifier("status_bar_height", "dimen", "android")
         val topo = (if (idSb > 0) a.resources.getDimensionPixelSize(idSb) else Ui.dp(a, 24)) + Ui.dp(a, 8)
         f.addView(pil, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP).also {
@@ -217,7 +240,10 @@ object SessaoIA {
         camada = f; borda = b; orbe = o; txt = t
     }
 
-    private fun texto(s: String) { txt?.text = s }
+    private fun texto(s: String) {
+        txt?.text = s
+        if (camada == null) IaFundoService.status(s)
+    }
 
     private val ouvinte = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) { texto("Ouvindo...") }
@@ -229,7 +255,7 @@ object SessaoIA {
             if (estado != Estado.OUVINDO) return
             val nada = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
             if (nada && conversa && semOuvir < 1) { semOuvir++; main.postDelayed({ if (estado == Estado.OUVINDO) ouvir() }, 300); return }
-            if (!nada) act?.let { Ui.toast(it, if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) "sem internet pra entender a voz" else "não deu pra ouvir agora") }
+            if (!nada) (act ?: ctx)?.let { Ui.toast(it, if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) "sem internet pra entender a voz" else "não deu pra ouvir agora") }
             parar()
         }
         override fun onResults(results: Bundle?) {
@@ -245,14 +271,14 @@ object SessaoIA {
     }
 
     private fun ouvir() {
-        val a = act ?: return
+        val a = ctx ?: act?.applicationContext ?: return
         estado = Estado.OUVINDO
         borda?.estado = 0
         orbe?.ativo = true
         texto("Ouvindo...")
         Voz.parar()
         try {
-            val s = sr ?: SpeechRecognizer.createSpeechRecognizer(a.applicationContext).also { it.setRecognitionListener(ouvinte); sr = it }
+            val s = sr ?: SpeechRecognizer.createSpeechRecognizer(a).also { it.setRecognitionListener(ouvinte); sr = it }
             val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
@@ -262,13 +288,13 @@ object SessaoIA {
     }
 
     private fun responder(fala: String) {
-        val a = act ?: return
+        val c = ctx ?: act?.applicationContext ?: return
+        val a = act
         estado = Estado.PENSANDO
         borda?.estado = 1
         orbe?.ativo = false
         texto("Pensando...")
         Assistente.anotar(true, fala)
-        val c = a.applicationContext
         Bg.io {
             val r = Assistente.responder(c, a, fala)
             Bg.ui {
@@ -283,7 +309,7 @@ object SessaoIA {
         borda?.estado = 2
         texto(r.lines().firstOrNull { it.isNotBlank() }?.trim()?.trimStart('✓', '✗', '⚠', '⏰', ' ') ?: "")
         val depois = {
-            if (estado == Estado.FALANDO) { if (conversa && act?.naFrente == true) ouvir() else parar() }
+            if (estado == Estado.FALANDO) { if (conversa && (act?.naFrente == true || IaFundoService.ativo)) ouvir() else parar() }
         }
         Voz.aoTerminar = { fimFala?.let { main.removeCallbacks(it) }; depois() }
         // se a voz do celular não responder, não fica preso: termina sozinho pelo tamanho do texto
@@ -325,6 +351,7 @@ object SessaoIA {
         Voz.aoTerminar = null
         fimFala?.let { main.removeCallbacks(it) }
         Voz.parar()
+        IaFundoService.status(null)
         val f = camada
         val b = borda
         camada = null; borda = null; orbe = null; txt = null
@@ -333,5 +360,120 @@ object SessaoIA {
             b.aoSumir = { (f.parent as? ViewGroup)?.removeView(f) }
             b.sumindo = true
         } else if (f != null) (f.parent as? ViewGroup)?.removeView(f)
+    }
+}
+
+
+/**
+ * IA em segundo plano: com o NOCRY minimizado, você fala com ela pela notificação ("Falar")
+ * ou pelo bloco "IA NOCRY" no menu do topo. Nada aparece por cima dos outros apps: é só voz.
+ */
+class IaFundoService : android.app.Service() {
+    companion object {
+        @Volatile var ativo = false
+            private set
+        private var eu: IaFundoService? = null
+        private const val ID = 1077
+
+        /** mostra na notificação o que a IA está fazendo (null = esperando) */
+        fun status(s: String?) { eu?.let { sv -> Handler(Looper.getMainLooper()).post { sv.notifica(s) } } }
+
+        /** liga (pede o microfone se faltar) */
+        fun ligar(a: MainActivity, depois: () -> Unit) {
+            if (Build.VERSION.SDK_INT >= 23 && a.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                a.aoPermissao = { req, ok -> if (req == SessaoIA.REQ_MIC && ok) ligar(a, depois) else if (req == SessaoIA.REQ_MIC) Ui.toast(a, "preciso do microfone pra te ouvir") }
+                a.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), SessaoIA.REQ_MIC)
+                return
+            }
+            try {
+                val i = Intent(a, IaFundoService::class.java)
+                if (Build.VERSION.SDK_INT >= 26) a.startForegroundService(i) else a.startService(i)
+                Prefs.gravaNum("ia_fundo", 1L)
+                depois()
+            } catch (_: Throwable) { Ui.toast(a, "o Android não deixou ligar agora") }
+        }
+
+        fun desligar(c: Context) {
+            Prefs.gravaNum("ia_fundo", 0L)
+            try { c.stopService(Intent(c, IaFundoService::class.java)) } catch (_: Throwable) {}
+        }
+
+        /** pede pra ela ouvir (pela notificação ou pelo menu do topo) */
+        fun falar(c: Context) {
+            try { c.startService(Intent(c, IaFundoService::class.java).setAction("falar")) } catch (_: Throwable) {}
+        }
+    }
+
+    override fun onBind(intent: Intent?): android.os.IBinder? = null
+
+    private fun montar(s: String?): android.app.Notification {
+        val abrir = android.app.PendingIntent.getActivity(this, 77, Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val falar = android.app.PendingIntent.getService(this, 79, Intent(this, IaFundoService::class.java).setAction("falar"), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val parar = android.app.PendingIntent.getService(this, 78, Intent(this, IaFundoService::class.java).setAction("parar"), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val ic = { r: Int -> android.graphics.drawable.Icon.createWithResource(this, r) }
+        return android.app.Notification.Builder(this, Notif.CH_SVC)
+            .setSmallIcon(R.drawable.ic_ia)
+            .setContentTitle(if (s == null) "IA do NOCRY pronta" else "IA do NOCRY")
+            .setContentText(s ?: "Toque em Falar (ou no bloco IA NOCRY do menu do topo)")
+            .setContentIntent(abrir)
+            .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_mic), if (SessaoIA.ativa) "Parar" else "Falar", falar).build())
+            .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_xcircle), "Desligar", parar).build())
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
+    }
+
+    fun notifica(s: String?) {
+        try { getSystemService(android.app.NotificationManager::class.java)?.notify(ID, montar(s)) } catch (_: Throwable) {}
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        try { Prefs.init(this); Notif.init(this) } catch (_: Throwable) {}
+        try {
+            if (Build.VERSION.SDK_INT >= 30) startForeground(ID, montar(null), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            else startForeground(ID, montar(null))
+        } catch (_: Throwable) { stopSelf(); return }
+        eu = this
+        ativo = true
+        Voz.init(this)
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            "parar" -> { Prefs.gravaNum("ia_fundo", 0L); stopSelf() }
+            "falar" -> if (SessaoIA.ativa) SessaoIA.parar() else SessaoIA.iniciarFundo(this)
+        }
+        return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        ativo = false
+        eu = null
+        if (SessaoIA.ativa) SessaoIA.parar()
+        super.onDestroy()
+    }
+}
+
+/** bloco "IA NOCRY" no menu do topo do celular: toque e fale (com o app minimizado, só voz) */
+class IaTile : android.service.quicksettings.TileService() {
+    override fun onStartListening() {
+        super.onStartListening()
+        qsTile?.let { t ->
+            t.state = if (SessaoIA.ativa) android.service.quicksettings.Tile.STATE_ACTIVE else android.service.quicksettings.Tile.STATE_INACTIVE
+            t.label = "IA NOCRY"
+            t.updateTile()
+        }
+    }
+
+    override fun onClick() {
+        super.onClick()
+        if (IaFundoService.ativo) { IaFundoService.falar(this); return }
+        // segundo plano desligado: abre o app já ouvindo (a luz aparece dentro do NOCRY)
+        val i = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("ia_ouvir", true)
+        try {
+            if (Build.VERSION.SDK_INT >= 34) startActivityAndCollapse(android.app.PendingIntent.getActivity(this, 80, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
+            else @Suppress("DEPRECATION") startActivityAndCollapse(i)
+        } catch (_: Throwable) {}
     }
 }

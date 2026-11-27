@@ -162,6 +162,9 @@ shot 15_inicio home
 # IA estilo Jarvis: a tela da IA com a bolinha do microfone e a luz contornando o início (demonstração)
 shot 16_ia ia
 GLOW=1; shot 16_luz_inicio home; video 16_luz_video "" home; GLOW=""
+# luz da IA na cor do tema (sangue e vidro) + tela da IA com as opções novas
+GLOW=1; TEMA=t_sangue; shot 17_luz_sangue home; TEMA=""; shot 17_luz_vidro home; GLOW=""
+shot 17_ia ia
 # catálogo de formatos de botão (só prévia): o dono escolhe pelo número
 shot 10_catalogo catalogo
 video 10_catalogo_video "" catalogo

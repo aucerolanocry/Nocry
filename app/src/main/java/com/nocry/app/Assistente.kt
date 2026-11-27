@@ -466,11 +466,13 @@ object IA {
         private set
 
     /** pedido pro servidor com tempo maior que o normal (a IA pode levar uns segundos pensando) */
-    private fun postIa(c: Context, corpo: JSONObject): JSONObject? {
+    private fun postIa(c: Context, corpo: JSONObject): JSONObject? = post(c, "ia", corpo)
+
+    fun post(c: Context, op: String, corpo: JSONObject): JSONObject? {
         val base = BuildConfig.API_URL.trim().trimEnd('/')
         val key = Prefs.licKey ?: return null
         if (base.isEmpty()) return null
-        corpo.put("key", key).put("dev", License.devId(c)).put("app", License.versao(c)).put("op", "ia")
+        corpo.put("key", key).put("dev", License.devId(c)).put("app", License.versao(c)).put("op", op)
         return try {
             val cx = java.net.URL("$base/v1/x").openConnection() as java.net.HttpURLConnection
             cx.requestMethod = "POST"
@@ -673,9 +675,19 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
     /** chamado quando termina de falar (no modo conversa por voz, volta a ouvir) */
     var aoTerminar: (() -> Unit)? = null
 
+    private var app: Context? = null
+    private var player: android.media.MediaPlayer? = null
+    @Volatile private var semNuvemAte = 0L
+
     fun init(c: Context) {
+        app = c.applicationContext
         if (tts == null) try { tts = android.speech.tts.TextToSpeech(c.applicationContext, this) } catch (_: Throwable) {}
     }
+
+    /** voz anime da nuvem (ElevenLabs, pelo servidor): liga sozinha quando o dono configura lá */
+    var nuvem: Boolean
+        get() = Prefs.lerNum("ia_voz_nuvem", 1L) == 1L
+        set(v) = Prefs.gravaNum("ia_voz_nuvem", if (v) 1L else 0L)
 
     override fun onInit(status: Int) {
         val t = tts ?: return
@@ -696,13 +708,57 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
     fun falar(texto: String) {
         val limpo = texto.lines().map { it.trim().trimStart('✓', '✗', '⚠', '⏰', '•', ' ') }.filter { it.isNotEmpty() }.joinToString(". ").take(1500)
         if (limpo.isEmpty()) return
+        val c = app
+        if (nuvem && c != null && System.currentTimeMillis() > semNuvemAte && limpo.length <= 600) {
+            Bg.io {
+                val arq = buscarNuvem(c, limpo)
+                main.post { if (arq != null && tocar(arq)) Unit else falarLocal(limpo) }
+            }
+            return
+        }
+        falarLocal(limpo)
+    }
+
+    private fun falarLocal(limpo: String) {
         if (!pronto) { pendente = limpo; return }
         try { tts?.speak(limpo, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "nocry-ia") } catch (_: Throwable) {}
     }
 
-    fun parar() { try { tts?.stop() } catch (_: Throwable) {} }
+    /** pede o áudio pro servidor (mp3) e guarda num arquivo temporário. null = sem voz da nuvem agora */
+    private fun buscarNuvem(c: Context, texto: String): java.io.File? {
+        val j = IA.post(c, "voz", JSONObject().put("texto", texto)) ?: return null
+        if (!j.optBoolean("ok")) {
+            val r = j.optString("reason")
+            if (r == "sem_voz") semNuvemAte = System.currentTimeMillis() + 30 * 60_000L
+            else if (r == "voz_limite") semNuvemAte = System.currentTimeMillis() + 60 * 60_000L
+            return null
+        }
+        return try {
+            val b = android.util.Base64.decode(j.optString("audio"), android.util.Base64.DEFAULT)
+            if (b.size < 200) return null
+            val f = java.io.File(c.cacheDir, "ia_voz.mp3")
+            f.writeBytes(b)
+            f
+        } catch (_: Throwable) { null }
+    }
 
-    fun falando(): Boolean = try { tts?.isSpeaking == true } catch (_: Throwable) { false }
+    private fun tocar(f: java.io.File): Boolean = try {
+        player?.release()
+        val mp = android.media.MediaPlayer()
+        mp.setDataSource(f.absolutePath)
+        mp.setOnCompletionListener { aoTerminar?.invoke() }
+        mp.prepare()
+        mp.start()
+        player = mp
+        true
+    } catch (_: Throwable) { false }
+
+    fun parar() {
+        try { tts?.stop() } catch (_: Throwable) {}
+        try { player?.let { if (it.isPlaying) it.stop() } } catch (_: Throwable) {}
+    }
+
+    fun falando(): Boolean = try { tts?.isSpeaking == true || player?.isPlaying == true } catch (_: Throwable) { false }
 
     /** tom da voz: 0 normal, 1 fofa, 2 anime (agudinha e animada) */
     var tom: Int
@@ -718,7 +774,8 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
 
     /** a voz feminina mais bonita: as do Google em pt-BR com "afs" são femininas; depois, qualquer "female" */
     private fun melhorFeminina(l: List<android.speech.tts.Voice>): android.speech.tts.Voice? =
-        l.firstOrNull { it.name.contains("afs") && !it.isNetworkConnectionRequired } ?: l.firstOrNull { it.name.contains("afs") }
+        // a da internet é a de melhor qualidade (a IA já usa internet); a do celular fica de reserva
+        l.firstOrNull { it.name.contains("afs") && it.isNetworkConnectionRequired } ?: l.firstOrNull { it.name.contains("afs") }
             ?: l.firstOrNull { it.name.contains("female", true) || it.features.any { f -> f.contains("female", true) } }
             ?: l.firstOrNull { !it.isNetworkConnectionRequired } ?: l.firstOrNull()
 
@@ -732,8 +789,9 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
             val v = l.firstOrNull { it.name == Prefs.extraTxt("ia_voz_nome") } ?: melhorFeminina(l)
             if (v != null) t.setVoice(v)
             when (tom) {
-                1 -> { t.setPitch(1.22f); t.setSpeechRate(1.05f) }
-                2 -> { t.setPitch(1.48f); t.setSpeechRate(1.1f) }
+                // tom mais agudo, mas sem passar do ponto (acima de ~1.3 a voz fica robótica/"zoada")
+                1 -> { t.setPitch(1.12f); t.setSpeechRate(1.04f) }
+                2 -> { t.setPitch(1.26f); t.setSpeechRate(1.07f) }
                 else -> { t.setPitch(1.0f); t.setSpeechRate(1.02f) }
             }
         } catch (_: Throwable) {}
@@ -768,7 +826,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|$maosLivres"
+    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|$maosLivres|${IaFundoService.ativo}"
 
     fun enviar(texto: String? = null, porVoz: Boolean = false) {
         var t = (texto ?: campo.text.toString()).trim()
@@ -829,17 +887,34 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         val idxTom = listOf(2, 1, 0)
         val ops = ArrayList<String>()
         ops += if (falarSempre) "✓ Falar sempre as respostas" else "Falar sempre as respostas (agora: só quando você fala)"
+        ops += if (Voz.nuvem) "✓ Voz anime da nuvem (quando o dono configurar)" else "Voz anime da nuvem: desligada"
         tons.forEachIndexed { i, n -> ops += (if (Voz.tom == idxTom[i]) "✓ " else "") + "Tom: $n" }
         vozes.forEachIndexed { i, v -> ops += (if (v.name == atual) "✓ " else "") + "Voz ${i + 1}" + (if (v.isNetworkConnectionRequired) " (internet)" else "") + (if (v.name.contains("afs")) " · feminina" else "") }
         Ui.dialogEscolha(act, "VOZ DA IA", ops) { i ->
             when {
                 i == 0 -> { falarSempre = !falarSempre; if (!falarSempre) Voz.parar() }
-                i in 1..3 -> Voz.tom = idxTom[i - 1]
-                else -> vozes.getOrNull(i - 4)?.let { Voz.escolherVoz(it.name) }
+                i == 1 -> Voz.nuvem = !Voz.nuvem
+                i in 2..4 -> Voz.tom = idxTom[i - 2]
+                else -> vozes.getOrNull(i - 5)?.let { Voz.escolherVoz(it.name) }
             }
             if (i > 0) Voz.falar("Oi! Eu sou a IA do NOCRY, criada pelo Aucerola. Assim que eu falo.")
             redesenha()
         }
+    }
+
+    /** pede pro Android colocar o bloco "IA NOCRY" no menu do topo */
+    private fun colocarNoMenu() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            try {
+                val sbm = act.getSystemService(android.app.StatusBarManager::class.java)
+                sbm.requestAddTileService(android.content.ComponentName(act, IaTile::class.java), "IA NOCRY",
+                    android.graphics.drawable.Icon.createWithResource(act, R.drawable.ic_ia), act.mainExecutor) { r ->
+                    Ui.toast(act, if (r == android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ADDED || r == android.app.StatusBarManager.TILE_ADD_REQUEST_RESULT_TILE_ALREADY_ADDED) "pronto: puxe o menu do topo e toque em IA NOCRY" else "não foi colocado")
+                }
+                return
+            } catch (_: Throwable) {}
+        }
+        Ui.toast(act, "puxe o menu do topo, toque no lápis e arraste o bloco IA NOCRY")
     }
 
     private fun escolherImagem() {
@@ -1007,6 +1082,13 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         op.addView(opcao(R.drawable.ic_mic, if (maosLivres) "conversa: on" else "conversa: off", maosLivres) { maosLivres = !maosLivres; redesenha() },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
         add(op, 16)
+        // segundo plano: com o NOCRY minimizado, fala pela notificação ou pelo bloco do menu do topo (só voz)
+        val fundoOn = IaFundoService.ativo
+        add(opcao(R.drawable.ic_ia, if (fundoOn) "IA em segundo plano: ligada" else "IA em segundo plano: desligada", fundoOn) {
+            if (IaFundoService.ativo) { IaFundoService.desligar(act); Bg.ui { redesenha() } }
+            else IaFundoService.ligar(act) { Ui.toast(act, "pronto! minimize o NOCRY e toque em Falar na notificação"); redesenha() }
+        }, 8)
+        add(opcao(R.drawable.ic_bolt, "Colocar a IA no menu do topo", false) { colocarNoMenu() }, 8)
 
         // campo + microfone + enviar
         val linha = Ui.hbox(c)

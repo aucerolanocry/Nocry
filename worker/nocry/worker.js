@@ -627,6 +627,34 @@ async function extrasRoute(req, env, ip) {
     return json({ ok: true, resposta: clean(o.resposta, 1200), passos });
   }
 
+  // ---- voz da IA pela nuvem (ElevenLabs). A chave fica SÓ no segredo ELEVENLABS_API_KEY; a voz em ELEVENLABS_VOZ.
+  if (op === "voz") {
+    if (!env.ELEVENLABS_API_KEY || !env.ELEVENLABS_VOZ) return json({ ok: false, reason: "sem_voz" });
+    const texto = clean(b.texto, 600).trim();
+    if (!texto) return json({ ok: false, reason: "vazio" });
+    const dia = new Date(now).toISOString().slice(0, 10);
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS voz_uso (key TEXT NOT NULL, dia TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (key, dia))").run();
+    const uso = await env.DB.prepare("SELECT n FROM voz_uso WHERE key = ? AND dia = ?").bind(key, dia).first();
+    const limite = a.rec.role === "owner" ? Number(env.VOZ_LIMITE_DONO || 6000) : Number(env.VOZ_LIMITE_DIA || 800);
+    if (uso && uso.n + texto.length > limite) return json({ ok: false, reason: "voz_limite" });
+    await env.DB.prepare("INSERT INTO voz_uso (key, dia, n) VALUES (?, ?, ?) ON CONFLICT (key, dia) DO UPDATE SET n = n + ?").bind(key, dia, texto.length, texto.length).run();
+    let r;
+    try {
+      r = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(env.ELEVENLABS_VOZ) + "?output_format=mp3_22050_32", {
+        method: "POST",
+        headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
+        body: JSON.stringify({ text: texto, model_id: env.ELEVENLABS_MODELO || "eleven_flash_v2_5", voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.45 } }),
+      });
+    } catch (e) {
+      return json({ ok: false, reason: "voz_erro" });
+    }
+    if (!r.ok) return json({ ok: false, reason: "voz_erro", status: r.status });
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return json({ ok: true, audio: btoa(bin) });
+  }
+
   // ---- rank (vitórias, R$, bypass) — o app manda os números dele; ninguém vê mensagens nem pix
   if (op === "rk_enviar") {
     const apelido = clean(b.apelido, 24).trim() || "jogador";
