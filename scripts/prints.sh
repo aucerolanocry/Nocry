@@ -146,6 +146,9 @@ video 9H_video H; video 9I_video I; video 9J_video J; video 9K_video K
 # formatos de botão de verdade em cima do início de sempre (só prévia): L 3D, M neon, N hexágono, O inclinado, P mira
 for e in L M N O P; do ESTILO=$e; shot 11${e}_inicio home; shot 11${e}_conexao conexao; shot 11${e}_bypass bypass; done; ESTILO=""
 for e in L M N O P; do video 11${e}_video $e; done
+# jeitos de arrumar o início com o visual de sempre (só prévia): Q jogar+bot no topo, R separado por assunto, S grade de quadradinhos
+for e in Q R S; do ESTILO=$e; shot 12${e}_inicio home; done; ESTILO=""
+for e in Q R S; do video 12${e}_video $e; done
 # catálogo de formatos de botão (só prévia): o dono escolhe pelo número
 shot 10_catalogo catalogo
 video 10_catalogo_video "" catalogo
