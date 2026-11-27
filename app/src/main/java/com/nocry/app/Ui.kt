@@ -60,7 +60,12 @@ object Ui {
 
     /** estilo dos botões em teste: "" = atual, "1" compacto, "2" lista, "3" sólido */
     @JvmStatic var estiloBt = ""
-    private val compacto get() = estiloBt.isNotEmpty() && pele.isEmpty()
+    private val compacto get() = estiloBt.isNotEmpty() && pele.isEmpty() && formato == 0
+
+    /** formato de botão em prévia (só no CI), desenhado por FormatoBotao: L 3D de jogo, M neon, N hexágono, O inclinado, P mira */
+    val formato: Int get() = when (estiloBt) { "L" -> 12; "M" -> 11; "N" -> 7; "O" -> 8; "P" -> 10; else -> 0 }
+    /** cor do texto em cima do botão grande (principal) */
+    fun corSobreGrande(): Int = if (formato > 0) (if (Formatos.grandeClaro(formato)) ESCURO else Color.WHITE) else Theme.sobreGrad()
 
     // ---------------- estilos de botão em prévia (só no CI; sem prévia tudo fica igual ao de sempre) ----------------
     /** "H" claro (botões brancos cheios), "I" cores (cada botão com a sua cor), "J" gamer (cantos cortados), "K" escuro limpo (sem borda) */
@@ -84,7 +89,7 @@ object Ui {
     }
 
     /** fundo dos botões pequenos (atalhos, menu do topo). Sem prévia = o de sempre */
-    fun fundoPeq(c: Context, raio: Int, ico: Int = 0, ativo: Boolean = false): Drawable = when (pele) {
+    fun fundoPeq(c: Context, raio: Int, ico: Int = 0, ativo: Boolean = false): Drawable = if (formato > 0) FormatoBotao(c, formato, false) else when (pele) {
         "H" -> shape(c, if (ativo) Theme.mix(Color.WHITE, OK, 0.35f) else Theme.alpha(Theme.mix(Color.WHITE, Theme.accent, 0.08f), 0xF2), raio)
         "I" -> { val k = corIcone(ico) ?: Theme.accent; shape(c, Theme.alpha(k, if (ativo) 0x44 else 0x22), raio, Theme.alpha(k, 0xA8), 1) }
         "J" -> Botao(c, if (ativo) "icoOn" else "ghost", raio)
@@ -417,7 +422,7 @@ object Ui {
         } else r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val pv = if (compacto) 6 else 9
         if (compacto) r.background = if (clicavel) ripple(c, solido(c, raioPilula())) else solido(c, raioPilula())
-        if (pele == "J" || pele == "K") r.background = if (clicavel) ripple(c, fundoPeq(c, raioPilula())) else fundoPeq(c, raioPilula())
+        if (pele == "J" || pele == "K" || formato > 0) r.background = if (clicavel) ripple(c, fundoPeq(c, raioPilula())) else fundoPeq(c, raioPilula())
         r.setPadding(dp(c, if (clicavel && ico != 0) 9 else 7), dp(c, pv), dp(c, if (clicavel && ico != 0) 5 else 7), dp(c, pv))
         r.contentDescription = "$nome $valor"
         return r
@@ -859,7 +864,7 @@ object Ui {
 
     fun button(c: Context, label: String, kind: Kind = Kind.PRIMARY, ico: Int = 0, onClick: () -> Unit): View {
         val corTxt = when (kind) {
-            Kind.PRIMARY -> Theme.sobreGrad()
+            Kind.PRIMARY -> corSobreGrande()
             Kind.DANGER -> 0xFFFF8E9E.toInt()
             Kind.GHOST -> if (estiloBt == "1") Theme.mix(Theme.accent, Color.WHITE, 0.45f) else if (pele == "H") ESCURO else if (pele == "I") (corIcone(ico) ?: TEXT) else TEXT
         }
@@ -887,8 +892,10 @@ object Ui {
             l.setPadding(ph, dp(c, 14), ph, dp(c, 14))
             l.minimumHeight = dp(c, 52)
         }
+        // botão 3D: o texto fica na "tampa", acima da base
+        if (formato == 12 && kind != Kind.DANGER) l.setPadding(l.paddingLeft, l.paddingTop, l.paddingRight, l.paddingBottom + dp(c, 4))
         clique(l, onClick)
-        if (kind == Kind.PRIMARY && Prefs.brilho > 0 && Build.VERSION.SDK_INT >= 28) {
+        if (kind == Kind.PRIMARY && Prefs.brilho > 0 && Build.VERSION.SDK_INT >= 28 && formato == 0) {
             l.elevation = dp(c, 4 + Prefs.brilho / 12).toFloat()
             l.outlineSpotShadowColor = RED
             l.outlineAmbientShadowColor = RED
@@ -1132,13 +1139,13 @@ object Ui {
         r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (botao != null && onBotao != null) {
             val tipo = if (primario) "grad" else "ghost"
-            val b = text(c, botao.uppercase(), 12.5f, if (primario) Theme.sobreGrad() else TEXT, true, mono = true)
+            val b = text(c, botao.uppercase(), 12.5f, if (primario) corSobreGrande() else TEXT, true, mono = true)
             b.gravity = Gravity.CENTER
             b.maxLines = 1
             b.letterSpacing = if (Prefs.maiusc) 0.1f else 0.02f
-            if (primario && Theme.sobreGrad() != Color.WHITE) b.setShadowLayer(0f, 0f, 0f, 0)
+            if (primario && corSobreGrande() != Color.WHITE) b.setShadowLayer(0f, 0f, 0f, 0)
             b.background = ripple(c, Botao(c, tipo), Botao(c, tipo, mascara = true))
-            b.setPadding(dp(c, 16), dp(c, if (compacto) 8 else 10), dp(c, 16), dp(c, if (compacto) 8 else 10))
+            b.setPadding(dp(c, 16), dp(c, if (compacto) 8 else 10), dp(c, 16), dp(c, (if (compacto) 8 else 10) + (if (formato == 12) 4 else 0)))
             b.minimumHeight = dp(c, if (compacto) 36 else 42)
             b.minimumWidth = dp(c, 76)
             clique(b, onBotao)

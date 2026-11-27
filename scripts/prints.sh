@@ -143,6 +143,9 @@ video 8_video_atual ""; video 8E_video E; video 8F_video F; video 8G_video Gv
 # estilos de botão em cima do início de sempre (só prévia): H claro, I cores, J gamer, K escuro limpo
 for e in H I J K; do ESTILO=$e; shot 9${e}_inicio home; shot 9${e}_bypass bypass; shot 9${e}_conexao conexao; done; ESTILO=""
 video 9H_video H; video 9I_video I; video 9J_video J; video 9K_video K
+# formatos de botão de verdade em cima do início de sempre (só prévia): L 3D, M neon, N hexágono, O inclinado, P mira
+for e in L M N O P; do ESTILO=$e; shot 11${e}_inicio home; shot 11${e}_conexao conexao; shot 11${e}_bypass bypass; done; ESTILO=""
+for e in L M N O P; do video 11${e}_video $e; done
 # catálogo de formatos de botão (só prévia): o dono escolhe pelo número
 shot 10_catalogo catalogo
 video 10_catalogo_video "" catalogo

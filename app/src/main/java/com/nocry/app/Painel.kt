@@ -265,6 +265,8 @@ class Botao(
     /** ideias novas (só na prévia do CI): "t" tonal (cor do tema clarinha, sem borda), "b" bloco (escuro com faixa da cor embaixo), "c" contorno (vazado) */
     private val pele = when (eb.take(1)) { "E" -> "t"; "F" -> "b"; "G" -> "c"; "H" -> "h"; "J" -> "j"; "K" -> "k"; else -> "" }
     private val hud = Prefs.cartao == "hud" || eb == "3" || pele == "j"
+    /** formato novo em prévia (3D, neon, hexágono, inclinado, mira): quem desenha é o FormatoBotao */
+    private val fmt: FormatoBotao? = if (!mascara && Ui.formato > 0 && (tipo == "grad" || tipo == "ghost" || tipo == "ico" || tipo == "icoOn")) FormatoBotao(c, Ui.formato, tipo == "grad") else null
     private val raio = minOf(raioDp, if (pele == "b") 8 else 18) * d * (if (tipo == "ico" || tipo == "icoOn") 0.8f else 1f)
     private val corte = (if (tipo == "ico" || tipo == "icoOn") 8f else 12f) * d
     private val path = Path()
