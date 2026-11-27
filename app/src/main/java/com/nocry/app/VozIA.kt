@@ -168,6 +168,9 @@ object SessaoIA {
     private var orbe: OrbeMic? = null
     private var txt: TextView? = null
     private var fimFala: Runnable? = null
+    /** quando você faz uma pausa, fecha a escuta e executa na hora (o Google costuma ignorar o tempo de silêncio do pedido) */
+    private var fecharPorPausa: Runnable? = null
+    private var ultimaParcial = ""
     /** cada escuta tem um número: resposta atrasada de uma escuta velha é ignorada
      *  (era isso + reaproveitar o reconhecedor antigo que dava "não deu pra ouvir agora") */
     private var sessao = 0
@@ -347,23 +350,51 @@ object SessaoIA {
         override fun onError(error: Int) { if (!velho()) aoErro(error) }
         override fun onResults(results: Bundle?) {
             if (velho()) return
-            val fala = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
+            fecharPorPausa?.let { main.removeCallbacks(it) }
+            // se o resultado final vier vazio, aproveita o que ela já tinha entendido (pra nunca sumir o que você falou)
+            val fala = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim()?.takeIf { it.isNotBlank() }
+                ?: ultimaParcial.trim()
+            ultimaParcial = ""
             errosSeguidos = 0
-            // tira barulho de fundo: pedaço curtinho ou com confiança muito baixa é ruído, não comando
+            // fora da tela da IA, corta barulho de fundo (pedaço curtinho ou de confiança baixa). Na tela, pega tudo.
             val conf = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)?.firstOrNull() ?: 1f
-            val ruido = fala.length < 2 || (conf in 0f..0.001f) || (!naTelaIAagora() && conf in 0f..0.3f)
-            if (fala.isEmpty() || ruido) { if (ligada) deNovo(120) else parar(); return }
+            val ruido = !naTelaIAagora() && (fala.length < 3 || conf in 0f..0.3f)
+            if (fala.isBlank() || ruido) { if (ligada) deNovo(120) else parar(); return }
             decidir(fala)
         }
         override fun onPartialResults(partialResults: Bundle?) {
             if (velho()) return
-            partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { texto("“$it”", notif = false) }
+            val p = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
+            if (p.isBlank()) return
+            ultimaParcial = p
+            texto("“$p”", notif = false)
+            // parou de falar por ~2s depois de já ter dito algo: fecha e executa (não fica esperando sem fim)
+            fecharPorPausa?.let { main.removeCallbacks(it) }
+            val meu = sessao
+            val r = Runnable {
+                if (velho()) return@Runnable
+                try { sr?.stopListening() } catch (_: Throwable) {}
+                // reserva: se o reconhecedor não devolver nada em 2s, usa o que já entendeu (nunca trava esperando)
+                main.postDelayed({
+                    if (meu == sessao && estado == Estado.OUVINDO && ultimaParcial.trim().length >= 2) {
+                        val p = ultimaParcial.trim(); ultimaParcial = ""; decidir(p)
+                    }
+                }, 2000)
+            }
+            fecharPorPausa = r
+            main.postDelayed(r, 2000)
         }
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
     private fun aoErro(error: Int) {
+        fecharPorPausa?.let { main.removeCallbacks(it) }
         val nada = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+        // o Google às vezes dá "não entendi" mesmo tendo entendido algo: aproveita o que ela captou
+        if (nada && ultimaParcial.trim().length >= 3) {
+            val p = ultimaParcial.trim(); ultimaParcial = ""
+            if (naTelaIAagora()) { decidir(p); return }
+        }
         if (!nada) NLog.add("ia", "escuta: erro $error (${nomeErro(error)})")
         if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
             (act ?: ctx)?.let { Ui.toast(it, "libere o microfone pro NOCRY nas configurações do celular") }
@@ -405,6 +436,8 @@ object SessaoIA {
         orbe?.ativo = true
         texto("Ouvindo...")
         Voz.parar()
+        ultimaParcial = ""
+        fecharPorPausa?.let { main.removeCallbacks(it) }
         inicioEscuta = System.currentTimeMillis()
         try {
             // um reconhecedor novo a cada escuta: reaproveitar o antigo dava "ocupado" e derrubava a escuta
@@ -417,10 +450,10 @@ object SessaoIA {
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
                 .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, a.packageName)
-                // assim que você faz uma pausa curtinha, ela já fecha e executa (não fica esperando mais)
-                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
-                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
-                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 500L)
+                // quando você faz uma pausa de ~2s, ela fecha e executa (não fica esperando mais)
+                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2000L)
+                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 800L)
                 // só o microfone do celular; não tenta puxar áudio de outras fontes
                 .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
             s.startListening(i)
@@ -543,6 +576,8 @@ object SessaoIA {
         trocarReconhecedor()
         Voz.aoTerminar = null
         fimFala?.let { main.removeCallbacks(it) }
+        fecharPorPausa?.let { main.removeCallbacks(it) }
+        ultimaParcial = ""
         Voz.parar()
         ultimoStatus = null
         IaFundoService.status(null)
