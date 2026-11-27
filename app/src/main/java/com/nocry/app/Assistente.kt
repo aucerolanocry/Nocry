@@ -44,7 +44,13 @@ object Acoes {
         "bot_ligar" to "ligar o bot de fila e começar a buscar",
         "bot_desligar" to "desligar o bot de fila",
         "bot_pausar" to "pausar a busca do bot (continua conectado)",
-        "jogo_abrir" to "abrir o Free Fire",
+        "jogo_abrir" to "abrir o Free Fire (arg: normal ou max)",
+        "abrir_app" to "abrir qualquer app do celular (arg: nome do app, ex.: Play Store, WhatsApp, YouTube, Discord, Câmera, Configurações)",
+        "pesquisar" to "pesquisar algo no Google (arg: o que pesquisar)",
+        "youtube" to "procurar um vídeo no YouTube (arg: o que procurar)",
+        "alarme" to "criar um alarme no relógio do celular (arg: HH:MM)",
+        "lanterna_ligar" to "ligar a lanterna",
+        "lanterna_desligar" to "desligar a lanterna",
         "otm_ligar" to "ligar a otimização",
         "otm_desligar" to "desligar a otimização",
         "comp_ligar" to "ligar o modo competitivo (toque rápido)",
@@ -68,6 +74,11 @@ object Acoes {
 
     fun descricao(p: Passo): String = when (p.acao) {
         "tela" -> "abrir a tela ${p.arg}"
+        "abrir_app" -> "abrir ${p.arg}"
+        "pesquisar" -> "pesquisar \"${p.arg}\""
+        "youtube" -> "procurar \"${p.arg}\" no YouTube"
+        "alarme" -> "alarme às ${p.arg}"
+        "jogo_abrir" -> if (p.arg == "max") "abrir o Free Fire MAX" else if (p.arg == "normal") "abrir o Free Fire" else "abrir o jogo"
         else -> nomes[p.acao] ?: p.acao
     }
 
@@ -139,14 +150,44 @@ object Acoes {
         }
         "jogo_abrir" -> {
             val pm = app.packageManager
-            val pref = if (Prefs.jogarFf == "max") Const.FF_MAX else Const.FF_NORMAL
-            val pkg = listOf(pref, Const.FF_NORMAL, Const.FF_MAX).firstOrNull { pm.getLaunchIntentForPackage(it) != null }
+            // "max" / "normal" vindo do pedido manda; sem isso, o que está escolhido no app
+            val pref = when (p.arg.lowercase()) { "max" -> Const.FF_MAX; "normal" -> Const.FF_NORMAL; else -> if (Prefs.jogarFf == "max") Const.FF_MAX else Const.FF_NORMAL }
+            val tem = { pk: String -> pm.getLaunchIntentForPackage(pk) != null }
+            val pkg = if (tem(pref)) pref else listOf(Const.FF_NORMAL, Const.FF_MAX).firstOrNull(tem)
+            val nome = { pk: String -> if (pk == Const.FF_MAX) "Free Fire MAX" else "Free Fire" }
             if (pkg == null) "✗ o Free Fire não está instalado"
             else {
                 val i = pm.getLaunchIntentForPackage(pkg)!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 val ok = naTela { (act ?: app).startActivity(i); true } == true
-                if (ok) "✓ abrindo o Free Fire" else "✗ não consegui abrir o jogo (abra o app e peça de novo)"
+                if (!ok) "✗ não consegui abrir o jogo (abra o app e peça de novo)"
+                else if (pkg != pref) "✓ abrindo o ${nome(pkg)} (o ${nome(pref)} não está instalado)"
+                else "✓ abrindo o ${nome(pkg)}"
             }
+        }
+        "abrir_app" -> abrirApp(app, act, p.arg)
+        "pesquisar" -> abrirLink(app, act, "https://www.google.com/search?q=" + java.net.URLEncoder.encode(p.arg, "UTF-8"), "✓ pesquisando \"${p.arg}\"")
+        "youtube" -> abrirLink(app, act, "https://www.youtube.com/results?search_query=" + java.net.URLEncoder.encode(p.arg, "UTF-8"), "✓ procurando \"${p.arg}\" no YouTube")
+        "alarme" -> {
+            val m = Regex("(\\d{1,2})\\D?(\\d{2})?").find(p.arg)
+            val h = m?.groupValues?.get(1)?.toIntOrNull()
+            val mi = m?.groupValues?.get(2)?.toIntOrNull() ?: 0
+            if (h == null || h !in 0..23 || mi !in 0..59) "✗ não entendi a hora do alarme"
+            else {
+                val i = Intent(android.provider.AlarmClock.ACTION_SET_ALARM)
+                    .putExtra(android.provider.AlarmClock.EXTRA_HOUR, h).putExtra(android.provider.AlarmClock.EXTRA_MINUTES, mi)
+                    .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "NOCRY").putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val ok = naTela { (act ?: app).startActivity(i); true } == true
+                if (ok) "✓ alarme criado pras %02d:%02d".format(h, mi) else "✗ o relógio do celular não aceitou criar o alarme"
+            }
+        }
+        "lanterna_ligar", "lanterna_desligar" -> {
+            val liga = p.acao == "lanterna_ligar"
+            try {
+                val cm = app.getSystemService(android.hardware.camera2.CameraManager::class.java)
+                val id = cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it).get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
+                if (id == null) "✗ esse celular não tem lanterna" else { cm.setTorchMode(id, liga); if (liga) "✓ lanterna ligada" else "✓ lanterna desligada" }
+            } catch (_: Throwable) { "✗ não consegui mexer na lanterna" }
         }
         "otm_ligar" -> if (Otm.status().first) "✓ a otimização já estava ligada"
             else if (Otm.ativar {}) "✓ otimização ligada" else "✗ otimização: o ADB não está conectado"
@@ -184,6 +225,45 @@ object Acoes {
             if (n == 0) "✓ não tinha nada agendado" else "✓ cancelei $n ${if (n == 1) "coisa agendada" else "coisas agendadas"}"
         }
         else -> "✗ não sei fazer \"${p.acao}\""
+    }
+
+    private fun limpaNome(s: String): String =
+        Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+
+    /** abre um app pelo nome falado ("play store", "zap", "configurações"...). Nunca abre o próprio NOCRY */
+    private fun abrirApp(app: Context, act: MainActivity?, nomeBruto: String): String {
+        val alvo = limpaNome(nomeBruto).removePrefix("o ").removePrefix("a ").removePrefix("app ").removePrefix("aplicativo ").trim()
+        if (alvo.isEmpty()) return "✗ qual app você quer abrir?"
+        val apelidos = mapOf("play store" to "com.android.vending", "playstore" to "com.android.vending", "loja" to "com.android.vending",
+            "google play" to "com.android.vending", "zap" to "com.whatsapp", "whats" to "com.whatsapp", "whatsapp" to "com.whatsapp",
+            "insta" to "com.instagram.android", "face" to "com.facebook.katana", "yt" to "com.google.android.youtube")
+        if (alvo == "configuracoes" || alvo == "configuracao" || alvo == "ajustes do celular") {
+            val ok = naTela { (act ?: app).startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } == true
+            return if (ok) "✓ abrindo as configurações do celular" else "✗ não consegui abrir as configurações"
+        }
+        val pm = app.packageManager
+        val lista = try { pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0) } catch (_: Throwable) { emptyList() }
+        val apps = lista.mapNotNull { r ->
+            val pk = r.activityInfo?.packageName ?: return@mapNotNull null
+            if (pk == Const.PKG || pk == app.packageName) null else pk to limpaNome(r.loadLabel(pm).toString())
+        }.distinctBy { it.first }
+        val porApelido = apelidos[alvo]?.takeIf { pk -> apps.any { it.first == pk } }
+        val achado = porApelido ?: apps.firstOrNull { it.second == alvo }?.first
+            ?: apps.firstOrNull { it.second.startsWith(alvo) || alvo.startsWith(it.second) }?.first
+            ?: apps.firstOrNull { it.second.contains(alvo) }?.first
+            ?: apps.maxByOrNull { a -> alvo.split(" ").count { w -> w.length > 2 && a.second.contains(w) } }
+                ?.takeIf { a -> alvo.split(" ").any { w -> w.length > 2 && a.second.contains(w) } }?.first
+        if (achado == null) return "✗ não achei o app \"$nomeBruto\" no celular"
+        val i = pm.getLaunchIntentForPackage(achado)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) ?: return "✗ não consegui abrir \"$nomeBruto\""
+        val ok = naTela { (act ?: app).startActivity(i); true } == true
+        val rotulo = apps.firstOrNull { it.first == achado }?.let { a -> try { pm.getApplicationLabel(pm.getApplicationInfo(a.first, 0)).toString() } catch (_: Throwable) { nomeBruto } } ?: nomeBruto
+        return if (ok) "✓ abrindo $rotulo" else "✗ não consegui abrir $rotulo (abra o NOCRY e peça de novo)"
+    }
+
+    private fun abrirLink(app: Context, act: MainActivity?, url: String, okTxt: String): String {
+        val i = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val ok = naTela { (act ?: app).startActivity(i); true } == true
+        return if (ok) okTxt else "✗ não consegui abrir o navegador"
     }
 
     private fun ligarBot(): String {
@@ -314,7 +394,15 @@ object Comandos {
 
             val achados = ArrayList<String>()
             val menu = MENU.containsMatchIn(p)
+            val alarme = tem(p, "\\b(alarme|despertador|me acorda|me acordar)\\b")
+            if (alarme) quando = 0L    // "alarme às 7h" é a hora do alarme, não pra agendar
             when {
+                alarme -> HORA.find(p)?.let { m -> achados += "alarme:" + m.groupValues[1] + ":" + (m.groupValues[2].ifEmpty { "00" }) }
+                tem(p, "\\blanterna\\b") -> achados += if (liga == false) "lanterna_desligar" else "lanterna_ligar"
+                tem(p, "\\byoutube\\b") && tem(p, "\\b(procura|procurar|procure|pesquisa|pesquisar|pesquise|busca|buscar|video|videos)\\b") ->
+                    achados += "youtube:" + p.replace(Regex(".*?\\b(procura|procurar|procure|pesquisa|pesquisar|pesquise|busca|buscar)\\b"), "").replace(Regex("\\b(no|na) youtube\\b|\\byoutube\\b|\\bvideos? de\\b"), "").trim()
+                tem(p, "^(pesquisa|pesquisar|pesquise|procura|procurar|procure|busca|buscar|googla|googlar)\\b") ->
+                    achados += "pesquisar:" + p.replace(Regex("^(pesquisa|pesquisar|pesquise|procura|procurar|procure|busca|buscar|googla|googlar)\\s*(no google|na internet|sobre|por)?\\s*"), "").trim()
                 tem(p, "\\b(erro|erros|problema|problemas|bug|bugs|diagnostic\\w*|verifica\\w*|arruma\\w*|conserta\\w*|checa\\w*|testa o app)\\b") -> achados += "verificar"
                 tem(p, "agend") && liga == false -> achados += "cancelar_agendados"
                 tem(p, "\\b(tela|aba)\\b") || tem(p, "^(vai|va|ir) (pra|para)\\b") -> achados += "tela:" + qualTela(p)
@@ -325,13 +413,19 @@ object Comandos {
                     else if (tem(p, "\\b(competitivo|comp|toque rapido)\\b")) achados += if (liga == false) "comp_desligar" else "comp_ligar"
                     if (tem(p, "\\b(bypass|bypas|baipas|bai pass)\\b")) achados += if (liga == false) "bypass_desligar" else "bypass_ligar"
                     if (tem(p, "\\b(bot|bots|fila|sniper|robo)\\b")) achados += if (liga == false) (if (PAUSA.containsMatchIn(p)) "bot_pausar" else "bot_desligar") else "bot_ligar"
-                    if (tem(p, "\\b(jogo|free ?fire|ff|freefire|partida)\\b") && liga != false) achados += "jogo_abrir"
+                    if (tem(p, "\\b(jogo|free ?fire|ff|freefire|partida)\\b") && liga != false)
+                        achados += "jogo_abrir" + (if (tem(p, "\\bmax\\b")) ":max" else if (tem(p, "\\bnormal\\b")) ":normal" else "")
                     if (tem(p, "otimiz")) achados += if (liga == false) "otm_desligar" else "otm_ligar"
                     if (tem(p, "\\b(adb|depuracao|conexao)\\b") && liga != false) achados += "adb_ligar"
                 }
             }
+            if (achados.isEmpty() && tem(p, "^(abre|abrir|abra|entra no|entra na|entrar no|entrar na)\\b")) {
+                val nome = p.replace(Regex("^(abre|abrir|abra|entra no|entra na|entrar no|entrar na)\\s+(o |a |os |as |app |aplicativo )?"), "").trim()
+                if (nome.isNotEmpty()) achados += "abrir_app:$nome"
+            }
             for (a in achados) {
-                val (acao, arg) = if (a.startsWith("tela:")) "tela" to a.substring(5) else a to ""
+                val i = a.indexOf(':')
+                val (acao, arg) = if (i > 0) a.substring(0, i) to a.substring(i + 1) else a to ""
                 passos += Passo(acao, atraso, arg, quando)
                 if (duracao > 0) Acoes.contrario[acao]?.let { passos += Passo(it, atraso + duracao, "", 0L) }
             }
@@ -371,19 +465,40 @@ object IA {
     @Volatile var ligada = false
         private set
 
-    /** null = IA de verdade indisponível agora (sem chave no servidor ou sem internet): usa os comandos grátis */
-    fun perguntar(c: Context, texto: String, hist: List<Pair<String, String>>): Resposta? {
-        if (System.currentTimeMillis() < semIaAte) return null
+    /** pedido pro servidor com tempo maior que o normal (a IA pode levar uns segundos pensando) */
+    private fun postIa(c: Context, corpo: JSONObject): JSONObject? {
+        val base = BuildConfig.API_URL.trim().trimEnd('/')
+        val key = Prefs.licKey ?: return null
+        if (base.isEmpty()) return null
+        corpo.put("key", key).put("dev", License.devId(c)).put("app", License.versao(c)).put("op", "ia")
+        return try {
+            val cx = java.net.URL("$base/v1/x").openConnection() as java.net.HttpURLConnection
+            cx.requestMethod = "POST"
+            cx.connectTimeout = 15000
+            cx.readTimeout = 50000
+            cx.doOutput = true
+            cx.setRequestProperty("Content-Type", "application/json")
+            cx.outputStream.use { it.write(corpo.toString().toByteArray(Charsets.UTF_8)) }
+            val st = if (cx.responseCode in 200..299) cx.inputStream else cx.errorStream
+            JSONObject(st?.bufferedReader()?.use { it.readText() } ?: return null)
+        } catch (_: Throwable) { null }
+    }
+
+    /** null = IA de verdade indisponível agora (sem internet, demorou demais, cota do dia acabou): usa os comandos grátis */
+    fun perguntar(c: Context, texto: String, hist: List<Pair<String, String>>, imagem: String? = null): Resposta? {
+        if (System.currentTimeMillis() < semIaAte && imagem == null) return null
         val h = JSONArray()
-        hist.takeLast(6).forEach { h.put(JSONObject().put("role", it.first).put("content", it.second.take(600))) }
+        hist.takeLast(8).forEach { h.put(JSONObject().put("role", it.first).put("content", it.second.take(600))) }
         val acoes = JSONObject()
         Acoes.nomes.forEach { (k, v) -> acoes.put(k, v) }
-        val j = Comunidade.x(c, "ia", JSONObject().put("texto", texto.take(500)).put("estado", estado(c)).put("hist", h).put("acoes", acoes))
-            ?: return null
+        val corpo = JSONObject().put("texto", texto.take(800)).put("estado", estado(c)).put("hist", h).put("acoes", acoes)
+        if (imagem != null) corpo.put("imagem", imagem)
+        val j = postIa(c, corpo) ?: return null
         if (!j.optBoolean("ok")) {
             if (j.optString("reason") == "ia_limite") return Resposta("Você usou todas as perguntas da IA de hoje. Até amanhã eu entendo os comandos simples.", emptyList())
             ligada = false
-            semIaAte = System.currentTimeMillis() + 10 * 60_000L
+            // sem IA no servidor: espera 10 min pra perguntar de novo; erro passageiro: tenta de novo no próximo pedido
+            if (j.optString("reason") == "sem_ia") semIaAte = System.currentTimeMillis() + 10 * 60_000L
             return null
         }
         ligada = true
@@ -394,7 +509,7 @@ object IA {
             val acao = o.optString("acao")
             if (acao !in Acoes.nomes) continue
             val min = o.optDouble("min", 0.0).let { if (it.isNaN()) 0.0 else it.coerceIn(0.0, 1440.0) }
-            passos += Passo(acao, (min * 60_000L).toLong(), o.optString("arg").take(20))
+            passos += Passo(acao, (min * 60_000L).toLong(), o.optString("arg").take(80))
         }
         return Resposta(j.optString("resposta").take(1200), passos)
     }
@@ -414,6 +529,9 @@ object IA {
             .put("competitivo", if (Comp.ligado()) "ligado" else "desligado")
             .put("menu_topo", "meet ${if (MenuRapido.noMenu(true)) "sim" else "não"}, toque rápido ${if (MenuRapido.noMenu(false)) "sim" else "não"}")
             .put("agendados", Agenda.lista().joinToString("; ") { Acoes.hora(it.quando) + " " + it.acao })
+            .put("free_fire_instalado", listOf(Const.FF_NORMAL to "normal", Const.FF_MAX to "max")
+                .filter { (pk, _) -> try { c.packageManager.getLaunchIntentForPackage(pk) != null } catch (_: Throwable) { false } }.joinToString { it.second }.ifEmpty { "nenhum" })
+            .put("hora_celular", SimpleDateFormat("HH:mm", Locale("pt", "BR")).format(Date()))
             .put("versao", License.versao(c))
             .put("erros_novos", try { Erros.novos() } catch (_: Throwable) { 0 })
             .put("log", logs)
@@ -529,48 +647,171 @@ object Assistente {
 
     val AJUDA = "Não entendi. Exemplos do que eu faço:\n• liga o bypass, liga o bot e desliga o bot em 5 minutos\n• liga o bot por 30 minutos\n• abre o jogo\n• coloca o Meet e o toque rápido no menu do topo\n• às 22h desliga o bot\n• verifica os erros e arruma\n• cancela os agendados"
 
-    /** responde e faz tudo (bloqueia: chame fora da tela) */
-    fun responder(c: Context, act: MainActivity?, texto: String): String {
-        val hist = synchronized(conversa) { conversa.dropLast(1).takeLast(6).map { (if (it.eu) "user" else "assistant") to it.texto } }
-        val ia = try { IA.perguntar(c, texto, hist) } catch (_: Throwable) { null }
+    /** responde e faz tudo (bloqueia: chame fora da tela). imagem = foto em base64 (jpeg) */
+    fun responder(c: Context, act: MainActivity?, texto: String, imagem: String? = null): String {
+        val hist = synchronized(conversa) { conversa.dropLast(1).takeLast(8).map { (if (it.eu) "user" else "assistant") to it.texto } }
+        val ia = try { IA.perguntar(c, texto, hist, imagem) } catch (_: Throwable) { null }
+        if (ia == null && imagem != null) return "Não consegui olhar a imagem agora: a IA do servidor não respondeu. Tenta de novo daqui a pouco."
         val passos = ia?.passos ?: Comandos.entender(texto)
         val linhas = ArrayList<String>()
         if (ia != null && ia.texto.isNotBlank()) linhas += ia.texto
-        if (passos.isEmpty() && ia == null) return AJUDA
+        if (passos.isEmpty() && ia == null) return "A IA do servidor não respondeu agora (internet fraca ou ela demorou), e esse pedido eu não sei fazer sem ela. Tenta de novo em alguns segundos.\n\n" + AJUDA.removePrefix("Não entendi. ")
         for (p in passos) linhas += Acoes.fazerOuAgendar(c, act, p)
         return linhas.joinToString("\n").ifBlank { "Pronto." }
     }
 }
 
+/** voz da IA: fala as respostas em português (motor de voz do próprio celular, grátis) */
+object Voz : android.speech.tts.TextToSpeech.OnInitListener {
+    private var tts: android.speech.tts.TextToSpeech? = null
+    @Volatile private var pronto = false
+    private var pendente: String? = null
+    private val main = Handler(Looper.getMainLooper())
+    /** chamado quando termina de falar (no modo conversa por voz, volta a ouvir) */
+    var aoTerminar: (() -> Unit)? = null
+
+    fun init(c: Context) {
+        if (tts == null) try { tts = android.speech.tts.TextToSpeech(c.applicationContext, this) } catch (_: Throwable) {}
+    }
+
+    override fun onInit(status: Int) {
+        val t = tts ?: return
+        if (status != android.speech.tts.TextToSpeech.SUCCESS) return
+        val r = try { t.setLanguage(Locale("pt", "BR")) } catch (_: Throwable) { android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED }
+        pronto = r != android.speech.tts.TextToSpeech.LANG_MISSING_DATA && r != android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED
+        try { t.setSpeechRate(1.05f) } catch (_: Throwable) {}
+        t.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) { main.post { aoTerminar?.invoke() } }
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) {}
+        })
+        pendente?.let { falar(it) }
+        pendente = null
+    }
+
+    fun falar(texto: String) {
+        val limpo = texto.lines().map { it.trim().trimStart('✓', '✗', '⚠', '⏰', '•', ' ') }.filter { it.isNotEmpty() }.joinToString(". ").take(1500)
+        if (limpo.isEmpty()) return
+        if (!pronto) { pendente = limpo; return }
+        try { tts?.speak(limpo, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "nocry-ia") } catch (_: Throwable) {}
+    }
+
+    fun parar() { try { tts?.stop() } catch (_: Throwable) {} }
+}
+
 class AssistenteScreen(a: MainActivity) : Screen(a) {
     override val titulo = "IA do NOCRY"
     private var pensando = false
+    /** foto escolhida pra mandar junto (jpeg em base64) e a miniatura pra mostrar */
+    private var imagem: String? = null
+    private var miniatura: android.graphics.Bitmap? = null
+
+    private companion object {
+        const val REQ_VOZ = 7701
+        const val REQ_IMG = 7702
+    }
+
+    /** sempre falar as respostas (sem isso, fala só quando você pediu por voz) */
+    private var falarSempre: Boolean
+        get() = Prefs.lerNum("ia_falar", 0L) == 1L
+        set(v) = Prefs.gravaNum("ia_falar", if (v) 1L else 0L)
+    /** conversa por voz: depois de falar a resposta, já volta a ouvir (mãos livres) */
+    private var maosLivres: Boolean
+        get() = Prefs.lerNum("ia_maos", 0L) == 1L
+        set(v) = Prefs.gravaNum("ia_maos", if (v) 1L else 0L)
 
     private val campo: EditText by lazy {
-        Ui.field(act, "escreva o que você quer", false).also { e ->
+        Ui.field(act, "escreva ou toque no microfone", false).also { e ->
             e.imeOptions = EditorInfo.IME_ACTION_SEND
             e.setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_SEND) { enviar(); true } else false }
         }
     }
 
-    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}"
+    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|$maosLivres"
 
-    fun enviar(texto: String? = null) {
-        val t = (texto ?: campo.text.toString()).trim()
+    fun enviar(texto: String? = null, porVoz: Boolean = false) {
+        var t = (texto ?: campo.text.toString()).trim()
+        val img = imagem
+        if (t.isEmpty() && img != null) t = "O que tem nessa imagem?"
         if (t.isEmpty() || pensando) return
         campo.setText("")
-        Assistente.anotar(true, t)
+        imagem = null
+        miniatura = null
+        Voz.parar()
+        Assistente.anotar(true, if (img != null) "📷 $t" else t)
         pensando = true
         redesenha()
         val c = act.applicationContext
         Bg.io {
-            val r = Assistente.responder(c, act, t)
+            val r = Assistente.responder(c, act, t, img)
             Bg.ui {
                 Assistente.anotar(false, r)
                 pensando = false
                 redesenha()
+                if (porVoz || falarSempre) {
+                    Voz.aoTerminar = if (porVoz && maosLivres) ({ if (act.naFrente) ouvir() }) else null
+                    Voz.falar(r)
+                }
             }
         }
+    }
+
+    /** abre o microfone (reconhecimento de voz do Google, grátis) */
+    fun ouvir() {
+        Voz.parar()
+        val it = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Pode falar")
+        act.aoResultado = { req, res, data ->
+            if (req == REQ_VOZ && res == android.app.Activity.RESULT_OK) {
+                data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let { fala -> enviar(fala, porVoz = true) }
+            }
+        }
+        try {
+            @Suppress("DEPRECATION")
+            act.startActivityForResult(it, REQ_VOZ)
+        } catch (_: Throwable) { Ui.toast(act, "esse celular não tem reconhecimento de voz (instale o app Google)") }
+    }
+
+    private fun escolherImagem() {
+        val it = Intent(Intent.ACTION_GET_CONTENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
+        act.aoResultado = { req, res, data ->
+            val u = data?.data
+            if (req == REQ_IMG && res == android.app.Activity.RESULT_OK && u != null) {
+                val c = act.applicationContext
+                Bg.io {
+                    val r = carregar(c, u)
+                    Bg.ui {
+                        if (r == null) Ui.toast(act, "não consegui abrir essa imagem")
+                        else { imagem = r.first; miniatura = r.second; redesenha() }
+                    }
+                }
+            }
+        }
+        try {
+            @Suppress("DEPRECATION")
+            act.startActivityForResult(it, REQ_IMG)
+        } catch (_: Throwable) { Ui.toast(act, "nenhum app de galeria encontrado") }
+    }
+
+    /** abre a foto, diminui (até 1024 px) e vira jpeg em base64 pra mandar pra IA */
+    private fun carregar(c: Context, u: android.net.Uri): Pair<String, android.graphics.Bitmap>? {
+        return try {
+            val op = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            c.contentResolver.openInputStream(u)?.use { android.graphics.BitmapFactory.decodeStream(it, null, op) }
+            var amostra = 1
+            while (maxOf(op.outWidth, op.outHeight) / amostra > 2048) amostra *= 2
+            val b0 = c.contentResolver.openInputStream(u)?.use {
+                android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = amostra })
+            } ?: return null
+            val esc = 1024f / maxOf(b0.width, b0.height)
+            val b = if (esc < 1f) android.graphics.Bitmap.createScaledBitmap(b0, maxOf(1, (b0.width * esc).toInt()), maxOf(1, (b0.height * esc).toInt()), true) else b0
+            val out = java.io.ByteArrayOutputStream()
+            b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 72, out)
+            Pair(android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP), b)
+        } catch (_: Throwable) { null }
     }
 
     private fun balao(eu: Boolean, texto: String): View {
@@ -581,23 +822,55 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         t.setLineSpacing(0f, 1.15f)
         t.setPadding(Ui.dp(c, 13), Ui.dp(c, 10), Ui.dp(c, 13), Ui.dp(c, 10))
         t.background = if (eu) Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x24), 16, Theme.alpha(android.graphics.Color.WHITE, 0x50), 1) else Ui.glass(c)
+        if (!eu) Ui.clique(t) { Voz.falar(texto) }   // tocar na resposta: ela fala de novo
         linha.addView(if (eu) View(c) else t, LinearLayout.LayoutParams(if (eu) 0 else ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, if (eu) 0.18f else 0f))
         if (eu) linha.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         else linha.addView(View(c), LinearLayout.LayoutParams(0, 1, 0.18f))
         return linha
     }
 
+    /** botãozinho de opção (imagem, sempre falar, conversa por voz) */
+    private fun opcao(ico: Int, rotulo: String, ligado: Boolean, acao: () -> Unit): View {
+        val c = act
+        val b = Ui.hbox(c)
+        b.gravity = Gravity.CENTER
+        b.background = Ui.ripple(c, Ui.fundoPeq(c, Ui.raioPeq(14), ico, ligado))
+        b.setPadding(Ui.dp(c, 6), Ui.dp(c, 9), Ui.dp(c, 6), Ui.dp(c, 9))
+        b.addView(Ui.icone(c, ico, Ui.corIconePeq(ico, ligado), 15), LinearLayout.LayoutParams(Ui.dp(c, 15), Ui.dp(c, 15)).also { it.rightMargin = Ui.dp(c, 5) })
+        b.addView(Ui.textoPeq(Ui.text(c, rotulo, 9f, if (ligado) Ui.OK else Ui.TEXT, true)).also { Ui.umaLinha(it, 7) })
+        b.contentDescription = rotulo
+        Ui.clique(b) { acao() }
+        return b
+    }
+
+    private fun botaoRedondo(ico: Int, desc: String, principal: Boolean, tam: Int, acao: () -> Unit): View {
+        val c = act
+        val f = FrameLayout(c)
+        f.background = if (principal) Ui.ripple(c, Botao(c, "grad"), Botao(c, "grad", mascara = true)) else Ui.ripple(c, Ui.fundoPeq(c, 99, ico))
+        val ti = tam * 2 / 5
+        f.addView(Ui.icone(c, ico, if (principal) Ui.corSobreGrande() else Ui.TEXT, ti), FrameLayout.LayoutParams(Ui.dp(c, ti), Ui.dp(c, ti), Gravity.CENTER))
+        f.contentDescription = desc
+        Ui.clique(f) { acao() }
+        return f
+    }
+
     override fun render() {
         limpa()
         val c = act
+        Voz.init(c)
         val vazio = synchronized(Assistente.conversa) { Assistente.conversa.isEmpty() }
         if (vazio) {
-            add(Ui.dica(c, "Escreva do seu jeito o que você quer e eu faço. Ex.: \"liga o bypass, liga o bot e desliga o bot em 5 minutos\". " +
-                "Entendo qualquer frase e explico os erros do app. Se a IA do servidor estiver fora do ar (ou a cota grátis do dia acabar), continuo entendendo os comandos: bypass, bot, jogo, otimização, competitivo, menu do topo e horários.",
+            add(Ui.dica(c, "Sou a assistente do NOCRY. Fala comigo por voz ou escreve: converso sobre qualquer coisa, olho imagens, abro apps, pesquiso, crio alarme e mexo no NOCRY (bypass, bot, jogo, otimização, horários). Ex.: \"liga o bypass, liga o bot e desliga o bot em 5 minutos\".",
                 Ui.Dica.INFO), 0)
-            add(Ui.secao(c, "experimente"), 18)
-            val sug = listOf("Liga o bypass e o bot", "Liga o bot por 30 minutos", "Abre o jogo", "Verifica os erros e arruma",
-                "Coloca o Meet e o toque rápido no menu do topo", "Às 23h desliga o bot")
+            // microfone grande
+            val col = Ui.vbox(c)
+            col.gravity = Gravity.CENTER_HORIZONTAL
+            col.addView(botaoRedondo(R.drawable.ic_mic, "falar com a IA", true, 76) { ouvir() }, LinearLayout.LayoutParams(Ui.dp(c, 76), Ui.dp(c, 76)))
+            col.addView(Ui.text(c, "toque e fale", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 8, c = c))
+            add(col, 22)
+            add(Ui.secao(c, "experimente"), 20)
+            val sug = listOf("Liga o bypass e o bot", "Liga o bot por 30 minutos", "Abre o Free Fire MAX", "Verifica os erros e arruma",
+                "Abre a Play Store", "Me dá uma dica pra subir de rank")
             sug.chunked(2).forEach { par ->
                 val l = Ui.hbox(c)
                 par.forEachIndexed { i, s ->
@@ -615,7 +888,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             val msgs = synchronized(Assistente.conversa) { Assistente.conversa.toList() }
             msgs.forEachIndexed { i, m -> add(balao(m.eu, m.texto), if (i == 0) 4 else 10) }
         }
-        if (pensando) add(Ui.text(c, "fazendo...", 10.5f, Ui.MUTED, true, mono = true), 10)
+        if (pensando) add(Ui.text(c, "pensando...", 10.5f, Ui.MUTED, true, mono = true), 10)
 
         // o que está agendado, com botão pra cancelar
         val ag = Agenda.lista()
@@ -637,17 +910,40 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             }
         }
 
-        // campo + enviar
+        // foto escolhida (vai junto com a próxima mensagem)
+        miniatura?.let { bmp ->
+            val r = Ui.hbox(c)
+            r.gravity = Gravity.CENTER_VERTICAL
+            r.background = Ui.glass(c)
+            r.setPadding(Ui.dp(c, 8), Ui.dp(c, 8), Ui.dp(c, 12), Ui.dp(c, 8))
+            val iv = android.widget.ImageView(c)
+            iv.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+            iv.setImageBitmap(bmp)
+            r.addView(iv, LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)).also { it.rightMargin = Ui.dp(c, 10) })
+            r.addView(Ui.text(c, "imagem pronta: escreva ou fale a pergunta", 10.5f, Ui.TEXT, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            val x = Ui.text(c, "tirar", 10f, Ui.WARN, true, mono = true)
+            x.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), 0, Ui.dp(c, 6))
+            Ui.clique(x) { imagem = null; miniatura = null; redesenha() }
+            r.addView(x)
+            add(r, 14)
+        }
+
+        // opções: mandar imagem, sempre falar, conversa por voz
+        val op = Ui.hbox(c)
+        op.addView(opcao(R.drawable.ic_image, "imagem", imagem != null) { escolherImagem() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        op.addView(opcao(R.drawable.ic_volume, if (falarSempre) "voz: sempre" else "voz: ao falar", falarSempre) { falarSempre = !falarSempre; if (!falarSempre) Voz.parar(); redesenha() },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
+        op.addView(opcao(R.drawable.ic_mic, if (maosLivres) "conversa: on" else "conversa: off", maosLivres) { maosLivres = !maosLivres; redesenha() },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
+        add(op, 16)
+
+        // campo + microfone + enviar
         val linha = Ui.hbox(c)
         linha.gravity = Gravity.CENTER_VERTICAL
         (campo.parent as? ViewGroup)?.removeView(campo)
         linha.addView(campo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val env = FrameLayout(c)
-        env.background = Ui.ripple(c, Botao(c, "grad"), Botao(c, "grad", mascara = true))
-        env.addView(Ui.icone(c, R.drawable.ic_play, Ui.corSobreGrande(), 18), FrameLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18), Gravity.CENTER))
-        env.contentDescription = "enviar"
-        Ui.clique(env) { enviar() }
-        linha.addView(env, LinearLayout.LayoutParams(Ui.dp(c, 48), Ui.dp(c, 48)).also { it.leftMargin = Ui.dp(c, 8) })
-        add(linha, 18)
+        linha.addView(botaoRedondo(R.drawable.ic_mic, "falar", false, 46) { ouvir() }, LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)).also { it.leftMargin = Ui.dp(c, 8) })
+        linha.addView(botaoRedondo(R.drawable.ic_play, "enviar", true, 46) { enviar() }, LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)).also { it.leftMargin = Ui.dp(c, 6) })
+        add(linha, 10)
     }
 }

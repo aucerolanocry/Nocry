@@ -527,7 +527,7 @@ async function extrasRoute(req, env, ip) {
   if (op === "ia") {
     // sem chave paga: usa a IA grátis do próprio Cloudflare (Workers AI, cota grátis todo dia)
     if (!env.ANTHROPIC_API_KEY && !env.AI) return json({ ok: false, reason: "sem_ia" });
-    const texto = clean(b.texto, 500).trim();
+    const texto = clean(b.texto, 800).trim();
     if (!texto) return json({ ok: false, reason: "vazio" });
     const dia = new Date(now).toISOString().slice(0, 10);
     await env.DB.prepare("CREATE TABLE IF NOT EXISTS ia_uso (key TEXT NOT NULL, dia TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (key, dia))").run();
@@ -541,13 +541,16 @@ async function extrasRoute(req, env, ip) {
     const lista = nomes.map((k) => "- " + k + ": " + clean(acoes[k], 200)).join("\n");
     const estado = clean(JSON.stringify(b.estado && typeof b.estado === "object" ? b.estado : {}), 3500);
     const sistema =
-      "Você é a IA dentro do app NOCRY (Android, para jogadores de Free Fire). Você entende o pedido da pessoa e escolhe ações da lista abaixo; o app faz as ações no celular dela.\n" +
-      'Responda SÓ com um JSON assim: {"resposta": "texto curto em português simples", "passos": [{"acao": "nome", "min": 0, "arg": ""}]}\n' +
+      "Você é a assistente pessoal do app NOCRY, no estilo do Jarvis do Homem de Ferro: inteligente, rápida, simpática e direta, falando português do Brasil simples. " +
+      "Você conversa sobre qualquer assunto, responde perguntas gerais, dá dicas de Free Fire, explica os erros do app, olha imagens que mandarem e, quando a pessoa pedir algo que dá pra fazer no celular, escolhe ações da lista.\n" +
+      'Responda SÓ com um JSON assim: {"resposta": "texto", "passos": [{"acao": "nome", "min": 0, "arg": ""}]}\n' +
       "Regras:\n" +
-      "- Use somente ações da lista. min = daqui a quantos minutos fazer (0 = agora). Para \"por 30 minutos\", ligue agora e desligue com min 30. Para um horário (ex.: às 22h), calcule os minutos a partir da hora atual que está no estado.\n" +
-      "- Se a pessoa perguntar algo ou pedir ajuda com erro, explique curto e em português simples usando o estado e o log; se uma ação da lista ajudar (verificar, adb_ligar, instalar_pastas...), inclua.\n" +
-      "- Se o pedido não tiver nada a ver com o app, responda curto e sem ações. Nunca invente ações. Nunca peça token, senha, pix ou dados pessoais.\n" +
-      "- resposta com até 3 frases; não repita a lista do que vai fazer (o app já mostra cada ação feita).\n" +
+      "- Só use ações da lista, e só quando a pessoa pedir pra fazer algo. min = daqui a quantos minutos (0 = agora). \"por 30 minutos\" = liga agora e desliga com min 30. Horário (ex.: às 22h) = calcule os minutos a partir da hora atual.\n" +
+      "- Free Fire MAX = jogo_abrir com arg max; Free Fire normal = arg normal.\n" +
+      "- Perguntas e conversa: responda de verdade, curto e útil, sem ações. Se for algo atual que você não sabe (notícias, preços, resultados), diga que não tem internet em tempo real e ofereça pesquisar (ação pesquisar).\n" +
+      "- Erros do app: explique simples usando o estado e o log; se uma ação ajudar (verificar, adb_ligar, instalar_pastas), inclua.\n" +
+      "- resposta curta (até 4 frases), boa pra ser lida em voz alta, sem markdown e sem listas. Não repita a lista do que vai fazer: o app mostra cada ação feita.\n" +
+      "- Nunca invente ações. Nunca peça token, senha, pix ou dados pessoais.\n" +
       "Ações:\n" + lista;
 
     // conversa: tem que começar com "user" e alternar
@@ -558,31 +561,52 @@ async function extrasRoute(req, env, ip) {
       if (msgs.length && msgs[msgs.length - 1].role === m.role) msgs[msgs.length - 1].content += "\n" + c;
       else if (msgs.length || m.role === "user") msgs.push({ role: m.role, content: c });
     }
+    const img = typeof b.imagem === "string" && b.imagem.length > 100 && b.imagem.length < 2000000 && /^[A-Za-z0-9+/=]+$/.test(b.imagem) ? b.imagem : "";
     const agoraBR = new Date(now - 3 * 3600000).toISOString().slice(11, 16);
     const final = "Hora atual (Brasília): " + agoraBR + "\nEstado do app agora: " + estado + "\n\nPedido: " + texto;
     if (msgs.length && msgs[msgs.length - 1].role === "user") msgs[msgs.length - 1].content += "\n" + final;
     else msgs.push({ role: "user", content: final });
 
     let txt = "";
+    const ultimo = msgs[msgs.length - 1];
+    const textoDe = (out) => {
+      const v = out && (out.response !== undefined ? out.response : out.choices && out.choices[0] && out.choices[0].message ? out.choices[0].message.content : "");
+      return typeof v === "string" ? v : JSON.stringify(v || "");
+    };
     try {
       if (env.ANTHROPIC_API_KEY) {
         // IA paga (Claude), se o dono colocar a chave
+        if (img) ultimo.content = [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: img } }, { type: "text", text: ultimo.content }];
         const r = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST",
           headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-          body: JSON.stringify({ model: env.IA_MODELO || "claude-haiku-5-5", max_tokens: 700, system: sistema, messages: msgs }),
+          body: JSON.stringify({ model: env.IA_MODELO || "claude-haiku-5-5", max_tokens: 600, system: sistema, messages: msgs }),
         });
         if (!r.ok) return json({ ok: false, reason: "ia_erro", status: r.status });
         const d = await r.json();
         txt = (d.content || []).filter((x) => x && x.type === "text").map((x) => x.text).join("");
       } else {
         // IA grátis do Cloudflare (acabou a cota do dia: o app volta pros comandos simples)
-        const out = await env.AI.run(env.IA_MODELO_CF || "@cf/google/gemma-4-26b-a4b-it", {
-          messages: [{ role: "system", content: sistema }].concat(msgs),
-          max_tokens: 700,
-        });
-        const v = out && (out.response !== undefined ? out.response : out.choices && out.choices[0] && out.choices[0].message ? out.choices[0].message.content : "");
-        txt = typeof v === "string" ? v : JSON.stringify(v || "");
+        const modelo = env.IA_MODELO_CF || "@cf/google/gemma-4-26b-a4b-it";
+        const textoUltimo = ultimo.content;
+        if (img) ultimo.content = [{ type: "text", text: textoUltimo }, { type: "image_url", image_url: { url: "data:image/jpeg;base64," + img } }];
+        const entrada = { messages: [{ role: "system", content: sistema }].concat(msgs), max_tokens: 600, chat_template_kwargs: { enable_thinking: false } };
+        try {
+          txt = textoDe(await env.AI.run(modelo, entrada));
+        } catch (e1) {
+          console.log("ia tentativa 1", e1 && e1.message ? e1.message : String(e1));
+          if (img) {
+            // o modelo não aceitou a imagem: tenta o modelo de visão da Meta
+            ultimo.content = textoUltimo;
+            try { await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { prompt: "agree" }); } catch (e) {}
+            txt = textoDe(await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+              messages: [{ role: "system", content: sistema }].concat(msgs), image: "data:image/jpeg;base64," + img, max_tokens: 600,
+            }));
+          } else {
+            delete entrada.chat_template_kwargs;
+            txt = textoDe(await env.AI.run(modelo, entrada));
+          }
+        }
       }
     } catch (e) {
       console.log("ia erro", e && e.message ? e.message : String(e));
