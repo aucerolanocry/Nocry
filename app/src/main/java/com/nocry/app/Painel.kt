@@ -281,6 +281,7 @@ class Botao(
 
     override fun onBoundsChange(b: android.graphics.Rect) {
         super.onBoundsChange(b)
+        fmt?.bounds = b
         val ins = 0.5f * d
         raioReal = when {
             tipo == "trilho" -> b.height() / 2f
@@ -309,6 +310,7 @@ class Botao(
 
     override fun draw(cv: Canvas) {
         if (path.isEmpty) return
+        fmt?.let { it.draw(cv); return }
         val b = bounds
         if (mascara) {
             pFill.shader = null
