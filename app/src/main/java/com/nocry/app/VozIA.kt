@@ -146,12 +146,16 @@ class OrbeMic(c: Context, private val tamDp: Int) : View(c) {
     }
 }
 
-/** a conversa por voz: ouve (sem janela do Google), pensa, fala e, no modo conversa, volta a ouvir */
+/** a IA por voz: com o microfone ligado ela ouve sem parar (até com o app minimizado), pensa, fala e volta a ouvir */
 object SessaoIA {
     enum class Estado { PARADO, OUVINDO, PENSANDO, FALANDO }
 
     const val REQ_MIC = 7703
     @Volatile var estado = Estado.PARADO
+        private set
+
+    /** microfone ligado: ela fica ouvindo sem parar até você tocar de novo (dentro e fora do app) */
+    @Volatile var ligada = false
         private set
 
     private val main = Handler(Looper.getMainLooper())
@@ -163,42 +167,103 @@ object SessaoIA {
     private var borda: BordaIA? = null
     private var orbe: OrbeMic? = null
     private var txt: TextView? = null
-    private var semOuvir = 0
     private var fimFala: Runnable? = null
+    /** cada escuta tem um número: resposta atrasada de uma escuta velha é ignorada
+     *  (era isso + reaproveitar o reconhecedor antigo que dava "não deu pra ouvir agora") */
+    private var sessao = 0
+    private var errosSeguidos = 0
+    private var inicioEscuta = 0L
+    private var ultimoStatus: String? = null
 
-    /** conversa por voz (mãos livres): depois de falar, volta a ouvir */
-    private val conversa get() = Prefs.lerNum("ia_maos", 0L) == 1L
+    /** com o app minimizado, continua ouvindo (padrão: sim) */
+    var foraDoApp: Boolean
+        get() = Prefs.lerNum("ia_fundo", 1L) == 1L
+        set(v) = Prefs.gravaNum("ia_fundo", if (v) 1L else 0L)
 
-    val ativa get() = estado != Estado.PARADO
+    /** fora da tela da IA: conversa só quando você fala o nome dela ("Nocry").
+     *  Comandos (liga o bypass, abre o jogo...) e palavras-chave valem sempre */
+    var soComNome: Boolean
+        get() = Prefs.lerNum("ia_nome", 1L) == 1L
+        set(v) = Prefs.gravaNum("ia_nome", if (v) 1L else 0L)
 
-    /** começa a ouvir. Sem a permissão do microfone, pede; sem reconhecimento de voz, usa a janela do Google */
-    fun iniciar(a: MainActivity, semJanela: () -> Unit) {
+    val ativa get() = ligada || estado != Estado.PARADO
+
+    private fun temMic(c: Context) = Build.VERSION.SDK_INT < 23 || c.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    /** o botão do microfone: toca = começa a ouvir; toca de novo = para */
+    fun alternar(a: MainActivity, semJanela: () -> Unit) { if (ligada) desligar(a) else ligar(a, semJanela) }
+
+    /** começa a ouvir sem parar. Sem a permissão do microfone, pede; sem reconhecimento de voz, usa a janela do Google */
+    fun ligar(a: MainActivity, semJanela: () -> Unit = {}) {
         act = a
         if (!SpeechRecognizer.isRecognitionAvailable(a)) { semJanela(); return }
-        if (Build.VERSION.SDK_INT >= 23 && a.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if (!temMic(a)) {
             a.aoPermissao = { req, ok ->
-                if (req == REQ_MIC) { if (ok) iniciar(a, semJanela) else { Ui.toast(a, "sem o microfone liberado eu uso a janela do Google"); semJanela() } }
+                if (req == REQ_MIC) { if (ok) ligar(a, semJanela) else { Ui.toast(a, "sem o microfone liberado eu uso a janela do Google"); semJanela() } }
             }
             a.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
             return
         }
-        Voz.init(a)
         ctx = a.applicationContext
-        mostra(a)
-        semOuvir = 0
-        ouvir()
+        Voz.init(a)
+        ligada = true
+        Prefs.gravaNum("ia_ouvindo", 1L)
+        // o serviço com microfone é o que deixa continuar ouvindo com o app minimizado (só dá pra ligar com o app aberto)
+        if (foraDoApp) IaFundoService.iniciar(a)
+        if (a.naFrente) mostra(a)
+        errosSeguidos = 0
+        if (estado == Estado.PARADO) ouvir()
+        IaTile.atualizar(a)
     }
 
-    /** segundo plano (NOCRY minimizado): só voz, nada aparece por cima dos outros apps.
-     *  O que está acontecendo aparece na notificação ("ouvindo", "pensando", "falando"). */
-    fun iniciarFundo(c: Context) {
-        val app = c.applicationContext
-        ctx = app
-        // se o app estiver aberto na frente, usa a luz dentro dele
+    /** volta a ouvir pelo menu do topo ou pela notificação (o serviço já está rodando) */
+    fun ligarFundo(c: Context) {
+        if (!temMic(c) || !SpeechRecognizer.isRecognitionAvailable(c)) return
+        ctx = c.applicationContext
+        Voz.init(c)
+        ligada = true
+        Prefs.gravaNum("ia_ouvindo", 1L)
+        errosSeguidos = 0
+        act?.let { if (it.naFrente) mostra(it) }
+        if (estado == Estado.PARADO) ouvir()
+        IaTile.atualizar(c)
+    }
+
+    /** desliga o microfone (e o serviço de segundo plano) */
+    fun desligar(c: Context?, fecharServico: Boolean = true) {
+        ligada = false
+        Prefs.gravaNum("ia_ouvindo", 0L)
+        parar()
+        val cc = c ?: ctx ?: return
+        if (fecharServico) IaFundoService.fechar(cc)
+        IaTile.atualizar(cc)
+    }
+
+    /** o app voltou pra frente: mostra a luz; se o microfone ficou ligado da última vez, já volta a ouvir */
+    fun aoVoltar(a: MainActivity) {
+        act = a
+        if (BuildConfig.PREVIEW) return
+        if (ligada) {
+            mostra(a)
+            if (estado == Estado.PARADO) { errosSeguidos = 0; ouvir() }
+        } else if (Prefs.lerNum("ia_ouvindo", 0L) == 1L && temMic(a) && License.valid()) ligar(a)
+    }
+
+    /** o app saiu da tela: sem o serviço de segundo plano o Android não deixa ouvir, então pausa (volta quando abrir) */
+    fun aoSair(a: MainActivity) {
+        if (act === a && ligada && !IaFundoService.ativo) parar()
+    }
+
+    /** a tela do app foi destruída: solta ela (a escuta continua pelo serviço) */
+    fun soltar(a: MainActivity) {
+        if (act !== a) return
         act = null
-        Voz.init(app)
-        semOuvir = 0
-        ouvir()
+        camada = null; borda = null; orbe = null; txt = null
+    }
+
+    /** o serviço de segundo plano fechou: com o app fora da tela, não dá mais pra ouvir */
+    fun servicoFechou() {
+        if (ligada && act?.naFrente != true) parar()
     }
 
     /** a pílula do topo: microfone + o que está acontecendo + botão de parar */
@@ -218,14 +283,16 @@ object SessaoIA {
         pil.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(a, 10); it.rightMargin = Ui.dp(a, 8) })
         val x = Ui.icone(a, R.drawable.ic_xcircle, Ui.MUTED, 20)
         x.contentDescription = "parar a IA"
-        x.setOnClickListener { parar() }
+        x.setOnClickListener { desligar(a) }
         pil.addView(x, LinearLayout.LayoutParams(Ui.dp(a, 22), Ui.dp(a, 22)))
         pil.setOnClickListener { aoTocar() }
         return Triple(pil, o, t)
     }
 
     private fun mostra(a: MainActivity) {
-        if (camada?.parent != null) { borda?.sumindo = false; return }
+        val f0 = camada
+        if (f0 != null && f0.context === a && f0.parent != null) { borda?.sumindo = false; return }
+        if (f0 != null) (f0.parent as? ViewGroup)?.removeView(f0)
         val raiz = a.window.decorView as? ViewGroup ?: return
         val f = FrameLayout(a)
         val b = BordaIA(a)
@@ -238,65 +305,146 @@ object SessaoIA {
         })
         raiz.addView(f, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         camada = f; borda = b; orbe = o; txt = t
+        t.text = when (estado) { Estado.PENSANDO -> "Pensando..."; Estado.FALANDO -> ultimoStatus ?: "Falando..."; else -> "Ouvindo..." }
+        b.estado = when (estado) { Estado.PENSANDO -> 1; Estado.FALANDO -> 2; else -> 0 }
     }
 
-    private fun texto(s: String) {
+    /** escreve o que está acontecendo na pílula do topo e na notificação */
+    private fun texto(s: String, notif: Boolean = true) {
         txt?.text = s
-        if (camada == null) IaFundoService.status(s)
+        if (notif && s != ultimoStatus) { ultimoStatus = s; IaFundoService.status(s) }
     }
 
-    private val ouvinte = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) { texto("Ouvindo...") }
+    private fun nomeErro(e: Int) = when (e) {
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "internet demorou"
+        SpeechRecognizer.ERROR_NETWORK -> "sem internet"
+        SpeechRecognizer.ERROR_AUDIO -> "microfone ocupado ou com problema"
+        SpeechRecognizer.ERROR_SERVER -> "servidor de voz"
+        SpeechRecognizer.ERROR_CLIENT -> "cliente"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "reconhecedor ocupado"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "sem permissão do microfone"
+        10 -> "muitos pedidos"
+        11 -> "serviço de voz caiu"
+        12, 13 -> "idioma indisponível"
+        else -> "código $e"
+    }
+
+    private fun ouvinte(id: Int) = object : RecognitionListener {
+        fun velho() = id != sessao || estado != Estado.OUVINDO
+        override fun onReadyForSpeech(params: Bundle?) { if (!velho()) texto("Ouvindo...") }
         override fun onBeginningOfSpeech() {}
-        override fun onRmsChanged(rmsdB: Float) { borda?.nivel = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
+        override fun onRmsChanged(rmsdB: Float) { if (!velho()) borda?.nivel = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
         override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() { borda?.nivel = 0f }
-        override fun onError(error: Int) {
-            if (estado != Estado.OUVINDO) return
-            val nada = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
-            if (nada && conversa && semOuvir < 1) { semOuvir++; main.postDelayed({ if (estado == Estado.OUVINDO) ouvir() }, 300); return }
-            if (!nada) (act ?: ctx)?.let { Ui.toast(it, if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) "sem internet pra entender a voz" else "não deu pra ouvir agora") }
-            parar()
-        }
+        override fun onEndOfSpeech() { if (!velho()) borda?.nivel = 0f }
+        override fun onError(error: Int) { if (!velho()) aoErro(error) }
         override fun onResults(results: Bundle?) {
+            if (velho()) return
             val fala = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
-            if (fala.isEmpty()) { parar(); return }
-            semOuvir = 0
-            responder(fala)
+            errosSeguidos = 0
+            if (fala.isEmpty()) { if (ligada) deNovo(150) else parar(); return }
+            decidir(fala)
         }
         override fun onPartialResults(partialResults: Bundle?) {
-            partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { texto("“$it”") }
+            if (velho()) return
+            partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { texto("“$it”", notif = false) }
         }
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }
 
+    private fun aoErro(error: Int) {
+        val nada = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+        if (!nada) NLog.add("ia", "escuta: erro $error (${nomeErro(error)})")
+        if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+            (act ?: ctx)?.let { Ui.toast(it, "libere o microfone pro NOCRY nas configurações do celular") }
+            desligar(ctx); return
+        }
+        if (!ligada) { parar(); return }
+        // ouvindo sempre: silêncio ou erro passageiro → volta a ouvir sozinha, sem aviso
+        if (nada) {
+            errosSeguidos = 0
+            // se o silêncio voltou rápido demais, espera um pouco (não fica apitando sem parar)
+            deNovo(if (System.currentTimeMillis() - inicioEscuta < 1500) 1200 else 150)
+            return
+        }
+        errosSeguidos++
+        trocarReconhecedor()
+        if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) texto("Sem internet pra entender a voz... tentando de novo")
+        else if (error == SpeechRecognizer.ERROR_AUDIO) texto("Microfone ocupado (outro app usando)... tentando de novo")
+        deNovo(when { errosSeguidos <= 2 -> 600L; errosSeguidos <= 6 -> 2500L; else -> 10_000L })
+    }
+
+    private fun trocarReconhecedor() {
+        try { sr?.destroy() } catch (_: Throwable) {}
+        sr = null
+    }
+
+    /** volta a ouvir daqui a pouco (se nada mudou nesse meio tempo) */
+    private fun deNovo(ms: Long) {
+        val id = sessao
+        main.postDelayed({ if (ligada && id == sessao && estado == Estado.OUVINDO) ouvir() }, ms)
+    }
+
     private fun ouvir() {
         val a = ctx ?: act?.applicationContext ?: return
+        sessao++
+        val id = sessao
         estado = Estado.OUVINDO
         borda?.estado = 0
         orbe?.ativo = true
         texto("Ouvindo...")
         Voz.parar()
+        inicioEscuta = System.currentTimeMillis()
         try {
-            val s = sr ?: SpeechRecognizer.createSpeechRecognizer(a).also { it.setRecognitionListener(ouvinte); sr = it }
+            // um reconhecedor novo a cada escuta: reaproveitar o antigo dava "ocupado" e derrubava a escuta
+            trocarReconhecedor()
+            val s = SpeechRecognizer.createSpeechRecognizer(a)
+            s.setRecognitionListener(ouvinte(id))
+            sr = s
             val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
                 .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, a.packageName)
             s.startListening(i)
-        } catch (_: Throwable) { parar() }
+        } catch (t: Throwable) {
+            NLog.add("ia", "escuta: não começou (${t.javaClass.simpleName})")
+            if (ligada) { errosSeguidos++; deNovo(3000) } else parar()
+        }
     }
 
-    private fun responder(fala: String) {
+    /** o que fazer com o que ela ouviu */
+    private fun decidir(fala: String) {
+        val naTelaIA = act?.let { it.naFrente && it.atual() is AssistenteScreen } == true
+        // 1) uma palavra-chave sua: faz na hora
+        val pc = PalavrasChave.achar(fala)
+        if (pc != null) { responder(fala, pc, true); return }
+        // 2) chamou pelo nome ("Nocry, ..."): conversa com a IA
+        val semNome = PalavrasChave.tirarNome(fala)
+        if (semNome != null) {
+            if (semNome.isBlank()) falar("Oi! Pode falar.") else responder(fala, semNome, false)
+            return
+        }
+        // 3) na tela da IA (ou com "só com o nome" desligado): tudo vai pra IA
+        if (naTelaIA || !soComNome) { responder(fala, fala, false); return }
+        // 4) fora da tela: comandos que ela entende sozinha (liga o bypass, abre o jogo...)
+        val ps = Comandos.entender(fala).filter { it.acao != "pesquisar" && it.acao != "youtube" }
+        if (ps.isNotEmpty()) { responder(fala, fala, true); return }
+        // conversa de fundo (sem o nome dela): ignora e continua ouvindo
+        texto("Ouvindo...")
+        deNovo(100)
+    }
+
+    private fun responder(fala: String, pedido: String, localPrimeiro: Boolean) {
         val c = ctx ?: act?.applicationContext ?: return
         val a = act
+        sessao++
         estado = Estado.PENSANDO
         borda?.estado = 1
         orbe?.ativo = false
         texto("Pensando...")
         Assistente.anotar(true, fala)
         Bg.io {
-            val r = Assistente.responder(c, a, fala)
+            val r = try { Assistente.responder(c, a, pedido, localPrimeiro = localPrimeiro) } catch (t: Throwable) { "Deu um erro aqui (${t.javaClass.simpleName}). Tenta de novo." }
             Bg.ui {
                 Assistente.anotar(false, r)
                 if (estado == Estado.PENSANDO) falar(r)
@@ -304,19 +452,38 @@ object SessaoIA {
         }
     }
 
+    /** a tela da IA vai responder um pedido escrito: para de ouvir enquanto isso */
+    fun pausar() {
+        if (!ligada || estado != Estado.OUVINDO) return
+        sessao++
+        try { sr?.cancel() } catch (_: Throwable) {}
+        estado = Estado.PENSANDO
+        borda?.estado = 1
+        orbe?.ativo = false
+        texto("Pensando...")
+    }
+
+    /** resposta de um pedido escrito com o microfone ligado: fala e volta a ouvir */
+    fun falarEVoltar(r: String) { if (ligada) falar(r) else Voz.falar(r) }
+
     private fun falar(r: String) {
         estado = Estado.FALANDO
         borda?.estado = 2
         texto(r.lines().firstOrNull { it.isNotBlank() }?.trim()?.trimStart('✓', '✗', '⚠', '⏰', ' ') ?: "")
         val depois = {
-            if (estado == Estado.FALANDO) { if (conversa && (act?.naFrente == true || IaFundoService.ativo)) ouvir() else parar() }
+            if (estado == Estado.FALANDO) { if (ligada) ouvir() else parar() }
         }
         Voz.aoTerminar = { fimFala?.let { main.removeCallbacks(it) }; depois() }
-        // se a voz do celular não responder, não fica preso: termina sozinho pelo tamanho do texto
+        // se a voz não avisar que terminou, não fica presa: confere de tempos em tempos
         fimFala?.let { main.removeCallbacks(it) }
-        val f = Runnable { if (!Voz.falando()) depois() }
+        val f = object : Runnable {
+            override fun run() {
+                if (estado != Estado.FALANDO) return
+                if (Voz.falando() || Voz.buscando) main.postDelayed(this, 700) else depois()
+            }
+        }
         fimFala = f
-        main.postDelayed(f, maxOf(5000L, r.length * 90L))
+        main.postDelayed(f, maxOf(4000L, r.length * 85L))
         Voz.falar(r)
     }
 
@@ -344,13 +511,15 @@ object SessaoIA {
         main.post(passo)
     }
 
-    /** para tudo e apaga a luz devagar */
+    /** para de ouvir agora e apaga a luz devagar (o microfone continua "ligado" se você não desligou) */
     fun parar() {
         estado = Estado.PARADO
-        try { sr?.cancel() } catch (_: Throwable) {}
+        sessao++
+        trocarReconhecedor()
         Voz.aoTerminar = null
         fimFala?.let { main.removeCallbacks(it) }
         Voz.parar()
+        ultimoStatus = null
         IaFundoService.status(null)
         val f = camada
         val b = borda
@@ -363,10 +532,57 @@ object SessaoIA {
     }
 }
 
+/**
+ * Palavras-chave suas: falou a palavra, ela faz o que você combinou na hora (sem esperar a IA).
+ * Ex.: "modo jogo" → "liga o bypass, liga a otimização e abre o free fire max".
+ */
+object PalavrasChave {
+    class Item(val palavra: String, val faz: String)
+
+    fun lista(): List<Item> = try {
+        val a = org.json.JSONArray(Prefs.extraTxt("ia_palavras")?.takeIf { it.isNotBlank() } ?: "[]")
+        (0 until a.length()).mapNotNull { i ->
+            a.optJSONObject(i)?.let { o -> Item(o.optString("p"), o.optString("f")) }?.takeIf { it.palavra.isNotBlank() && it.faz.isNotBlank() }
+        }
+    } catch (_: Throwable) { emptyList() }
+
+    private fun salvar(l: List<Item>) {
+        val a = org.json.JSONArray()
+        l.forEach { a.put(org.json.JSONObject().put("p", it.palavra).put("f", it.faz)) }
+        Prefs.extraTxt("ia_palavras", a.toString())
+    }
+
+    fun adicionar(palavra: String, faz: String) {
+        val k = limpa(palavra)
+        salvar(lista().filter { limpa(it.palavra) != k } + Item(palavra.trim(), faz.trim()))
+    }
+
+    fun remover(palavra: String) { salvar(lista().filter { it.palavra != palavra }) }
+
+    fun limpa(s: String): String =
+        java.text.Normalizer.normalize(s.lowercase(java.util.Locale.ROOT), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+            .replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+
+    /** o que fazer, se a fala tem uma das palavras-chave (a maior primeiro) */
+    fun achar(fala: String): String? {
+        val n = " " + limpa(fala) + " "
+        return lista().sortedByDescending { it.palavra.length }.firstOrNull { val k = limpa(it.palavra); k.isNotEmpty() && n.contains(" $k ") }?.faz
+    }
+
+    /** o nome dela do jeito que o Google costuma escrever: "nocry", "no cry", "nocri", "nó cry", "nokri"... (ou "assistente") */
+    private val NOME = Regex("(?:^|\\s)(?:(?:ei|oi|ok|ola|fala|e ai)\\s+)?(?:no\\s?[ck]\\s?r(?:i|y|ai)e?|assistente)(?=\\s|$)")
+
+    /** tira o nome dela da fala. null = não chamou pelo nome */
+    fun tirarNome(fala: String): String? {
+        val n = limpa(fala)
+        val m = NOME.find(n) ?: return null
+        return (n.substring(0, m.range.first) + " " + n.substring(m.range.last + 1)).replace(Regex("\\s+"), " ").trim()
+    }
+}
 
 /**
- * IA em segundo plano: com o NOCRY minimizado, você fala com ela pela notificação ("Falar")
- * ou pelo bloco "IA NOCRY" no menu do topo. Nada aparece por cima dos outros apps: é só voz.
+ * IA em segundo plano: o serviço com microfone que deixa ela continuar ouvindo com o NOCRY minimizado.
+ * Nada aparece por cima dos outros apps: só a notificação (obrigatória do Android) com Pausar e Desligar.
  */
 class IaFundoService : android.app.Service() {
     companion object {
@@ -378,29 +594,17 @@ class IaFundoService : android.app.Service() {
         /** mostra na notificação o que a IA está fazendo (null = esperando) */
         fun status(s: String?) { eu?.let { sv -> Handler(Looper.getMainLooper()).post { sv.notifica(s) } } }
 
-        /** liga (pede o microfone se faltar) */
-        fun ligar(a: MainActivity, depois: () -> Unit) {
-            if (Build.VERSION.SDK_INT >= 23 && a.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                a.aoPermissao = { req, ok -> if (req == SessaoIA.REQ_MIC && ok) ligar(a, depois) else if (req == SessaoIA.REQ_MIC) Ui.toast(a, "preciso do microfone pra te ouvir") }
-                a.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), SessaoIA.REQ_MIC)
-                return
-            }
+        /** liga o serviço (só com o app aberto: o Android não deixa começar a ouvir escondido) */
+        fun iniciar(c: Context) {
+            if (ativo) return
             try {
-                val i = Intent(a, IaFundoService::class.java)
-                if (Build.VERSION.SDK_INT >= 26) a.startForegroundService(i) else a.startService(i)
-                Prefs.gravaNum("ia_fundo", 1L)
-                depois()
-            } catch (_: Throwable) { Ui.toast(a, "o Android não deixou ligar agora") }
+                val i = Intent(c, IaFundoService::class.java)
+                if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i)
+            } catch (t: Throwable) { NLog.add("ia", "segundo plano não ligou (${t.javaClass.simpleName})") }
         }
 
-        fun desligar(c: Context) {
-            Prefs.gravaNum("ia_fundo", 0L)
+        fun fechar(c: Context) {
             try { c.stopService(Intent(c, IaFundoService::class.java)) } catch (_: Throwable) {}
-        }
-
-        /** pede pra ela ouvir (pela notificação ou pelo menu do topo) */
-        fun falar(c: Context) {
-            try { c.startService(Intent(c, IaFundoService::class.java).setAction("falar")) } catch (_: Throwable) {}
         }
     }
 
@@ -408,16 +612,17 @@ class IaFundoService : android.app.Service() {
 
     private fun montar(s: String?): android.app.Notification {
         val abrir = android.app.PendingIntent.getActivity(this, 77, Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
-        val falar = android.app.PendingIntent.getService(this, 79, Intent(this, IaFundoService::class.java).setAction("falar"), android.app.PendingIntent.FLAG_IMMUTABLE)
-        val parar = android.app.PendingIntent.getService(this, 78, Intent(this, IaFundoService::class.java).setAction("parar"), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val alternar = android.app.PendingIntent.getService(this, 79, Intent(this, IaFundoService::class.java).setAction("alternar"), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val fechar = android.app.PendingIntent.getService(this, 78, Intent(this, IaFundoService::class.java).setAction("fechar"), android.app.PendingIntent.FLAG_IMMUTABLE)
         val ic = { r: Int -> android.graphics.drawable.Icon.createWithResource(this, r) }
+        val ouvindo = SessaoIA.ligada
         return android.app.Notification.Builder(this, Notif.CH_SVC)
             .setSmallIcon(R.drawable.ic_ia)
-            .setContentTitle(if (s == null) "IA do NOCRY pronta" else "IA do NOCRY")
-            .setContentText(s ?: "Toque em Falar (ou no bloco IA NOCRY do menu do topo)")
+            .setContentTitle(if (ouvindo) "IA do NOCRY ouvindo" else "IA do NOCRY pausada")
+            .setContentText(s ?: if (ouvindo) "Fale um comando. Pra conversar, comece com \"Nocry\"" else "Toque em Ouvir pra ela voltar a te ouvir")
             .setContentIntent(abrir)
-            .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_mic), if (SessaoIA.ativa) "Parar" else "Falar", falar).build())
-            .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_xcircle), "Desligar", parar).build())
+            .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_mic), if (ouvindo) "Pausar" else "Ouvir", alternar).build())
+            .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_xcircle), "Desligar", fechar).build())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
@@ -433,7 +638,7 @@ class IaFundoService : android.app.Service() {
         try {
             if (Build.VERSION.SDK_INT >= 30) startForeground(ID, montar(null), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             else startForeground(ID, montar(null))
-        } catch (_: Throwable) { stopSelf(); return }
+        } catch (t: Throwable) { NLog.add("ia", "segundo plano não ligou (${t.javaClass.simpleName})"); stopSelf(); return }
         eu = this
         ativo = true
         Voz.init(this)
@@ -441,8 +646,8 @@ class IaFundoService : android.app.Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "parar" -> { Prefs.gravaNum("ia_fundo", 0L); stopSelf() }
-            "falar" -> if (SessaoIA.ativa) SessaoIA.parar() else SessaoIA.iniciarFundo(this)
+            "fechar", "parar" -> { SessaoIA.desligar(this, fecharServico = false); stopSelf() }
+            "alternar", "falar" -> { if (SessaoIA.ligada) SessaoIA.desligar(this, fecharServico = false) else SessaoIA.ligarFundo(this); notifica(null) }
         }
         return START_NOT_STICKY
     }
@@ -450,30 +655,43 @@ class IaFundoService : android.app.Service() {
     override fun onDestroy() {
         ativo = false
         eu = null
-        if (SessaoIA.ativa) SessaoIA.parar()
+        SessaoIA.servicoFechou()
         super.onDestroy()
     }
 }
 
-/** bloco "IA NOCRY" no menu do topo do celular: toque e fale (com o app minimizado, só voz) */
+/** bloco "IA NOCRY" no menu do topo do celular: liga e desliga o microfone da IA */
 class IaTile : android.service.quicksettings.TileService() {
+    companion object {
+        fun atualizar(c: Context) {
+            try { android.service.quicksettings.TileService.requestListeningState(c, android.content.ComponentName(c, IaTile::class.java)) } catch (_: Throwable) {}
+        }
+    }
+
     override fun onStartListening() {
         super.onStartListening()
         qsTile?.let { t ->
-            t.state = if (SessaoIA.ativa) android.service.quicksettings.Tile.STATE_ACTIVE else android.service.quicksettings.Tile.STATE_INACTIVE
+            t.state = if (SessaoIA.ligada) android.service.quicksettings.Tile.STATE_ACTIVE else android.service.quicksettings.Tile.STATE_INACTIVE
             t.label = "IA NOCRY"
+            if (Build.VERSION.SDK_INT >= 29) t.subtitle = if (SessaoIA.ligada) "ouvindo" else "desligada"
             t.updateTile()
         }
     }
 
     override fun onClick() {
         super.onClick()
-        if (IaFundoService.ativo) { IaFundoService.falar(this); return }
-        // segundo plano desligado: abre o app já ouvindo (a luz aparece dentro do NOCRY)
-        val i = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("ia_ouvir", true)
-        try {
-            if (Build.VERSION.SDK_INT >= 34) startActivityAndCollapse(android.app.PendingIntent.getActivity(this, 80, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
-            else @Suppress("DEPRECATION") startActivityAndCollapse(i)
-        } catch (_: Throwable) {}
+        when {
+            SessaoIA.ligada -> SessaoIA.desligar(this)
+            IaFundoService.ativo -> SessaoIA.ligarFundo(this)
+            else -> {
+                // o Android só deixa começar a ouvir com o app aberto: abre o NOCRY já ouvindo (depois pode minimizar)
+                val i = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("ia_ouvir", true)
+                try {
+                    if (Build.VERSION.SDK_INT >= 34) startActivityAndCollapse(android.app.PendingIntent.getActivity(this, 80, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
+                    else @Suppress("DEPRECATION") startActivityAndCollapse(i)
+                } catch (_: Throwable) {}
+            }
+        }
+        onStartListening()
     }
 }

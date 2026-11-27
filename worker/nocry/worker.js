@@ -629,7 +629,8 @@ async function extrasRoute(req, env, ip) {
 
   // ---- voz da IA pela nuvem (ElevenLabs). A chave fica SÓ no segredo ELEVENLABS_API_KEY; a voz em ELEVENLABS_VOZ.
   if (op === "voz") {
-    if (!env.ELEVENLABS_API_KEY || !env.ELEVENLABS_VOZ) return json({ ok: false, reason: "sem_voz" });
+    if (!env.ELEVENLABS_API_KEY) return json({ ok: false, reason: "sem_voz" });
+    const vozId = await vozPadrao(env);
     const texto = clean(b.texto, 600).trim();
     if (!texto) return json({ ok: false, reason: "vazio" });
     const dia = new Date(now).toISOString().slice(0, 10);
@@ -640,15 +641,15 @@ async function extrasRoute(req, env, ip) {
     await env.DB.prepare("INSERT INTO voz_uso (key, dia, n) VALUES (?, ?, ?) ON CONFLICT (key, dia) DO UPDATE SET n = n + ?").bind(key, dia, texto.length, texto.length).run();
     let r;
     try {
-      r = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(env.ELEVENLABS_VOZ) + "?output_format=mp3_22050_32", {
+      r = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(vozId) + "?output_format=mp3_22050_32", {
         method: "POST",
         headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
-        body: JSON.stringify({ text: texto, model_id: env.ELEVENLABS_MODELO || "eleven_flash_v2_5", voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.45 } }),
+        body: JSON.stringify({ text: texto, model_id: env.ELEVENLABS_MODELO || "eleven_flash_v2_5", language_code: "pt", voice_settings: { stability: 0.35, similarity_boost: 0.8, style: 0.55, speed: 1.05 } }),
       });
     } catch (e) {
       return json({ ok: false, reason: "voz_erro" });
     }
-    if (!r.ok) return json({ ok: false, reason: "voz_erro", status: r.status });
+    if (!r.ok) { if (r.status === 404 || r.status === 400) vozCache = null; return json({ ok: false, reason: "voz_erro", status: r.status }); }
     const bytes = new Uint8Array(await r.arrayBuffer());
     let bin = "";
     for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
@@ -1216,6 +1217,34 @@ async function apiRoute(req, env, ip, op) {
 }
 
 // ---------------------------------------------------------------- entrada
+// voz da IA: a escolhida no segredo ELEVENLABS_VOZ; sem ela, a voz feminina mais fofa da conta da ElevenLabs
+let vozCache = null;
+async function vozPadrao(env) {
+  if (env.ELEVENLABS_VOZ) return env.ELEVENLABS_VOZ;
+  if (vozCache && Date.now() - vozCache.t < 6 * 3600 * 1000) return vozCache.id;
+  let id = "EXAVITQu4vr4xnSDxMaL";
+  try {
+    const r = await fetch("https://api.elevenlabs.io/v1/voices", { headers: { "xi-api-key": env.ELEVENLABS_API_KEY } });
+    if (r.ok) {
+      const j = await r.json();
+      let melhor = -1;
+      for (const v of (j.voices || [])) {
+        const l = v.labels || {};
+        const txt = [v.name, l.description, l.descriptive, l.use_case, l.age, v.description].join(" ").toLowerCase();
+        let n = 0;
+        if (String(l.gender || "").toLowerCase() === "female") n += 6;
+        if (/young|teen|child/.test(String(l.age || "").toLowerCase())) n += 3;
+        if (/anime|kawaii|cute|sweet|girl|childish|playful|cheerful|bright|upbeat|soft/.test(txt)) n += 3;
+        if (/anime|kawaii/.test(txt)) n += 5;
+        if (/male|deep|old|raspy|narrat/.test(txt) && String(l.gender || "").toLowerCase() !== "female") n -= 6;
+        if (n > melhor) { melhor = n; id = v.voice_id; }
+      }
+    }
+  } catch (e) {}
+  vozCache = { id, t: Date.now() };
+  return id;
+}
+
 export default {
   async fetch(req, env) {
     try {

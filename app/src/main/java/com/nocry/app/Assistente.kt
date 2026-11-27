@@ -158,7 +158,7 @@ object Acoes {
             if (pkg == null) "✗ o Free Fire não está instalado"
             else {
                 val i = pm.getLaunchIntentForPackage(pkg)!!.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                val ok = naTela { (act ?: app).startActivity(i); true } == true
+                val ok = abrirAtividade(app, act, i)
                 if (!ok) "✗ não consegui abrir o jogo (abra o app e peça de novo)"
                 else if (pkg != pref) "✓ abrindo o ${nome(pkg)} (o ${nome(pref)} não está instalado)"
                 else "✓ abrindo o ${nome(pkg)}"
@@ -177,7 +177,7 @@ object Acoes {
                     .putExtra(android.provider.AlarmClock.EXTRA_HOUR, h).putExtra(android.provider.AlarmClock.EXTRA_MINUTES, mi)
                     .putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, "NOCRY").putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                val ok = naTela { (act ?: app).startActivity(i); true } == true
+                val ok = abrirAtividade(app, act, i)
                 if (ok) "✓ alarme criado pras %02d:%02d".format(h, mi) else "✗ o relógio do celular não aceitou criar o alarme"
             }
         }
@@ -227,6 +227,42 @@ object Acoes {
         else -> "✗ não sei fazer \"${p.acao}\""
     }
 
+    /** abre uma tela (jogo, app, link, alarme). Com o NOCRY minimizado o Android bloqueia isso;
+     *  aí abre pelo ADB, que pode (quando está conectado) */
+    private fun abrirAtividade(app: Context, act: MainActivity?, i: Intent): Boolean {
+        if (act?.naFrente == true) return naTela { act.startActivity(i); true } == true
+        if (Adb.connected || Adb.ensure(app)) {
+            val r = try { Adb.exec(amStart(i), 8000) } catch (_: Throwable) { null }
+            if (r != null && r.ok && !r.out.contains("Error", true)) return true
+        }
+        return naTela { app.startActivity(i); true } == true
+    }
+
+    /** o mesmo pedido de abrir tela, escrito como comando do ADB */
+    @Suppress("DEPRECATION")
+    private fun amStart(i: Intent): String {
+        fun q(s: String) = "'" + s.replace("'", "'\\''") + "'"
+        val sb = StringBuilder("am start")
+        i.action?.let { sb.append(" -a ").append(q(it)) }
+        i.data?.let { sb.append(" -d ").append(q(it.toString())) }
+        i.categories?.forEach { sb.append(" -c ").append(q(it)) }
+        val comp = i.component
+        if (comp != null) sb.append(" -n ").append(q(comp.flattenToShortString()))
+        else i.`package`?.let { sb.append(" -p ").append(q(it)) }
+        i.extras?.let { b ->
+            for (k in b.keySet()) {
+                when (val v = b.get(k)) {
+                    is String -> sb.append(" --es ").append(q(k)).append(' ').append(q(v))
+                    is Int -> sb.append(" --ei ").append(q(k)).append(' ').append(v)
+                    is Boolean -> sb.append(" --ez ").append(q(k)).append(' ').append(v)
+                    is Long -> sb.append(" --el ").append(q(k)).append(' ').append(v)
+                }
+            }
+        }
+        sb.append(" -f 0x10000000")
+        return sb.toString()
+    }
+
     private fun limpaNome(s: String): String =
         Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "").replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
 
@@ -238,7 +274,7 @@ object Acoes {
             "google play" to "com.android.vending", "zap" to "com.whatsapp", "whats" to "com.whatsapp", "whatsapp" to "com.whatsapp",
             "insta" to "com.instagram.android", "face" to "com.facebook.katana", "yt" to "com.google.android.youtube")
         if (alvo == "configuracoes" || alvo == "configuracao" || alvo == "ajustes do celular") {
-            val ok = naTela { (act ?: app).startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } == true
+            val ok = abrirAtividade(app, act, Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             return if (ok) "✓ abrindo as configurações do celular" else "✗ não consegui abrir as configurações"
         }
         val pm = app.packageManager
@@ -255,14 +291,14 @@ object Acoes {
                 ?.takeIf { a -> alvo.split(" ").any { w -> w.length > 2 && a.second.contains(w) } }?.first
         if (achado == null) return "✗ não achei o app \"$nomeBruto\" no celular"
         val i = pm.getLaunchIntentForPackage(achado)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) ?: return "✗ não consegui abrir \"$nomeBruto\""
-        val ok = naTela { (act ?: app).startActivity(i); true } == true
+        val ok = abrirAtividade(app, act, i)
         val rotulo = apps.firstOrNull { it.first == achado }?.let { a -> try { pm.getApplicationLabel(pm.getApplicationInfo(a.first, 0)).toString() } catch (_: Throwable) { nomeBruto } } ?: nomeBruto
         return if (ok) "✓ abrindo $rotulo" else "✗ não consegui abrir $rotulo (abra o NOCRY e peça de novo)"
     }
 
     private fun abrirLink(app: Context, act: MainActivity?, url: String, okTxt: String): String {
         val i = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val ok = naTela { (act ?: app).startActivity(i); true } == true
+        val ok = abrirAtividade(app, act, i)
         return if (ok) okTxt else "✗ não consegui abrir o navegador"
     }
 
@@ -652,7 +688,12 @@ object Assistente {
     val AJUDA = "Não entendi. Exemplos do que eu faço:\n• liga o bypass, liga o bot e desliga o bot em 5 minutos\n• liga o bot por 30 minutos\n• abre o jogo\n• coloca o Meet e o toque rápido no menu do topo\n• às 22h desliga o bot\n• verifica os erros e arruma\n• cancela os agendados"
 
     /** responde e faz tudo (bloqueia: chame fora da tela). imagem = foto em base64 (jpeg) */
-    fun responder(c: Context, act: MainActivity?, texto: String, imagem: String? = null): String {
+    fun responder(c: Context, act: MainActivity?, texto: String, imagem: String? = null, localPrimeiro: Boolean = false): String {
+        // palavra-chave ou comando falado fora da tela: o que ela entende sozinha faz na hora, sem esperar a IA
+        if (localPrimeiro && imagem == null) {
+            val ps = Comandos.entender(texto)
+            if (ps.isNotEmpty()) return ps.joinToString("\n") { Acoes.fazerOuAgendar(c, act, it) }.ifBlank { "Pronto." }
+        }
         val hist = synchronized(conversa) { conversa.dropLast(1).takeLast(8).map { (if (it.eu) "user" else "assistant") to it.texto } }
         val ia = try { IA.perguntar(c, texto, hist, imagem) } catch (_: Throwable) { null }
         if (ia == null && imagem != null) return "Não consegui olhar a imagem agora: a IA do servidor não respondeu. Tenta de novo daqui a pouco."
@@ -678,10 +719,18 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
     private var app: Context? = null
     private var player: android.media.MediaPlayer? = null
     @Volatile private var semNuvemAte = 0L
+    /** buscando o áudio da voz da nuvem (ainda não começou a falar) */
+    @Volatile var buscando = false
+        private set
 
     fun init(c: Context) {
         app = c.applicationContext
-        if (tts == null) try { tts = android.speech.tts.TextToSpeech(c.applicationContext, this) } catch (_: Throwable) {}
+        if (tts == null) try {
+            // a voz do Google é a mais natural; outros motores (de fábrica) deixam a voz robótica com o tom mais agudo
+            val google = "com.google.android.tts"
+            val temGoogle = try { c.packageManager.getPackageInfo(google, 0); true } catch (_: Throwable) { false }
+            tts = if (temGoogle) android.speech.tts.TextToSpeech(c.applicationContext, this, google) else android.speech.tts.TextToSpeech(c.applicationContext, this)
+        } catch (_: Throwable) {}
     }
 
     /** voz anime da nuvem (ElevenLabs, pelo servidor): liga sozinha quando o dono configura lá */
@@ -710,9 +759,10 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
         if (limpo.isEmpty()) return
         val c = app
         if (nuvem && c != null && System.currentTimeMillis() > semNuvemAte && limpo.length <= 600) {
+            buscando = true
             Bg.io {
-                val arq = buscarNuvem(c, limpo)
-                main.post { if (arq != null && tocar(arq)) Unit else falarLocal(limpo) }
+                val arq = try { buscarNuvem(c, limpo) } catch (_: Throwable) { null }
+                main.post { buscando = false; if (arq != null && tocar(arq)) Unit else falarLocal(limpo) }
             }
             return
         }
@@ -790,8 +840,8 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
             if (v != null) t.setVoice(v)
             when (tom) {
                 // tom mais agudo, mas sem passar do ponto (acima de ~1.3 a voz fica robótica/"zoada")
-                1 -> { t.setPitch(1.12f); t.setSpeechRate(1.04f) }
-                2 -> { t.setPitch(1.26f); t.setSpeechRate(1.07f) }
+                1 -> { t.setPitch(1.08f); t.setSpeechRate(1.02f) }
+                2 -> { t.setPitch(1.16f); t.setSpeechRate(1.04f) }
                 else -> { t.setPitch(1.0f); t.setSpeechRate(1.02f) }
             }
         } catch (_: Throwable) {}
@@ -814,10 +864,6 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
     private var falarSempre: Boolean
         get() = Prefs.lerNum("ia_falar", 0L) == 1L
         set(v) = Prefs.gravaNum("ia_falar", if (v) 1L else 0L)
-    /** conversa por voz: depois de falar a resposta, já volta a ouvir (mãos livres) */
-    private var maosLivres: Boolean
-        get() = Prefs.lerNum("ia_maos", 0L) == 1L
-        set(v) = Prefs.gravaNum("ia_maos", if (v) 1L else 0L)
 
     private val campo: EditText by lazy {
         Ui.field(act, "escreva ou toque no microfone", false).also { e ->
@@ -826,7 +872,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|$maosLivres|${IaFundoService.ativo}"
+    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|${SessaoIA.ligada}|${SessaoIA.foraDoApp}|${SessaoIA.soComNome}|${PalavrasChave.lista().size}"
 
     fun enviar(texto: String? = null, porVoz: Boolean = false) {
         var t = (texto ?: campo.text.toString()).trim()
@@ -836,7 +882,8 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         campo.setText("")
         imagem = null
         miniatura = null
-        Voz.parar()
+        val ouvindo = SessaoIA.ligada
+        if (ouvindo) SessaoIA.pausar() else Voz.parar()
         Assistente.anotar(true, if (img != null) "📷 $t" else t)
         pensando = true
         redesenha()
@@ -847,18 +894,58 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
                 Assistente.anotar(false, r)
                 pensando = false
                 redesenha()
-                if (porVoz || falarSempre) {
-                    Voz.aoTerminar = if (porVoz && maosLivres) ({ if (act.naFrente) ouvir() }) else null
-                    Voz.falar(r)
-                }
+                // microfone ligado: fala a resposta e volta a ouvir
+                if (ouvindo && SessaoIA.ligada) SessaoIA.falarEVoltar(r)
+                else if (porVoz || falarSempre) { Voz.aoTerminar = null; Voz.falar(r) }
             }
         }
     }
 
-    /** fala com a IA: a luz contorna a tela e ela ouve sem janela (se não der, usa a janela do Google) */
+    /** o microfone: toca = ela fica ouvindo sem parar (até com o app minimizado); toca de novo = para.
+     *  Sem reconhecimento de voz no celular, usa a janela do Google */
     fun ouvir() {
-        if (SessaoIA.ativa) { SessaoIA.parar(); return }
-        SessaoIA.iniciar(act) { ouvirJanela() }
+        SessaoIA.alternar(act) { ouvirJanela() }
+        redesenha()
+    }
+
+    /** palavras-chave: falou a palavra, ela faz o que você combinou */
+    private fun palavras() {
+        val l = PalavrasChave.lista()
+        val ops = ArrayList<String>()
+        ops += "+ Nova palavra-chave"
+        ops += (if (SessaoIA.soComNome) "✓ " else "") + "Fora da tela da IA, conversar só quando eu falar \"Nocry\""
+        l.forEach { ops += "✗ \"${it.palavra}\" → ${it.faz}" }
+        Ui.dialogEscolha(act, "PALAVRAS-CHAVE", ops) { i ->
+            when (i) {
+                0 -> novaPalavra()
+                1 -> { SessaoIA.soComNome = !SessaoIA.soComNome; redesenha() }
+                else -> l.getOrNull(i - 2)?.let { PalavrasChave.remover(it.palavra); Ui.toast(act, "palavra \"${it.palavra}\" apagada"); redesenha() }
+            }
+        }
+    }
+
+    private fun novaPalavra() {
+        val c = act
+        val box = Ui.vbox(c)
+        box.setPadding(Ui.dp(c, 20), Ui.dp(c, 8), Ui.dp(c, 20), 0)
+        val p = Ui.field(c, "palavra (ex.: modo jogo)", false)
+        val f = Ui.field(c, "o que fazer (ex.: liga o bypass, liga a otimização e abre o free fire max)", false)
+        box.addView(p)
+        box.addView(f, Ui.lp(top = 10, c = c))
+        android.app.AlertDialog.Builder(c)
+            .setTitle("Nova palavra-chave")
+            .setView(box)
+            .setPositiveButton("Salvar") { _, _ ->
+                val pv = p.text.toString().trim()
+                val fz = f.text.toString().trim()
+                if (pv.isEmpty() || fz.isEmpty()) { Ui.toast(c, "preencha a palavra e o que fazer"); return@setPositiveButton }
+                PalavrasChave.adicionar(pv, fz)
+                val entende = Comandos.entender(fz).isNotEmpty()
+                Ui.toast(c, if (entende) "pronto: fale \"$pv\" e eu faço" else "salvei; esse pedido eu faço com a ajuda da IA (precisa de internet)")
+                redesenha()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     /** reserva: janela de voz do Google */
@@ -1010,9 +1097,10 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             val orbe = OrbeMic(c, 96)
             orbe.contentDescription = "falar com a IA"
             orbe.isClickable = true
+            orbe.ativo = SessaoIA.ligada
             orbe.setOnClickListener { ouvir() }
             col.addView(orbe)
-            col.addView(Ui.text(c, "toque e fale", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 8, c = c))
+            col.addView(Ui.text(c, if (SessaoIA.ligada) "ouvindo · toque pra parar" else "toque e fale", 10.5f, if (SessaoIA.ligada) Ui.OK else Ui.MUTED, true, mono = true), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 8, c = c))
             add(col, 22)
             add(Ui.secao(c, "experimente"), 20)
             val sug = listOf("Liga o bypass e o bot", "Liga o bot por 30 minutos", "Abre o Free Fire MAX", "Verifica os erros e arruma",
@@ -1079,14 +1167,16 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         op.addView(opcao(R.drawable.ic_image, "imagem", imagem != null) { escolherImagem() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         op.addView(opcao(R.drawable.ic_volume, "voz", falarSempre) { escolherVoz() },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
-        op.addView(opcao(R.drawable.ic_mic, if (maosLivres) "conversa: on" else "conversa: off", maosLivres) { maosLivres = !maosLivres; redesenha() },
+        val np = PalavrasChave.lista().size
+        op.addView(opcao(R.drawable.ic_bolt, if (np > 0) "palavras: $np" else "palavras", np > 0) { palavras() },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
         add(op, 16)
-        // segundo plano: com o NOCRY minimizado, fala pela notificação ou pelo bloco do menu do topo (só voz)
-        val fundoOn = IaFundoService.ativo
-        add(opcao(R.drawable.ic_ia, if (fundoOn) "IA em segundo plano: ligada" else "IA em segundo plano: desligada", fundoOn) {
-            if (IaFundoService.ativo) { IaFundoService.desligar(act); Bg.ui { redesenha() } }
-            else IaFundoService.ligar(act) { Ui.toast(act, "pronto! minimize o NOCRY e toque em Falar na notificação"); redesenha() }
+        // segundo plano: com o microfone ligado, continua ouvindo com o NOCRY minimizado (só voz)
+        val fora = SessaoIA.foraDoApp
+        add(opcao(R.drawable.ic_ia, if (fora) "Ouvir com o app minimizado: sim" else "Ouvir com o app minimizado: não", fora) {
+            SessaoIA.foraDoApp = !SessaoIA.foraDoApp
+            if (SessaoIA.ligada) { if (SessaoIA.foraDoApp) IaFundoService.iniciar(act) else IaFundoService.fechar(act) }
+            redesenha()
         }, 8)
         add(opcao(R.drawable.ic_bolt, "Colocar a IA no menu do topo", false) { colocarNoMenu() }, 8)
 
@@ -1096,7 +1186,8 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         (campo.parent as? ViewGroup)?.removeView(campo)
         linha.addView(campo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val mic = OrbeMic(c, 50)
-        mic.contentDescription = "falar"
+        mic.contentDescription = if (SessaoIA.ligada) "parar de ouvir" else "falar"
+        mic.ativo = SessaoIA.ligada
         mic.isClickable = true
         mic.setOnClickListener { ouvir() }
         linha.addView(mic, LinearLayout.LayoutParams(Ui.dp(c, 50), Ui.dp(c, 50)).also { it.leftMargin = Ui.dp(c, 6) })

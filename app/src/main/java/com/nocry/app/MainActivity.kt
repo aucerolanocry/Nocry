@@ -496,7 +496,7 @@ class MainActivity : Activity() {
 
     /** bloco "IA NOCRY" do menu do topo: abre já ouvindo (a luz aparece dentro do app) */
     private fun iaOuvir() {
-        android.os.Handler(mainLooper).postDelayed({ SessaoIA.iniciar(this) { abre(AssistenteScreen(this)) } }, 500)
+        android.os.Handler(mainLooper).postDelayed({ if (!SessaoIA.ligada) SessaoIA.ligar(this) { abre(AssistenteScreen(this)) } }, 500)
     }
 
     /** notificação dos extras (staff respondeu, evento novo, amigo chamou, fim de partida) */
@@ -616,10 +616,8 @@ class MainActivity : Activity() {
         naFrente = true
         bg.retoma()
         try { Conquistas.marcaDia() } catch (_: Throwable) {}
-        try {
-            if (Prefs.lerNum("ia_fundo", 0L) == 1L && !IaFundoService.ativo &&
-                checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) IaFundoService.ligar(this) {}
-        } catch (_: Throwable) {}
+        // IA: mostra a luz se ela está ouvindo; se o microfone ficou ligado da última vez, volta a ouvir sozinha
+        try { if (!gate) SessaoIA.aoVoltar(this) } catch (_: Throwable) {}
         val updPendente = Update.pendente(applicationContext)
         if (updPendente != null) mostraUpdateGate(updPendente)
         else if (intro == null && !gate && !License.valid()) mostraGate()
@@ -670,7 +668,13 @@ class MainActivity : Activity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        try { SessaoIA.aoSair(this) } catch (_: Throwable) {}
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        try { SessaoIA.soltar(this) } catch (_: Throwable) {}
         intro?.acabaJa()
         License.saiu = null
         License.voltou = null

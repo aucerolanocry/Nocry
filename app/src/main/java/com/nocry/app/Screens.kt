@@ -98,7 +98,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             col.background = Ui.ripple(c, Ui.fundoPeq(c, Ui.raioPeq(16), a.ico))
             col.setPadding(Ui.dp(c, 2), Ui.dp(c, 10), Ui.dp(c, 2), Ui.dp(c, 9))
             col.addView(Ui.icone(c, a.ico, Ui.corIconePeq(a.ico), 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)))
-            if (a.ico == R.drawable.ic_ia) col.setOnLongClickListener { SessaoIA.iniciar(act) { act.abre(AssistenteScreen(act)) }; true }
+            if (a.ico == R.drawable.ic_ia) col.setOnLongClickListener { SessaoIA.alternar(act) { act.abre(AssistenteScreen(act)) }; true }
             val t = Ui.textoPeq(Ui.text(c, a.nome, 9f, Ui.TEXT, true))
             t.gravity = Gravity.CENTER
             Ui.umaLinha(t, 7)

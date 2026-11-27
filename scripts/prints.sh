@@ -165,6 +165,8 @@ GLOW=1; shot 16_luz_inicio home; video 16_luz_video "" home; GLOW=""
 # luz da IA na cor do tema (sangue e vidro) + tela da IA com as opções novas
 GLOW=1; TEMA=t_sangue; shot 17_luz_sangue home; TEMA=""; shot 17_luz_vidro home; GLOW=""
 shot 17_ia ia
+# tela da IA com microfone liga/desliga, palavras-chave e ouvir com o app minimizado
+TEMA=t_sangue; shot 18_ia_sangue ia; TEMA=""; shot 18_ia ia
 # catálogo de formatos de botão (só prévia): o dono escolhe pelo número
 shot 10_catalogo catalogo
 video 10_catalogo_video "" catalogo
