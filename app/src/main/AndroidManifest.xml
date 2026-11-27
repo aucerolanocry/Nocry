@@ -103,6 +103,11 @@
             android:name=".PairReceiver"
             android:exported="false" />
 
+        <!-- agenda da IA ("desliga o bot em 5 minutos"): faz mesmo com o app fechado -->
+        <receiver
+            android:name=".IaReceiver"
+            android:exported="false" />
+
         <!-- lembrete de evento (15 min antes e na hora) -->
         <receiver
             android:name=".EventoReceiver"

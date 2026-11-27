@@ -474,6 +474,9 @@ class MainActivity : Activity() {
             "rank" -> RankScreen(this)
             "estilos" -> EstilosScreen(this) {}
             "catalogo" -> CatalogoBotoesScreen(this)
+            "ia" -> AssistenteScreen(this).also { tela ->
+                i.getStringExtra("pedido")?.let { pd -> android.os.Handler(mainLooper).postDelayed({ tela.enviar(pd) }, 1500) }
+            }
             else -> return
         }
         abre(t)

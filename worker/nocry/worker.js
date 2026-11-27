@@ -522,6 +522,71 @@ async function extrasRoute(req, env, ip) {
     return json({ ok: true });
   }
 
+  // ---- IA do NOCRY: entende o pedido e devolve as ações. Quem faz é o app, e só ações da lista fechada.
+  // A chave da IA fica SÓ no segredo ANTHROPIC_API_KEY deste Worker (nunca no app nem no repositório).
+  if (op === "ia") {
+    if (!env.ANTHROPIC_API_KEY) return json({ ok: false, reason: "sem_ia" });
+    const texto = clean(b.texto, 500).trim();
+    if (!texto) return json({ ok: false, reason: "vazio" });
+    const dia = new Date(now).toISOString().slice(0, 10);
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS ia_uso (key TEXT NOT NULL, dia TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (key, dia))").run();
+    const uso = await env.DB.prepare("SELECT n FROM ia_uso WHERE key = ? AND dia = ?").bind(key, dia).first();
+    const limite = a.rec.role === "owner" ? 400 : Number(env.IA_LIMITE_DIA || 40);
+    if (uso && uso.n >= limite) return json({ ok: false, reason: "ia_limite" });
+    await env.DB.prepare("INSERT INTO ia_uso (key, dia, n) VALUES (?, ?, 1) ON CONFLICT (key, dia) DO UPDATE SET n = n + 1").bind(key, dia).run();
+
+    const acoes = b.acoes && typeof b.acoes === "object" ? b.acoes : {};
+    const nomes = Object.keys(acoes).filter((k) => /^[a-z_]{2,32}$/.test(k)).slice(0, 40);
+    const lista = nomes.map((k) => "- " + k + ": " + clean(acoes[k], 200)).join("\n");
+    const estado = clean(JSON.stringify(b.estado && typeof b.estado === "object" ? b.estado : {}), 3500);
+    const sistema =
+      "Você é a IA dentro do app NOCRY (Android, para jogadores de Free Fire). Você entende o pedido da pessoa e escolhe ações da lista abaixo; o app faz as ações no celular dela.\n" +
+      'Responda SÓ com um JSON assim: {"resposta": "texto curto em português simples", "passos": [{"acao": "nome", "min": 0, "arg": ""}]}\n' +
+      "Regras:\n" +
+      "- Use somente ações da lista. min = daqui a quantos minutos fazer (0 = agora). Para \"por 30 minutos\", ligue agora e desligue com min 30. Para um horário (ex.: às 22h), calcule os minutos a partir da hora atual que está no estado.\n" +
+      "- Se a pessoa perguntar algo ou pedir ajuda com erro, explique curto e em português simples usando o estado e o log; se uma ação da lista ajudar (verificar, adb_ligar, instalar_pastas...), inclua.\n" +
+      "- Se o pedido não tiver nada a ver com o app, responda curto e sem ações. Nunca invente ações. Nunca peça token, senha, pix ou dados pessoais.\n" +
+      "- resposta com até 3 frases; não repita a lista do que vai fazer (o app já mostra cada ação feita).\n" +
+      "Ações:\n" + lista;
+
+    // conversa: tem que começar com "user" e alternar
+    const msgs = [];
+    for (const m of (Array.isArray(b.hist) ? b.hist : []).slice(-6)) {
+      if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
+      const c = clean(m.content, 600) || ".";
+      if (msgs.length && msgs[msgs.length - 1].role === m.role) msgs[msgs.length - 1].content += "\n" + c;
+      else if (msgs.length || m.role === "user") msgs.push({ role: m.role, content: c });
+    }
+    const agoraBR = new Date(now - 3 * 3600000).toISOString().slice(11, 16);
+    const final = "Hora atual (Brasília): " + agoraBR + "\nEstado do app agora: " + estado + "\n\nPedido: " + texto;
+    if (msgs.length && msgs[msgs.length - 1].role === "user") msgs[msgs.length - 1].content += "\n" + final;
+    else msgs.push({ role: "user", content: final });
+
+    let r;
+    try {
+      r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: env.IA_MODELO || "claude-haiku-5-5", max_tokens: 700, system: sistema, messages: msgs }),
+      });
+    } catch (e) {
+      return json({ ok: false, reason: "ia_erro" });
+    }
+    if (!r.ok) return json({ ok: false, reason: "ia_erro", status: r.status });
+    const d = await r.json();
+    const txt = (d.content || []).filter((x) => x && x.type === "text").map((x) => x.text).join("");
+    let o = null;
+    try {
+      const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
+      if (i >= 0 && j > i) o = JSON.parse(txt.slice(i, j + 1));
+    } catch (e) {}
+    if (!o) return json({ ok: true, resposta: clean(txt, 1200), passos: [] });
+    const passos = (Array.isArray(o.passos) ? o.passos : []).slice(0, 12)
+      .filter((p) => p && nomes.includes(String(p.acao)))
+      .map((p) => ({ acao: String(p.acao), min: Math.max(0, Math.min(1440, Number(p.min) || 0)), arg: clean(p.arg, 20) }));
+    return json({ ok: true, resposta: clean(o.resposta, 1200), passos });
+  }
+
   // ---- rank (vitórias, R$, bypass) — o app manda os números dele; ninguém vê mensagens nem pix
   if (op === "rk_enviar") {
     const apelido = clean(b.apelido, 24).trim() || "jogador";
@@ -674,6 +739,7 @@ async function extrasRoute(req, env, ip) {
     await env.DB.prepare("INSERT INTO toques (para, de, t) VALUES (?, ?, ?)").bind(cod, meu.apelido, now).run();
     return json({ ok: true });
   }
+
   return json({ ok: false, reason: "not_found" }, 404);
 }
 

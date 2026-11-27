@@ -29,7 +29,7 @@ shot() { # nome tela [aba] [demo]
   if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
   adb shell am force-stop $PKG
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
-  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" ${INICIO:+--es inicio $INICIO} ${ESTILO:+--es estilo $ESTILO} ${COR:+--es cor $COR} ${TEMA:+--es tema $TEMA} ${PERFIL:+--es perfil $PERFIL} >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" ${INICIO:+--es inicio $INICIO} ${ESTILO:+--es estilo $ESTILO} ${COR:+--es cor $COR} ${TEMA:+--es tema $TEMA} ${PERFIL:+--es perfil $PERFIL} ${PEDIDO:+--es pedido "'$PEDIDO'"} >/dev/null
   sleep 7
   adb exec-out screencap -p > "$OUT/cru/${nome}_1.png"
   for i in 2 3 4 5; do
@@ -50,7 +50,7 @@ video() { # nome estilo [tela]
   if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
   anim 1
   adb shell am force-stop $PKG
-  adb shell am start -n $PKG/$ACT --es tela "$tela" --es fonte "$FONTE" ${est:+--es estilo $est} >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --es fonte "$FONTE" ${est:+--es estilo $est} ${PEDIDO:+--es pedido "'$PEDIDO'"} >/dev/null
   sleep 7
   adb shell rm -f /sdcard/v.mp4
   adb shell screenrecord --time-limit 26 --bit-rate 5000000 /sdcard/v.mp4 &
@@ -155,6 +155,10 @@ for e in T U; do video 13${e}_video $e; done
 # topo igual ao de hoje, arrumação nova embaixo (só prévia): V, W, X, Y
 for e in V W X Y; do ESTILO=$e; shot 14${e}_inicio home; done; ESTILO=""
 for e in V W X Y; do video 14${e}_video $e; done
+# IA do NOCRY: a tela vazia, um pedido de verdade (os comandos grátis respondem) e o início com o atalho "IA"
+shot 15_ia ia
+PEDIDO="liga o bypass, liga o bot e desliga o bot em 5 minutos"; shot 15_ia_pedido ia; video 15_ia_video "" ia; PEDIDO=""
+shot 15_inicio home
 # catálogo de formatos de botão (só prévia): o dono escolhe pelo número
 shot 10_catalogo catalogo
 video 10_catalogo_video "" catalogo

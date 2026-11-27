@@ -78,6 +78,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     /** ajuda, amigos, eventos, caderninho, partidas e teste de toque: em grade de 3 ou numa fila que rola de lado */
     private fun atalhosExtras(c: android.content.Context): View {
         val lista = listOf(
+            Atalho(R.drawable.ic_ia, "IA", false) { act.abre(AssistenteScreen(act)) },
             Atalho(R.drawable.ic_info, "Ajuda", Comunidade.supNovas > 0) { act.abre(AjudaScreen(act)) },
             Atalho(R.drawable.ic_trofeu, "Rank", false) { act.abre(RankScreen(act)) },
             Atalho(R.drawable.ic_sparkle, "Eventos", false) { act.abre(EventosScreen(act)) },
@@ -85,7 +86,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             Atalho(R.drawable.ic_gamepad, "Partidas", Partida.jogando) { act.abre(PartidasScreen(act)) }
         )
         fun ponto(): View = View(c).also { it.background = Ui.shape(c, Ui.WARN, 99) }
-        // opção C: uma fila só com os 5 atalhos, ícone em cima e nome embaixo
+        // opção C: uma fila só com os atalhos (IA + 5), ícone em cima e nome embaixo
         val box = Ui.vbox(c)
         val linha = Ui.hbox(c)
         lista.forEachIndexed { j, a ->
@@ -122,6 +123,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     private var demoAgendado = false
 
     private fun listaAtalhos(): List<Atalho> = listOf(
+        Atalho(R.drawable.ic_ia, "IA", false) { act.abre(AssistenteScreen(act)) },
         Atalho(R.drawable.ic_info, "Ajuda", Comunidade.supNovas > 0) { act.abre(AjudaScreen(act)) },
         Atalho(R.drawable.ic_trofeu, "Rank", false) { act.abre(RankScreen(act)) },
         Atalho(R.drawable.ic_sparkle, "Eventos", false) { act.abre(EventosScreen(act)) },
