@@ -140,5 +140,8 @@ for e in E F G; do ESTILO=$e; shot 7${e}_inicio home; shot 7${e}_bypass bypass; 
 ESTILO=G1; shot 7G1_inicio home; ESTILO=G2; shot 7G2_inicio home; ESTILO=""
 shot 70_atual_inicio home
 video 8_video_atual ""; video 8E_video E; video 8F_video F; video 8G_video Gv
+# estilos de botão em cima do início de sempre (só prévia): H claro, I cores, J gamer, K escuro limpo
+for e in H I J K; do ESTILO=$e; shot 9${e}_inicio home; shot 9${e}_bypass bypass; shot 9${e}_conexao conexao; done; ESTILO=""
+video 9H_video H; video 9I_video I; video 9J_video J; video 9K_video K
 rm -rf "$OUT/cru"
 ls -la "$OUT"

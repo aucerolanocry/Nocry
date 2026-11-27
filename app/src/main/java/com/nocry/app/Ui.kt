@@ -60,7 +60,50 @@ object Ui {
 
     /** estilo dos botões em teste: "" = atual, "1" compacto, "2" lista, "3" sólido */
     @JvmStatic var estiloBt = ""
-    private val compacto get() = estiloBt.isNotEmpty()
+    private val compacto get() = estiloBt.isNotEmpty() && pele.isEmpty()
+
+    // ---------------- estilos de botão em prévia (só no CI; sem prévia tudo fica igual ao de sempre) ----------------
+    /** "H" claro (botões brancos cheios), "I" cores (cada botão com a sua cor), "J" gamer (cantos cortados), "K" escuro limpo (sem borda) */
+    val pele: String get() = estiloBt.take(1).takeIf { it == "H" || it == "I" || it == "J" || it == "K" } ?: ""
+    private val ESCURO = 0xFF14161E.toInt()
+
+    /** cor própria de cada ícone no estilo "cores" */
+    fun corIcone(res: Int): Int? = when (res) {
+        R.drawable.ic_info -> 0xFF4FC3F7.toInt()
+        R.drawable.ic_trofeu, R.drawable.ic_crown -> 0xFFFFC94D.toInt()
+        R.drawable.ic_sparkle -> 0xFFB388FF.toInt()
+        R.drawable.ic_log -> 0xFF4ADE80.toInt()
+        R.drawable.ic_gamepad -> 0xFFFF6B81.toInt()
+        R.drawable.ic_bolt -> 0xFFFFD54F.toInt()
+        R.drawable.ic_video -> 0xFF26C6DA.toInt()
+        R.drawable.ic_chip -> 0xFF40C4FF.toInt()
+        R.drawable.ic_sliders -> 0xFFFFA94D.toInt()
+        R.drawable.ic_shield -> 0xFF9D7BFF.toInt()
+        R.drawable.ic_wifi -> 0xFF4FC3F7.toInt()
+        else -> null
+    }
+
+    /** fundo dos botões pequenos (atalhos, menu do topo). Sem prévia = o de sempre */
+    fun fundoPeq(c: Context, raio: Int, ico: Int = 0, ativo: Boolean = false): Drawable = when (pele) {
+        "H" -> shape(c, if (ativo) Theme.mix(Color.WHITE, OK, 0.35f) else Theme.alpha(Theme.mix(Color.WHITE, Theme.accent, 0.08f), 0xF2), raio)
+        "I" -> { val k = corIcone(ico) ?: Theme.accent; shape(c, Theme.alpha(k, if (ativo) 0x44 else 0x22), raio, Theme.alpha(k, 0xA8), 1) }
+        "J" -> Botao(c, if (ativo) "icoOn" else "ghost", raio)
+        "K" -> shape(c, if (ativo) Theme.alpha(OK, 0x30) else Theme.alpha(0xFF07080D.toInt(), 0xC8), raio + 4)
+        else -> shape(c, Theme.alpha(Color.WHITE, 0x1A), raio, Theme.alpha(Color.WHITE, 0x70), 1)
+    }
+
+    /** cor do ícone em cima do botão pequeno */
+    fun corIconePeq(ico: Int = 0, ativo: Boolean = false): Int = when (pele) {
+        "H" -> if (ativo) 0xFF0E6B3A.toInt() else ESCURO
+        "I" -> corIcone(ico) ?: TEXT
+        else -> if (ativo) OK else TEXT
+    }
+
+    /** texto em cima do botão pequeno: escuro (e sem sombra) no estilo claro */
+    fun textoPeq(t: TextView): TextView {
+        if (pele == "H") { t.setTextColor(ESCURO); t.setShadowLayer(0f, 0f, 0f, 0) }
+        return t
+    }
     /** fundo dos botões no estilo sólido: cor do tema clarinha, sem borda */
     fun solido(c: Context, raio: Int): Drawable = when (estiloBt) {
         "1" -> shape(c, Theme.alpha(Color.BLACK, 0x55), raio, Theme.alpha(Theme.accent, 0xF0), 2)
@@ -305,9 +348,20 @@ object Ui {
     /** quadradinho com um icone dentro; aceso fica em degrade com brilho */
     fun caixaIcone(c: Context, res: Int, ativo: Boolean = false, tamDp: Int = 40): View {
         val f = FrameLayout(c)
-        f.background = Botao(c, if (ativo) "icoOn" else "ico")
+        val k = if (pele == "I") corIcone(res) else null
+        val rIco = (minOf(Prefs.raio, 18) * 0.8f).toInt()
+        f.background = when {
+            k != null -> shape(c, Theme.alpha(k, if (ativo) 0x48 else 0x26), rIco, Theme.alpha(k, 0x9C), 1)
+            pele == "H" -> shape(c, if (ativo) Theme.mix(Color.WHITE, OK, 0.35f) else Theme.alpha(Color.WHITE, 0xEE), rIco)
+            else -> Botao(c, if (ativo) "icoOn" else "ico")
+        }
         val tam = (tamDp * 0.5f).toInt()
-        val ic = icone(c, res, if (ativo || Theme.vidro) (if (ativo) Color.WHITE else 0xFFE6EAF7.toInt()) else 0xFFB9B9C8.toInt(), tam)
+        val corIc = when {
+            k != null -> k
+            pele == "H" -> if (ativo) 0xFF0E6B3A.toInt() else ESCURO
+            else -> if (ativo || Theme.vidro) (if (ativo) Color.WHITE else 0xFFE6EAF7.toInt()) else 0xFFB9B9C8.toInt()
+        }
+        val ic = icone(c, res, corIc, tam)
         f.addView(ic, FrameLayout.LayoutParams(dp(c, tam), dp(c, tam), Gravity.CENTER))
         f.layoutParams = LinearLayout.LayoutParams(dp(c, tamDp), dp(c, tamDp))
         return f
@@ -363,6 +417,7 @@ object Ui {
         } else r.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val pv = if (compacto) 6 else 9
         if (compacto) r.background = if (clicavel) ripple(c, solido(c, raioPilula())) else solido(c, raioPilula())
+        if (pele == "J" || pele == "K") r.background = if (clicavel) ripple(c, fundoPeq(c, raioPilula())) else fundoPeq(c, raioPilula())
         r.setPadding(dp(c, if (clicavel && ico != 0) 9 else 7), dp(c, pv), dp(c, if (clicavel && ico != 0) 5 else 7), dp(c, pv))
         r.contentDescription = "$nome $valor"
         return r
@@ -806,7 +861,7 @@ object Ui {
         val corTxt = when (kind) {
             Kind.PRIMARY -> Theme.sobreGrad()
             Kind.DANGER -> 0xFFFF8E9E.toInt()
-            Kind.GHOST -> if (estiloBt == "1") Theme.mix(Theme.accent, Color.WHITE, 0.45f) else TEXT
+            Kind.GHOST -> if (estiloBt == "1") Theme.mix(Theme.accent, Color.WHITE, 0.45f) else if (pele == "H") ESCURO else if (pele == "I") (corIcone(ico) ?: TEXT) else TEXT
         }
         val tipo = when (kind) { Kind.PRIMARY -> "grad"; Kind.DANGER -> "danger"; Kind.GHOST -> "ghost" }
         val bg = Botao(c, tipo)
@@ -819,7 +874,7 @@ object Ui {
         t.maxLines = 2
         t.gravity = Gravity.CENTER
         // letra escura em cima do botao claro nao leva sombra (a sombra preta deixava a letra borrada)
-        if (kind == Kind.PRIMARY && corTxt != Color.WHITE) t.setShadowLayer(0f, 0f, 0f, 0)
+        if ((kind == Kind.PRIMARY && corTxt != Color.WHITE) || (kind == Kind.GHOST && pele == "H")) t.setShadowLayer(0f, 0f, 0f, 0)
         val tp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         if (ico != 0) tp.leftMargin = dp(c, 8)
         l.addView(t, tp)

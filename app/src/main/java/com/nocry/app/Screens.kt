@@ -94,10 +94,10 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             val cel = android.widget.FrameLayout(c)
             val col = Ui.vbox(c)
             col.gravity = Gravity.CENTER
-            col.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x1A), Ui.raioPeq(16), Theme.alpha(android.graphics.Color.WHITE, 0x70), 1))
+            col.background = Ui.ripple(c, Ui.fundoPeq(c, Ui.raioPeq(16), a.ico))
             col.setPadding(Ui.dp(c, 2), Ui.dp(c, 10), Ui.dp(c, 2), Ui.dp(c, 9))
-            col.addView(Ui.icone(c, a.ico, Ui.TEXT, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)))
-            val t = Ui.text(c, a.nome, 9f, Ui.TEXT, true)
+            col.addView(Ui.icone(c, a.ico, Ui.corIconePeq(a.ico), 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)))
+            val t = Ui.textoPeq(Ui.text(c, a.nome, 9f, Ui.TEXT, true))
             t.gravity = Gravity.CENTER
             Ui.umaLinha(t, 7)
             col.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 5) })
@@ -752,10 +752,10 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                 val ja = MenuRapido.noMenu(meet)
                 val b = Ui.hbox(c)
                 b.gravity = Gravity.CENTER_VERTICAL
-                b.background = Ui.ripple(c, Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x1A), Ui.raioPeq(16), Theme.alpha(android.graphics.Color.WHITE, 0x70), 1))
+                b.background = Ui.ripple(c, Ui.fundoPeq(c, Ui.raioPeq(16), ico, ja))
                 b.setPadding(Ui.dp(c, 12), Ui.dp(c, 7), Ui.dp(c, 8), Ui.dp(c, 7))
-                b.addView(Ui.icone(c, ico, if (ja) Ui.OK else Ui.TEXT, 16), LinearLayout.LayoutParams(Ui.dp(c, 16), Ui.dp(c, 16)).also { it.rightMargin = Ui.dp(c, 7) })
-                val t = Ui.text(c, rot, 10f, Ui.TEXT, true)
+                b.addView(Ui.icone(c, ico, Ui.corIconePeq(ico, ja), 16), LinearLayout.LayoutParams(Ui.dp(c, 16), Ui.dp(c, 16)).also { it.rightMargin = Ui.dp(c, 7) })
+                val t = Ui.textoPeq(Ui.text(c, rot, 10f, Ui.TEXT, true))
                 Ui.umaLinha(t, 8)
                 b.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 val sw = Ui.interruptor(c, ja) { MenuRapido.alternar(act, meet) { redesenha() } }

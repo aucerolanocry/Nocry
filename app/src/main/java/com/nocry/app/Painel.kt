@@ -263,8 +263,8 @@ class Botao(
     /** estilo de botão em teste: "1" neon (contorno roxo), "2" chapado (cheio), "3" gamer (cantos cortados) */
     private val eb = Ui.estiloBt
     /** ideias novas (só na prévia do CI): "t" tonal (cor do tema clarinha, sem borda), "b" bloco (escuro com faixa da cor embaixo), "c" contorno (vazado) */
-    private val pele = when (eb.take(1)) { "E" -> "t"; "F" -> "b"; "G" -> "c"; else -> "" }
-    private val hud = Prefs.cartao == "hud" || eb == "3"
+    private val pele = when (eb.take(1)) { "E" -> "t"; "F" -> "b"; "G" -> "c"; "H" -> "h"; "J" -> "j"; "K" -> "k"; else -> "" }
+    private val hud = Prefs.cartao == "hud" || eb == "3" || pele == "j"
     private val raio = minOf(raioDp, if (pele == "b") 8 else 18) * d * (if (tipo == "ico" || tipo == "icoOn") 0.8f else 1f)
     private val corte = (if (tipo == "ico" || tipo == "icoOn") 8f else 12f) * d
     private val path = Path()
@@ -325,6 +325,9 @@ class Botao(
         pFill.color = if (peleNova) when (pele) {
             "t" -> Theme.alpha(Theme.accent, if (tipo == "ghost") 0x2E else 0x26)
             "b" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.06f), 0xE6)
+            "h" -> Theme.alpha(Theme.mix(Color.WHITE, Theme.accent, 0.08f), if (tipo == "ghost") 0xF2 else 0xEE)
+            "j" -> Theme.alpha(Color.BLACK, 0x70)
+            "k" -> Theme.alpha(0xFF07080D.toInt(), 0xC8)
             else -> Theme.alpha(Color.BLACK, 0x22)
         }
         else if (eb == "1" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Color.BLACK, 0x55)
@@ -362,6 +365,8 @@ class Botao(
         val cor = if (peleNova) when (pele) {
             "t" -> 0
             "b" -> Theme.alpha(Color.WHITE, 0x26)
+            "h", "k" -> 0
+            "j" -> Theme.alpha(Color.WHITE, 0xB0)
             else -> if (tipo == "ghost") Theme.alpha(Color.WHITE, 0x99) else Theme.alpha(Theme.accent, 0xD0)
         }
         else if (eb == "1" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Theme.accent, 0xF0)
@@ -382,7 +387,7 @@ class Botao(
         } else if (cor != 0) {
             pLine.shader = null
             pLine.color = cor
-            pLine.strokeWidth = if (eb == "1" || eb == "3" || pele == "c") 1.6f * d else d
+            pLine.strokeWidth = if (eb == "1" || eb == "3" || pele == "c" || pele == "j") 1.6f * d else d
             cv.drawPath(path, pLine)
         }
     }
