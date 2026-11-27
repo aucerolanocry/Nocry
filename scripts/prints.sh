@@ -152,6 +152,9 @@ for e in Q R S; do video 12${e}_video $e; done
 # jeito profissional (só prévia): T ações rápidas, U central da partida
 for e in T U; do ESTILO=$e; shot 13${e}_inicio home; done; ESTILO=""
 for e in T U; do video 13${e}_video $e; done
+# topo igual ao de hoje, arrumação nova embaixo (só prévia): V, W, X, Y
+for e in V W X Y; do ESTILO=$e; shot 14${e}_inicio home; done; ESTILO=""
+for e in V W X Y; do video 14${e}_video $e; done
 # catálogo de formatos de botão (só prévia): o dono escolhe pelo número
 shot 10_catalogo catalogo
 video 10_catalogo_video "" catalogo

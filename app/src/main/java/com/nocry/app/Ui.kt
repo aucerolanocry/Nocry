@@ -60,7 +60,7 @@ object Ui {
 
     /** estilo dos botões em teste: "" = atual, "1" compacto, "2" lista, "3" sólido */
     @JvmStatic var estiloBt = ""
-    private val compacto get() = estiloBt.isNotEmpty() && pele.isEmpty() && formato == 0 && estiloBt != "T" && estiloBt != "U"
+    private val compacto get() = estiloBt.isNotEmpty() && pele.isEmpty() && formato == 0 && estiloBt !in listOf("T", "U", "V", "W", "X", "Y")
 
     /** formato de botão em prévia (só no CI), desenhado por FormatoBotao: L 3D de jogo, M neon, N hexágono, O inclinado, P mira */
     val formato: Int get() = when (estiloBt) { "L" -> 12; "M" -> 11; "N" -> 7; "O" -> 8; "P" -> 10; else -> 0 }

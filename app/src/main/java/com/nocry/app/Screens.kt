@@ -813,7 +813,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
 
     // ---------------- jeitos de arrumar o início com o visual de sempre (só na prévia do CI) ----------------
     /** "Q" Jogar e Bot lado a lado no topo, "R" separado por assunto, "S" grade de quadradinhos iguais */
-    private val org get() = Ui.estiloBt.takeIf { it == "Q" || it == "R" || it == "S" || it == "T" || it == "U" } ?: ""
+    private val org get() = Ui.estiloBt.takeIf { it in listOf("Q", "R", "S", "T", "U", "V", "W", "X", "Y") } ?: ""
     /** T e U: jeito profissional — status mais enxuto em cima e tudo agrupado por assunto */
     private val pro get() = org == "T" || org == "U"
 
@@ -894,6 +894,64 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         col.contentDescription = "$nome, $estado"
         Ui.clique(col) { acao() }
         return col
+    }
+
+
+    // ---------------- peças das arrumações V, W, X, Y (topo igual ao de hoje; só muda daqui pra baixo) ----------------
+    /** cartão de ações rápidas: Jogar (principal), Bot, Competitivo e a 4ª (conexão ou otimização) */
+    private fun cartaoAcoes(c: android.content.Context, quartaOtm: Boolean): View {
+        val ff = pacoteFf()
+        val compOn = Comp.ligado()
+        val card = Ui.hbox(c)
+        card.background = Ui.glass(c)
+        card.setPadding(Ui.dp(c, 6), Ui.dp(c, 16), Ui.dp(c, 6), Ui.dp(c, 14))
+        val comp = Atalhos.visiveis().firstOrNull { it.id == "comp" }
+        val quarta = if (quartaOtm) {
+            val otm = Atalhos.visiveis().firstOrNull { it.id == "otm" }
+            val i = otm?.let { info(it) }
+            acaoRapida(c, R.drawable.ic_chip, "Otimização", i?.estado ?: "desligada", i?.ligado) { i?.abrir?.invoke() ?: act.abre(OtmScreen(act)) }
+        } else acaoRapida(c, R.drawable.ic_wifi, "Conexão", if (Adb.connected) "adb ligado" else "adb off", Adb.connected) { act.irAba(1) }
+        listOf(
+            acaoRapida(c, R.drawable.ic_play, "Jogar", if (Otm.status().first) "otimizado" else "abrir jogo", null, principal = true) { jogarOuAvisa(ff) },
+            acaoRapida(c, R.drawable.ic_crown, "Bot de fila", if (Sniper.buscando) "buscando" else "desligado", Sniper.buscando) { act.abre(SniperScreen(act)) },
+            acaoRapida(c, comp?.ico ?: R.drawable.ic_gamepad, "Competitivo", if (ocupadoComp) "..." else if (compOn) "ligado" else "desligado", compOn) { alternaComp() },
+            quarta
+        ).forEach { card.addView(it, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)) }
+        return card
+    }
+
+    /** cartão "partida": o jogo com JOGAR em cima e, embaixo, competitivo (chavinha) + o que pedir */
+    private fun cartaoPartida(c: android.content.Context, comOtm: Boolean, comBot: Boolean): View {
+        val ff = pacoteFf()
+        val (est, onFf) = estadoFf()
+        val cab = Ui.hbox(c)
+        cab.gravity = Gravity.CENTER_VERTICAL
+        cab.setPadding(0, Ui.dp(c, 14), 0, Ui.dp(c, 14))
+        cab.addView(Ui.caixaIcone(c, R.drawable.ic_play, onFf, 44), LinearLayout.LayoutParams(Ui.dp(c, 44), Ui.dp(c, 44)).also { it.rightMargin = Ui.dp(c, 12) })
+        val col = Ui.vbox(c)
+        col.addView(Ui.text(c, nomeDoFf(ff), 16f, Ui.TEXT, true).also { Ui.umaLinha(it, 10) })
+        col.addView(Ui.pilulaEstado(c, est, onFf), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.topMargin = Ui.dp(c, 6) })
+        cab.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        cab.addView(botaoPrincipal(c, "jogar") { jogarOuAvisa(ff) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.leftMargin = Ui.dp(c, 10) })
+        val linhas = mutableListOf<View>(cab)
+        Atalhos.visiveis().firstOrNull { it.id == "comp" }?.let { a -> val i = info(a); linhas += linhaLista(c, a.ico, a.nome, if (ocupadoComp) "..." else i.estado, i.ligado, chave(c, i.ligado == true) { alternaComp() }) { i.abrir() } }
+        if (comOtm) Atalhos.visiveis().firstOrNull { it.id == "otm" }?.let { a -> val i = info(a); linhas += linhaLista(c, a.ico, a.nome, i.estado, i.ligado) { i.abrir() } }
+        if (comBot) linhas += linhaLista(c, R.drawable.ic_crown, "Bot de fila", subBot(), Sniper.buscando) { act.abre(SniperScreen(act)) }
+        return grupoLinhas(c, linhas)
+    }
+
+    /** ferramentas em quadradinhos, 3 por linha */
+    private fun addFerramentas(c: android.content.Context, lista: List<Atalhos.It>) {
+        lista.map { a -> val i = info(a); quadradinho(c, a.ico, a.nome, i.estado, i.ligado) { i.abrir() } }
+            .chunked(3).forEach { g -> add(linhaIgual(c, g[0], g.getOrElse(1) { View(c) }, g.getOrElse(2) { View(c) }, gap = 8), 8) }
+    }
+
+    private fun addAtalhosEMenu(c: android.content.Context, usarDoca: Boolean) {
+        add(Ui.secao(c, "atalhos"), 22)
+        add(if (usarDoca) doca(c) else atalhosExtras(c), 8)
+        add(Ui.secao(c, "menu do topo"), 18)
+        add(linhaFixos(c), 8)
+        add(ultimaAcao(c), 16)
     }
 
     private fun blocoOrg(c: android.content.Context) {
@@ -984,6 +1042,36 @@ class HomeScreen(a: MainActivity) : Screen(a) {
                 add(Ui.secao(c, "menu do topo"), 18)
                 add(linhaFixos(c), 8)
                 add(ultimaAcao(c), 16)
+            }
+            // V: ações rápidas (jogar, bot, competitivo, conexão) + modos de sempre
+            "V" -> {
+                add(Ui.secao(c, "ações rápidas"), 18)
+                add(cartaoAcoes(c, quartaOtm = false), 8)
+                if (resto.isNotEmpty()) { add(Ui.secao(c, "modos", linkEditar(c)), 22); gradeModos(c, resto) }
+                addAtalhosEMenu(c, usarDoca = false)
+            }
+            // W: cartão da partida (jogo, competitivo, otimização, bot) + ferramentas em quadradinhos
+            "W" -> {
+                add(Ui.secao(c, "partida"), 18)
+                add(cartaoPartida(c, comOtm = true, comBot = true), 8)
+                val ferr = resto.filter { it.id != "otm" }
+                if (ferr.isNotEmpty()) { add(Ui.secao(c, "ferramentas", linkEditar(c)), 22); addFerramentas(c, ferr) }
+                addAtalhosEMenu(c, usarDoca = false)
+            }
+            // X: o mais enxuto — ações rápidas (com otimização), ferramentas em 1 linha, atalhos num cartão só
+            "X" -> {
+                add(Ui.secao(c, "ações rápidas"), 18)
+                add(cartaoAcoes(c, quartaOtm = true), 8)
+                val ferr = resto.filter { it.id != "otm" }
+                if (ferr.isNotEmpty()) { add(Ui.secao(c, "ferramentas", linkEditar(c)), 22); addFerramentas(c, ferr) }
+                addAtalhosEMenu(c, usarDoca = true)
+            }
+            // Y: cartão da partida (jogo, competitivo, bot) + modos de sempre em quadrados
+            "Y" -> {
+                add(Ui.secao(c, "partida"), 18)
+                add(cartaoPartida(c, comOtm = false, comBot = true), 8)
+                if (resto.isNotEmpty()) { add(Ui.secao(c, "modos", linkEditar(c)), 22); gradeModos(c, resto) }
+                addAtalhosEMenu(c, usarDoca = true)
             }
             // S: jogar em cima e todo o resto em quadradinhos iguais, 3 por linha (tipo menu de jogo)
             else -> {
