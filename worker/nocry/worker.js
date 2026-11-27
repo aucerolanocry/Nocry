@@ -641,17 +641,23 @@ async function extrasRoute(req, env, ip) {
     await env.DB.prepare("INSERT INTO voz_uso (key, dia, n) VALUES (?, ?, ?) ON CONFLICT (key, dia) DO UPDATE SET n = n + ?").bind(key, dia, texto.length, texto.length).run();
     let r;
     try {
-      r = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(vozId) + "?output_format=mp3_22050_32", {
-        method: "POST",
-        headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
-        body: JSON.stringify({ text: texto, model_id: env.ELEVENLABS_MODELO || "eleven_flash_v2_5", language_code: "pt", voice_settings: { stability: 0.35, similarity_boost: 0.8, style: 0.55, speed: 1.05 } }),
-      });
+      r = await falarEleven(env, vozId, texto);
     } catch (e) {
       return json({ ok: false, reason: "voz_erro" });
     }
+    if (!r.ok && vozId === VOZ_ANIME.id && (r.status === 404 || r.status === 400)) {
+      // a Kurumin ainda não está na conta: coloca ela lá pela biblioteca e fala de novo
+      const novo = await adicionarDaBiblioteca(env, VOZ_ANIME);
+      if (novo) r = await falarEleven(env, novo, texto);
+      else vozCache = { falhou: VOZ_ANIME.id, t: 0 };
+    }
+    if (!r.ok && (r.status === 400 || r.status === 422) && !env.ELEVENLABS_MODELO) {
+      // o modelo novo não está liberado no plano: usa o rápido
+      r = await falarEleven(env, vozId, texto, "eleven_flash_v2_5");
+    }
     if (!r.ok) {
       // a voz sumiu da conta: esquece e procura de novo na próxima
-      if (r.status === 404 || r.status === 400) { vozCache = null; try { await env.DB.prepare("DELETE FROM ia_cfg WHERE k = 'voz_id'").run(); } catch (e) {} }
+      if (r.status === 404 || r.status === 400) { try { await env.DB.prepare("DELETE FROM ia_cfg WHERE k = 'voz_id'").run(); } catch (e) {} }
       return json({ ok: false, reason: "voz_erro", status: r.status });
     }
     const bytes = new Uint8Array(await r.arrayBuffer());
@@ -1221,13 +1227,45 @@ async function apiRoute(req, env, ip, op) {
 }
 
 // ---------------------------------------------------------------- entrada
+// fala o texto com a voz (mp3). O modelo eleven_v4 é o mais natural; ELEVENLABS_MODELO troca, se precisar
+function falarEleven(env, vozId, texto, modelo) {
+  return fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(vozId) + "?output_format=mp3_22050_32", {
+    method: "POST",
+    headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json", accept: "audio/mpeg" },
+    body: JSON.stringify({ text: texto, model_id: modelo || env.ELEVENLABS_MODELO || "eleven_v4", language_code: "pt", voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.5 } }),
+  });
+}
+
+// coloca uma voz da biblioteca da ElevenLabs na conta (precisa do dono dela, achado pela busca)
+async function adicionarDaBiblioteca(env, voz) {
+  const H = { "xi-api-key": env.ELEVENLABS_API_KEY };
+  try {
+    const r = await fetch("https://api.elevenlabs.io/v1/shared-voices?" + new URLSearchParams({ page_size: "30", search: voz.nome }).toString(), { headers: H });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const v = (j.voices || []).find((x) => x.voice_id === voz.id);
+    if (!v) return null;
+    const a = await fetch("https://api.elevenlabs.io/v1/voices/add/" + encodeURIComponent(v.public_owner_id) + "/" + encodeURIComponent(v.voice_id), {
+      method: "POST", headers: { ...H, "content-type": "application/json" }, body: JSON.stringify({ new_name: "NOCRY " + voz.nome }),
+    });
+    if (!a.ok) return null;
+    const k = await a.json();
+    const id = k.voice_id || null;
+    if (id) { vozCache = { id, t: Date.now() }; try { await env.DB.prepare("INSERT INTO ia_cfg (k, v) VALUES ('voz_id', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v").bind(id).run(); } catch (e) {} }
+    return id;
+  } catch (e) { return null; }
+}
+
 // voz da IA: UMA voz só, feminina estilo anime (kawaii). Se o dono guardar ELEVENLABS_VOZ, usa ela.
 // Sem isso, o servidor procura sozinho na biblioteca da ElevenLabs uma voz de anime feminina fofa,
 // coloca na conta uma vez (nome "NOCRY Anime") e guarda o código no banco (não procura de novo).
 let vozCache = null;
+// a voz escolhida pro app: Kurumin (menina de anime japonesa, fofa e kawaii), falando português
+const VOZ_ANIME = { id: "UiDW9qKjB9LaJDdoINsZ", nome: "Kurumin" };
+
 async function vozPadrao(env) {
   if (env.ELEVENLABS_VOZ) return env.ELEVENLABS_VOZ;
-  if (vozCache && Date.now() - vozCache.t < 12 * 3600 * 1000) return vozCache.id;
+  if (vozCache && vozCache.id && Date.now() - vozCache.t < 12 * 3600 * 1000) return vozCache.id;
   const H = { "xi-api-key": env.ELEVENLABS_API_KEY };
   let id = null;
   try {
@@ -1235,6 +1273,9 @@ async function vozPadrao(env) {
     const salvo = await env.DB.prepare("SELECT v FROM ia_cfg WHERE k = 'voz_id'").first();
     if (salvo && salvo.v) id = salvo.v;
   } catch (e) {}
+  if (id) { vozCache = { id, t: Date.now() }; return id; }
+  // a Kurumin é a voz do app; só procura outra se ela não puder ser usada nessa conta
+  if (!(vozCache && vozCache.falhou === VOZ_ANIME.id)) return VOZ_ANIME.id;
   // já está na conta?
   if (!id) {
     try {
