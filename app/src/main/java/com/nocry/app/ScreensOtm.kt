@@ -533,11 +533,14 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
             if (itens.size > 5) card.addView(Ui.text(c, "e mais ${itens.size - 5} no relatório completo", 10.5f, Ui.MUTED), Ui.lp(top = 6, c = c))
         }
         add(card, 10)
+        // um arquivo só com tudo: erros (com os detalhes) + o log inteiro do app
         if (itens.isNotEmpty()) {
             add(Ui.chips(c,
-                Ui.button(c, "compartilhar", Ui.Kind.PRIMARY) { compartilharErros(c) },
+                Ui.button(c, "compartilhar tudo", Ui.Kind.PRIMARY) { compartilharErros(c) },
                 Ui.button(c, "apagar", Ui.Kind.DANGER) { Bg.run({ Erros.apagar() }) { redesenha() } }
             ), 10)
+        } else {
+            add(Ui.chips(c, Ui.button(c, "compartilhar tudo", Ui.Kind.PRIMARY) { compartilharErros(c) }), 10)
         }
     }
 
@@ -560,16 +563,30 @@ class LogScreen(a: MainActivity, private val tag: String?) : Screen(a) {
     }
 
     private fun compartilharErros(c: Context) {
-        Bg.run({ try { Erros.montarRelatorio() } catch (_: Throwable) { null } }) { f ->
-            if (f == null) { Ui.toast(c, "não tem nada pra mandar"); return@run }
+        Bg.run({
+            try {
+                // junta num arquivo só: relatório de erros + log completo do app (sem token, pix nem e-mail)
+                val out = java.io.File(c.filesDir, "nocry_tudo.txt")
+                val erros = try { Erros.montarRelatorio()?.readText() } catch (_: Throwable) { null }
+                val log = try { Sentinela.limpa(NLog.text()) ?: "" } catch (_: Throwable) { "" }
+                out.writeText(buildString {
+                    append("NOCRY · versão ${License.versao(c)} · ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}\n\n")
+                    append(erros ?: "RELATÓRIO DE ERROS: nenhum erro registrado\n")
+                    append("\n\n##################################################################\nLOG DO APP (tudo o que o NOCRY fez)\n##################################################################\n")
+                    append(log.ifBlank { "(vazio)" })
+                })
+                out
+            } catch (_: Throwable) { null }
+        }) { f ->
+            if (f == null) { Ui.toast(c, "não consegui montar o arquivo"); return@run }
             try {
                 val uri = androidx.core.content.FileProvider.getUriForFile(c, c.packageName + ".fileprovider", f)
                 val i = Intent(Intent.ACTION_SEND)
                 i.type = "text/plain"
                 i.putExtra(Intent.EXTRA_STREAM, uri)
-                i.putExtra(Intent.EXTRA_SUBJECT, "relatório de erros do NOCRY")
+                i.putExtra(Intent.EXTRA_SUBJECT, "erros e log do NOCRY")
                 i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                c.startActivity(Intent.createChooser(i, "Mandar relatório de erros"))
+                c.startActivity(Intent.createChooser(i, "Mandar erros e log"))
             } catch (t: Throwable) {
                 Ui.toast(c, "não consegui compartilhar: ${t.message}")
             }

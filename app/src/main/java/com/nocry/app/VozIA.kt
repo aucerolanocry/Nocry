@@ -413,13 +413,18 @@ object SessaoIA {
 
     private fun aoErro(error: Int) {
         fecharPorPausa?.let { main.removeCallbacks(it) }
-        val nada = error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+        // erro 11 ("serviço de voz caiu") e 5 vêm toda hora no Android 16 quando você fica em silêncio:
+        // é só um "não ouvi nada". Antes contava como erro e ela esperava até 10s sem ouvir (era o "às vezes não ouve")
+        val caiu = error == 11 || error == SpeechRecognizer.ERROR_CLIENT
+        if (caiu) trocarReconhecedor()
+        val nada = caiu || error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
         // o Google às vezes dá "não entendi" mesmo tendo entendido algo: aproveita o que ela captou
         if (nada && ultimaParcial.trim().length >= 3) {
             val p = ultimaParcial.trim(); ultimaParcial = ""
             decidir(p); return
         }
         if (!nada) NLog.add("ia", "escuta: erro $error (${nomeErro(error)})")
+        if (caiu && ligada) { errosSeguidos = 0; deNovo(200); return }
         if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
             (act ?: ctx)?.let { Ui.toast(it, "libere o microfone pro NOCRY nas configurações do celular") }
             desligar(ctx); return
@@ -713,7 +718,7 @@ object PalavrasChave {
     }
 
     /** "Nocry" do jeito que o Google costuma escrever: "nocry", "no cry", "nocri", "nó cry", "nokri"... */
-    private const val NOCRY = "no\\s?[ck]\\s?r(?:i|y|ai)e?"
+    private const val NOCRY = "no\\s?(?:[ck]\\s?r(?:i|y|ai)e?|kwai|kuai|quai[s]?|cuai|crai|krai)"
 
     /** tira o nome dela da fala ("ô joão, abre o jogo" → "abre o jogo"). null = não chamou */
     fun tirarNome(fala: String, nome: String): String? {
