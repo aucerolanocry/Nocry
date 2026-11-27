@@ -473,6 +473,7 @@ class MainActivity : Activity() {
             "amigos" -> AmigosScreen(this)
             "rank" -> RankScreen(this)
             "estilos" -> EstilosScreen(this) {}
+            "catalogo" -> CatalogoBotoesScreen(this)
             else -> return
         }
         abre(t)

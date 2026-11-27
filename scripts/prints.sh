@@ -45,12 +45,12 @@ shot() { # nome tela [aba] [demo]
 
 # vídeo curto de uma tela (prévia de como vai ficar): grava a tela enquanto rola pra baixo e volta
 anim() { for k in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global $k $1; done; }
-video() { # nome estilo
-  local nome=$1 est=$2
+video() { # nome estilo [tela]
+  local nome=$1 est=$2 tela=${3:-home}
   if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
   anim 1
   adb shell am force-stop $PKG
-  adb shell am start -n $PKG/$ACT --es tela home --es fonte "$FONTE" ${est:+--es estilo $est} >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --es fonte "$FONTE" ${est:+--es estilo $est} >/dev/null
   sleep 7
   adb shell rm -f /sdcard/v.mp4
   adb shell screenrecord --time-limit 26 --bit-rate 5000000 /sdcard/v.mp4 &
@@ -143,5 +143,8 @@ video 8_video_atual ""; video 8E_video E; video 8F_video F; video 8G_video Gv
 # estilos de botão em cima do início de sempre (só prévia): H claro, I cores, J gamer, K escuro limpo
 for e in H I J K; do ESTILO=$e; shot 9${e}_inicio home; shot 9${e}_bypass bypass; shot 9${e}_conexao conexao; done; ESTILO=""
 video 9H_video H; video 9I_video I; video 9J_video J; video 9K_video K
+# catálogo de formatos de botão (só prévia): o dono escolhe pelo número
+shot 10_catalogo catalogo
+video 10_catalogo_video "" catalogo
 rm -rf "$OUT/cru"
 ls -la "$OUT"
