@@ -569,7 +569,8 @@ object SessaoIA {
             if (estado == Estado.FALANDO) {
                 // por uns segundos depois de falar, o que você disser é pra ela (sem precisar chamar de novo)
                 conversaAte = System.currentTimeMillis() + 10_000L
-                if (ligada) ouvir() else parar()
+                // espera a voz dela sumir do alto-falante antes de voltar a ouvir (senão ela escuta a própria voz e repete)
+                if (ligada) main.postDelayed({ if (ligada && estado == Estado.FALANDO) ouvir() }, 500) else parar()
             }
         }
         Voz.aoTerminar = { fimFala?.let { main.removeCallbacks(it) }; depois() }
@@ -585,9 +586,10 @@ object SessaoIA {
         main.postDelayed(f, maxOf(4000L, r.length * 85L))
         falandoTexto = r
         errosNaFala = 0
+        // o microfone fica DESLIGADO enquanto ela fala (senão ela escutava a própria voz e repetia no chat).
+        // pra interromper, toque no microfone ou na barrinha do topo.
+        try { sr?.cancel() } catch (_: Throwable) {}
         Voz.falar(r)
-        // enquanto ela fala, continua escutando: se você falar por cima, ela para e faz o novo pedido
-        if (ligada) main.postDelayed({ if (estado == Estado.FALANDO) escutarDuranteFala() }, 600)
     }
 
     /** escuta enquanto ela fala (pra você poder interromper) */
