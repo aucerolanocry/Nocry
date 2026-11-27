@@ -20,7 +20,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # a chave do GitHub que o servidor de download usa pra pegar as pastas: testa as que estão guardadas
+      # aqui (só mostra se funciona, nunca o valor) e, se uma funcionar, troca a do servidor por ela
+      - name: Conferir chave do GitHub do servidor de download
+        env:
+          T_NOVO: ${{ secrets.FF_GITHUB_TOKEN }}
+          T_APK: ${{ secrets.GH_TOKEN_DOWNLOAD }}
+        run: |
+          teste() { if [ -z "$1" ]; then echo "nao-existe"; else curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $1" "https://api.github.com/repos/aucerolanocry/ff-installer/releases?per_page=1"; fi; }
+          A=$(teste "$T_NOVO"); B=$(teste "$T_APK")
+          echo "FF_GITHUB_TOKEN: $A · GH_TOKEN_DOWNLOAD: $B"
+          if [ "$A" = "200" ]; then echo "TOKEN_ESCOLHIDO=$T_NOVO" >> "$GITHUB_ENV"; echo "vai usar FF_GITHUB_TOKEN"
+          elif [ "$B" = "200" ]; then echo "TOKEN_ESCOLHIDO=$T_APK" >> "$GITHUB_ENV"; echo "vai usar GH_TOKEN_DOWNLOAD"
+          else echo "nenhuma chave guardada funciona: o servidor continua com a que já tem"; fi
+      - name: Publicar worker "nocry-download" (com a chave nova do GitHub)
+        if: env.TOKEN_ESCOLHIDO != ''
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: "worker/nocry-download"
+          command: deploy
+          secrets: |
+            GITHUB_TOKEN
+        env:
+          GITHUB_TOKEN: ${{ env.TOKEN_ESCOLHIDO }}
       - name: Publicar worker "nocry-download"
+        if: env.TOKEN_ESCOLHIDO == ''
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
