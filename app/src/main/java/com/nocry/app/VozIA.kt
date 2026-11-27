@@ -349,7 +349,10 @@ object SessaoIA {
             if (velho()) return
             val fala = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
             errosSeguidos = 0
-            if (fala.isEmpty()) { if (ligada) deNovo(150) else parar(); return }
+            // tira barulho de fundo: pedaço curtinho ou com confiança muito baixa é ruído, não comando
+            val conf = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)?.firstOrNull() ?: 1f
+            val ruido = fala.length < 2 || (conf in 0f..0.001f) || (!naTelaIAagora() && conf in 0f..0.3f)
+            if (fala.isEmpty() || ruido) { if (ligada) deNovo(120) else parar(); return }
             decidir(fala)
         }
         override fun onPartialResults(partialResults: Bundle?) {
@@ -414,6 +417,12 @@ object SessaoIA {
                 .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pt-BR")
                 .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, a.packageName)
+                // assim que você faz uma pausa curtinha, ela já fecha e executa (não fica esperando mais)
+                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
+                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 900L)
+                .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 500L)
+                // só o microfone do celular; não tenta puxar áudio de outras fontes
+                .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
             s.startListening(i)
         } catch (t: Throwable) {
             NLog.add("ia", "escuta: não começou (${t.javaClass.simpleName})")
@@ -421,9 +430,12 @@ object SessaoIA {
         }
     }
 
+    /** a tela da IA está aberta na frente? (na tela ela pega tudo; fora dela, filtra o ruído) */
+    private fun naTelaIAagora() = act?.let { it.naFrente && it.atual() is AssistenteScreen } == true
+
     /** o que fazer com o que ela ouviu */
     private fun decidir(fala: String) {
-        val naTelaIA = act?.let { it.naFrente && it.atual() is AssistenteScreen } == true
+        val naTelaIA = naTelaIAagora()
         // 1) uma palavra-chave sua: faz na hora
         val pc = PalavrasChave.achar(fala)
         if (pc != null) { responder(fala, pc, true); return }
@@ -662,10 +674,18 @@ class IaFundoService : android.app.Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            "fechar", "parar" -> { SessaoIA.desligar(this, fecharServico = false); stopSelf() }
+            "fechar", "parar" -> { SessaoIA.desligar(this, fecharServico = false); stopSelf(); return START_NOT_STICKY }
             "alternar", "falar" -> { if (SessaoIA.ligada) SessaoIA.desligar(this, fecharServico = false) else SessaoIA.ligarFundo(this); notifica(null) }
+            // o Android reiniciou o serviço (tinha fechado): volta a ouvir sozinho
+            null -> { if (Prefs.lerNum("ia_ouvindo", 0L) == 1L && !SessaoIA.ligada) SessaoIA.ligarFundo(this) }
         }
-        return START_NOT_STICKY
+        // START_STICKY: se o Android fechar o serviço por falta de memória, ele liga de novo
+        return android.app.Service.START_STICKY
+    }
+
+    /** o usuário tirou o app dos recentes: o serviço continua ouvindo (não morre junto) */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (SessaoIA.ligada) notifica(null) else { try { stopSelf() } catch (_: Throwable) {} }
     }
 
     override fun onDestroy() {
