@@ -114,6 +114,192 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     /** jeito dos botões em teste: "A" lado a lado, "B" barra de bolinhas, "C" grade */
     private val jeito get() = Ui.estiloBt.takeIf { it == "A" || it == "B" || it == "C" } ?: ""
 
+    // ---------------- ideias novas de organização (só na prévia do CI; o app de verdade não muda) ----------------
+    /** "E" lista organizada, "F" blocos, "G" abas. "G1"/"G2" já abrem na 2ª/3ª aba; "Gv" troca de aba sozinho (pro vídeo) */
+    private val novo get() = Ui.estiloBt.take(1).takeIf { it == "E" || it == "F" || it == "G" } ?: ""
+    private var abaG = Ui.estiloBt.drop(1).toIntOrNull() ?: 0
+    private var trocasDemo = 0
+    private var demoAgendado = false
+
+    private fun listaAtalhos(): List<Atalho> = listOf(
+        Atalho(R.drawable.ic_info, "Ajuda", Comunidade.supNovas > 0) { act.abre(AjudaScreen(act)) },
+        Atalho(R.drawable.ic_trofeu, "Rank", false) { act.abre(RankScreen(act)) },
+        Atalho(R.drawable.ic_sparkle, "Eventos", false) { act.abre(EventosScreen(act)) },
+        Atalho(R.drawable.ic_log, "Caderno", false) { act.abre(CadernoScreen(act)) },
+        Atalho(R.drawable.ic_gamepad, "Partidas", Partida.jogando) { act.abre(PartidasScreen(act)) }
+    )
+
+    private fun traco(c: android.content.Context): View =
+        View(c).also { it.setBackgroundColor(Theme.alpha(android.graphics.Color.WHITE, 0x1C)); it.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 1)) }
+
+    private fun seta(c: android.content.Context): View =
+        Ui.icone(c, R.drawable.ic_chevron, Ui.MUTED, 16).also { it.layoutParams = LinearLayout.LayoutParams(Ui.dp(c, 16), Ui.dp(c, 16)) }
+
+    private fun chave(c: android.content.Context, on: Boolean, acao: () -> Unit): View =
+        Ui.interruptor(c, on) { acao() }.also { it.scaleX = 0.85f; it.scaleY = 0.85f }
+
+    /** um cartão só com várias linhas separadas por um traço fino */
+    private fun grupoLinhas(c: android.content.Context, linhas: List<View>): View {
+        val card = Ui.vbox(c)
+        card.background = Ui.glass(c)
+        card.setPadding(Ui.dp(c, 14), Ui.dp(c, 2), Ui.dp(c, 14), Ui.dp(c, 2))
+        linhas.forEachIndexed { i, v -> if (i > 0) card.addView(traco(c)); card.addView(v) }
+        return card
+    }
+
+    /** linha da lista: ícone, nome, estado (verde quando ligado) e seta ou chavinha */
+    private fun linhaLista(c: android.content.Context, ico: Int, nome: String, estado: String, on: Boolean?, direita: View? = null, alerta: Boolean = false, acao: () -> Unit): View {
+        val r = Ui.hbox(c)
+        r.gravity = Gravity.CENTER_VERTICAL
+        r.setPadding(0, Ui.dp(c, 11), 0, Ui.dp(c, 11))
+        r.addView(Ui.caixaIcone(c, ico, on == true, 34), LinearLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 34)).also { it.rightMargin = Ui.dp(c, 12) })
+        val col = Ui.vbox(c)
+        col.addView(Ui.text(c, nome, 13f, Ui.TEXT, true).also { Ui.umaLinha(it, 9) })
+        if (estado.isNotEmpty()) col.addView(Ui.text(c, estado, 9.5f, if (on == true) Ui.OK else Ui.MUTED, true, mono = true).also { Ui.umaLinha(it, 7) }, Ui.lp(top = 2, c = c))
+        r.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (alerta) r.addView(View(c).also { it.background = Ui.shape(c, Ui.WARN, 99) }, LinearLayout.LayoutParams(Ui.dp(c, 8), Ui.dp(c, 8)).also { it.rightMargin = Ui.dp(c, 10) })
+        r.addView(direita ?: seta(c))
+        r.contentDescription = nome
+        Ui.clique(r) { acao() }
+        return r
+    }
+
+    /** os modos + o bot, cada um numa linha (o competitivo liga e desliga pela chavinha) */
+    private fun linhasModos(c: android.content.Context): List<View> {
+        val l = Atalhos.visiveis().map { a ->
+            val i = info(a)
+            if (a.id == "comp") linhaLista(c, a.ico, a.nome, if (ocupadoComp) "..." else i.estado, i.ligado, chave(c, i.ligado == true) { alternaComp() }) { i.abrir() }
+            else linhaLista(c, a.ico, a.nome, i.estado, i.ligado) { i.abrir() }
+        }.toMutableList()
+        l += linhaLista(c, R.drawable.ic_crown, "Bot de fila", subBot(), Sniper.buscando) { act.abre(SniperScreen(act)) }
+        return l
+    }
+
+    private fun linhasMenuTopo(c: android.content.Context): List<View> = listOf(false, true).map { meet ->
+        val ja = MenuRapido.noMenu(meet)
+        val alterna = { MenuRapido.alternar(act, meet) { redesenha() } }
+        linhaLista(c, if (meet) R.drawable.ic_video else R.drawable.ic_bolt, if (meet) "Meet" else "Toque rápido",
+            if (ja) "no menu do topo" else "fora do menu do topo", ja, chave(c, ja) { alterna() }) { alterna() }
+    }
+
+    /** botão grande de jogar + uma linha dizendo se a otimização está ligada */
+    private fun addJogar(c: android.content.Context) {
+        val ff = pacoteFf()
+        val nomeFf = if (ff == Const.FF_MAX) "Free Fire MAX" else "Free Fire"
+        add(Ui.button(c, "jogar $nomeFf", Ui.Kind.PRIMARY, R.drawable.ic_gamepad) { if (ff != null) jogar(ff) else Ui.toast(act, "Free Fire não instalado") }, 14)
+        val otmOn = Otm.status().first
+        add(Ui.text(c, if (otmOn) "otimização ativa" else if (Prefs.otmAuto) "otimização liga sozinha" else "otimização desligada", 9.5f, if (otmOn) Ui.OK else Ui.MUTED, true, mono = true).also { it.gravity = Gravity.CENTER }, 6)
+    }
+
+    private fun linkEditar(c: android.content.Context): View =
+        Ui.text(c, "Editar ›", 10.5f, Ui.MUTED, true, mono = true).also { e ->
+            e.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), 0, Ui.dp(c, 6))
+            Ui.clique(e) { act.abre(OrganizarScreen(act)) }
+        }
+
+    /** bloco quadrado da ideia F: ícone em cima, bolinha de estado no canto, nome e estado embaixo */
+    private fun bloco(c: android.content.Context, ico: Int, nome: String, estado: String, on: Boolean?, direita: View? = null, acao: () -> Unit): View {
+        val v = Ui.vbox(c)
+        v.background = Ui.ripple(c, Ui.glass(c, ligado = on == true), Painel(c, mascara = true))
+        v.setPadding(Ui.dp(c, 12), Ui.dp(c, 12), Ui.dp(c, 12), Ui.dp(c, 12))
+        v.minimumHeight = Ui.dp(c, 112)
+        val topo = Ui.hbox(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        topo.addView(Ui.caixaIcone(c, ico, on == true, 36))
+        topo.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f))
+        topo.addView(direita ?: View(c).also { it.background = Ui.shape(c, if (on == true) Ui.OK else Theme.alpha(android.graphics.Color.WHITE, 0x44), 99) },
+            if (direita != null) LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT) else LinearLayout.LayoutParams(Ui.dp(c, 9), Ui.dp(c, 9)))
+        v.addView(topo)
+        v.addView(View(c), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        v.addView(Ui.text(c, nome, 12.5f, Ui.TEXT, true).also { Ui.umaLinha(it, 8) }, Ui.lp(top = 12, c = c))
+        v.addView(Ui.text(c, estado, 9f, if (on == true) Ui.OK else Ui.MUTED, true, mono = true).also { Ui.umaLinha(it, 7) }, Ui.lp(top = 2, c = c))
+        v.contentDescription = nome
+        Ui.clique(v) { acao() }
+        return v
+    }
+
+    /** a faixa de baixo com os 5 atalhos num cartão só (ideia F) */
+    private fun doca(c: android.content.Context): View {
+        val d = Ui.hbox(c)
+        d.background = Ui.glass(c)
+        d.setPadding(Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 9))
+        listaAtalhos().forEach { a ->
+            val col = Ui.vbox(c)
+            col.gravity = Gravity.CENTER
+            col.addView(Ui.icone(c, a.ico, if (a.alerta) Ui.WARN else Ui.TEXT, 20), LinearLayout.LayoutParams(Ui.dp(c, 20), Ui.dp(c, 20)))
+            col.addView(Ui.text(c, a.nome, 8.5f, Ui.MUTED, true).also { it.gravity = Gravity.CENTER; Ui.umaLinha(it, 7) }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 5, c = c))
+            col.contentDescription = a.nome
+            Ui.clique(col) { a.abre() }
+            d.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        return d
+    }
+
+    /** o resto do início em cada ideia nova */
+    private fun blocoNovo(c: android.content.Context) {
+        when (novo) {
+            // E: tudo arrumado em listas — um cartão por assunto, uma linha por coisa
+            "E" -> {
+                addJogar(c)
+                add(Ui.secao(c, "ferramentas", linkEditar(c)), 20)
+                add(grupoLinhas(c, linhasModos(c)), 8)
+                add(Ui.secao(c, "menu do topo"), 20)
+                add(grupoLinhas(c, linhasMenuTopo(c)), 8)
+                add(Ui.secao(c, "atalhos"), 20)
+                add(linhaIgual(c, *listaAtalhos().map { a -> bolinha(c, a.ico, a.nome) { a.abre() } }.toTypedArray(), gap = 2), 10)
+                add(ultimaAcao(c), 18)
+            }
+            // F: blocos do mesmo tamanho, em grade de 2, com bolinha de estado no canto
+            "F" -> {
+                addJogar(c)
+                add(Ui.secao(c, "modos", linkEditar(c)), 20)
+                val itens = Atalhos.visiveis().map { a ->
+                    val i = info(a)
+                    if (a.id == "comp") bloco(c, a.ico, a.nome, if (ocupadoComp) "..." else i.estado, i.ligado, chave(c, i.ligado == true) { alternaComp() }) { i.abrir() }
+                    else bloco(c, a.ico, a.nome, i.estado, i.ligado) { i.abrir() }
+                }.toMutableList()
+                itens += bloco(c, R.drawable.ic_crown, "Bot de fila", subBot(), Sniper.buscando) { act.abre(SniperScreen(act)) }
+                for (meet in listOf(false, true)) {
+                    val ja = MenuRapido.noMenu(meet)
+                    itens += bloco(c, if (meet) R.drawable.ic_video else R.drawable.ic_bolt, if (meet) "Meet" else "Toque rápido",
+                        if (ja) "no menu do topo" else "fora do menu", ja, chave(c, ja) { MenuRapido.alternar(act, meet) { redesenha() } }) { MenuRapido.alternar(act, meet) { redesenha() } }
+                }
+                itens.chunked(2).forEachIndexed { k, par ->
+                    add(linhaIgual(c, par[0], if (par.size > 1) par[1] else View(c), gap = 10), if (k == 0) 8 else 10)
+                }
+                add(Ui.secao(c, "atalhos"), 20)
+                add(doca(c), 8)
+                add(ultimaAcao(c), 10)
+            }
+            // G: três abas em cima — só aparece o assunto escolhido, quase sem rolar
+            else -> {
+                add(Ui.segmento(c, listOf("Jogar", "Modos", "Mais"), abaG) { i -> abaG = i; redesenha() }, 16)
+                when (abaG) {
+                    0 -> {
+                        addJogar(c)
+                        Atalhos.visiveis().firstOrNull { it.id == "comp" }?.let { add(destaque(c, it), 14) }
+                        add(Ui.secao(c, "menu do topo"), 18)
+                        add(grupoLinhas(c, linhasMenuTopo(c)), 8)
+                    }
+                    1 -> {
+                        add(Ui.secao(c, "modos e bot", linkEditar(c)), 4)
+                        add(grupoLinhas(c, linhasModos(c)), 8)
+                    }
+                    else -> {
+                        add(Ui.secao(c, "atalhos"), 4)
+                        add(grupoLinhas(c, listaAtalhos().map { a -> linhaLista(c, a.ico, a.nome, "", null, alerta = a.alerta) { a.abre() } }), 8)
+                        add(ultimaAcao(c), 12)
+                    }
+                }
+                // vídeo da prévia: troca de aba sozinho, pra mostrar as três
+                if (Ui.estiloBt == "Gv" && trocasDemo < 3 && !demoAgendado) {
+                    demoAgendado = true
+                    root.postDelayed({ demoAgendado = false; trocasDemo++; abaG = (abaG + 1) % 3; redesenha() }, 4500)
+                }
+            }
+        }
+    }
+
     /** quadrinho pequeno: ícone em cima, nome e (opcional) uma linha embaixo */
     private fun quadro(c: android.content.Context, ico: Int, nome: String, sub: String?, alerta: Boolean = false, destaque: Boolean = false, acao: () -> Unit): View {
         val cel = android.widget.FrameLayout(c)
@@ -474,7 +660,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             redesenha()
         }
         val falta = !adb || !perm
-        if (jeito.isNotEmpty() && !falta) {
+        if ((jeito.isNotEmpty() || novo.isNotEmpty()) && !falta) {
             // conexão vira um botãozinho redondo no fim da fila das pílulas
             val fila = Ui.hbox(c)
             fila.gravity = Gravity.CENTER_VERTICAL
@@ -488,11 +674,11 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             hero.addView(fila, Ui.lp(top = 14, c = c))
         } else hero.addView(Ui.chips(c, pAdb, pPerm, pVol), Ui.lp(top = 16, c = c))
         hero.addView(Ui.text(c, "toque nos botões acima pra ligar ou desligar", 9.5f, Ui.MUTED, true).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 6, c = c))
-        if (jeito.isEmpty() || falta) hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "abrir conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
+        if ((jeito.isEmpty() && novo.isEmpty()) || falta) hero.addView(Ui.button(c, if (falta) "configurar e conectar" else "abrir conexão", if (falta) Ui.Kind.PRIMARY else Ui.Kind.GHOST, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 14, c = c))
         add(hero, 16)
 
         // ---------------- jogar: abre o Free Fire direto daqui ----------------
-        if (jeito.isEmpty()) pacoteFf()?.let { ff ->
+        if (jeito.isEmpty() && novo.isEmpty()) pacoteFf()?.let { ff ->
             val otmOn = Otm.status().first
             val est = when { otmOn -> "otimização ativa"; Prefs.otmAuto -> "otimização liga sozinha"; else -> "sem otimização" }
             val nomeFf = if (ff == Const.FF_MAX) "Free Fire MAX" else "Free Fire"
@@ -552,6 +738,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
 
         // ---------------- SNIPER (todo mundo com key vê) ----------------
         botSub = null
+        if (novo.isNotEmpty()) { blocoNovo(c); return }
         if (jeito.isEmpty()) run {
             val linhaBot = Ui.row(c, "Bot de fila", subBot(), R.drawable.ic_crown) { act.abre(SniperScreen(act)) }
             botSub = linhaBot.findViewWithTag("sub")
@@ -617,6 +804,11 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         }
 
         // ---------------- ultima coisa que o app fez ----------------
+        add(ultimaAcao(c), 10)
+    }
+
+    /** faixa com a última coisa que o app fez (toque abre os logs) */
+    private fun ultimaAcao(c: android.content.Context): View {
         versaoLog = NLog.versao
         val faixa = Ui.hbox(c)
         faixa.background = Ui.ripple(c, Ui.glass(c))
@@ -633,7 +825,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         faixa.addView(tc, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         faixa.addView(Ui.icone(c, R.drawable.ic_chevron, Ui.MUTED, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.leftMargin = Ui.dp(c, 8) })
         Ui.clique(faixa) { act.irAba(3) }
-        add(faixa, 10)
+        return faixa
     }
 }
 

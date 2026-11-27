@@ -262,8 +262,10 @@ class Botao(
     private val d = c.resources.displayMetrics.density
     /** estilo de botão em teste: "1" neon (contorno roxo), "2" chapado (cheio), "3" gamer (cantos cortados) */
     private val eb = Ui.estiloBt
+    /** ideias novas (só na prévia do CI): "t" tonal (cor do tema clarinha, sem borda), "b" bloco (escuro com faixa da cor embaixo), "c" contorno (vazado) */
+    private val pele = when (eb.take(1)) { "E" -> "t"; "F" -> "b"; "G" -> "c"; else -> "" }
     private val hud = Prefs.cartao == "hud" || eb == "3"
-    private val raio = minOf(raioDp, 18) * d * (if (tipo == "ico" || tipo == "icoOn") 0.8f else 1f)
+    private val raio = minOf(raioDp, if (pele == "b") 8 else 18) * d * (if (tipo == "ico" || tipo == "icoOn") 0.8f else 1f)
     private val corte = (if (tipo == "ico" || tipo == "icoOn") 8f else 12f) * d
     private val path = Path()
     private val pFill = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -272,7 +274,7 @@ class Botao(
     private var shLinha: Shader? = null
     private val vidro = Theme.vidro
     /** tema redondo: botao comprido (ate 64dp de altura) vira pilula; caixas grandes continuam so arredondadas */
-    private val pilula = Theme.redondo && raioDp >= 14 && (tipo == "grad" || tipo == "ghost" || tipo == "danger" || tipo == "campo")
+    private val pilula = (Theme.redondo || pele == "t") && pele != "b" && raioDp >= 14 && (tipo == "grad" || tipo == "ghost" || tipo == "danger" || tipo == "campo")
     private var raioReal = raio
 
     override fun onBoundsChange(b: android.graphics.Rect) {
@@ -318,8 +320,14 @@ class Botao(
             pFill.color = Theme.alpha(0xFF10131E.toInt(), Theme.op(0x80, 0.3f))
             cv.drawPath(path, pFill)
         }
-        pFill.shader = shFill
-        pFill.color = if (eb == "1" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Color.BLACK, 0x55)
+        val peleNova = pele.isNotEmpty() && (tipo == "ghost" || tipo == "ico")
+        pFill.shader = if (peleNova) null else shFill
+        pFill.color = if (peleNova) when (pele) {
+            "t" -> Theme.alpha(Theme.accent, if (tipo == "ghost") 0x2E else 0x26)
+            "b" -> Theme.alpha(Theme.mix(0xFF0B0A12.toInt(), Color.WHITE, 0.06f), 0xE6)
+            else -> Theme.alpha(Color.BLACK, 0x22)
+        }
+        else if (eb == "1" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Color.BLACK, 0x55)
         else if ((eb == "2" || eb == "3") && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Theme.accent, if (eb == "2") 0x50 else 0x30)
         else when (tipo) {
             "ghost" -> if (vidro) Theme.alpha(Theme.mix(0xFF10131E.toInt(), Color.WHITE, 0.13f), Theme.op(0xA8, 0.35f))
@@ -331,6 +339,14 @@ class Botao(
         }
         cv.drawPath(path, pFill)
         pFill.shader = null
+        if (pele == "b" && tipo == "ghost") {
+            // estilo bloco: uma faixa fina da cor do tema na base do botão
+            cv.save()
+            cv.clipPath(path)
+            pFill.color = Theme.accent
+            cv.drawRect(b.left.toFloat(), b.bottom - 2.5f * d, b.right.toFloat(), b.bottom.toFloat(), pFill)
+            cv.restore()
+        }
         if (tipo == "grad" && eb.isEmpty()) {
             // brilho de vidro na metade de cima
             cv.save()
@@ -343,7 +359,12 @@ class Botao(
             pFill.shader = null
             cv.restore()
         }
-        val cor = if (eb == "1" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Theme.accent, 0xF0)
+        val cor = if (peleNova) when (pele) {
+            "t" -> 0
+            "b" -> Theme.alpha(Color.WHITE, 0x26)
+            else -> if (tipo == "ghost") Theme.alpha(Color.WHITE, 0x99) else Theme.alpha(Theme.accent, 0xD0)
+        }
+        else if (eb == "1" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Theme.accent, 0xF0)
         else if (eb == "2" && (tipo == "ghost" || tipo == "ico")) 0
         else if (eb == "3" && (tipo == "ghost" || tipo == "ico")) Theme.alpha(Theme.accent, 0xC0)
         else when (tipo) {
@@ -361,7 +382,7 @@ class Botao(
         } else if (cor != 0) {
             pLine.shader = null
             pLine.color = cor
-            pLine.strokeWidth = if (eb == "1" || eb == "3") 1.6f * d else d
+            pLine.strokeWidth = if (eb == "1" || eb == "3" || pele == "c") 1.6f * d else d
             cv.drawPath(path, pLine)
         }
     }

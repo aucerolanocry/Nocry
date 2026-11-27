@@ -43,6 +43,42 @@ shot() { # nome tela [aba] [demo]
   echo "ok $nome"
 }
 
+# vídeo curto de uma tela (prévia de como vai ficar): grava a tela enquanto rola pra baixo e volta
+anim() { for k in window_animation_scale transition_animation_scale animator_duration_scale; do adb shell settings put global $k $1; done; }
+video() { # nome estilo
+  local nome=$1 est=$2
+  if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
+  anim 1
+  adb shell am force-stop $PKG
+  adb shell am start -n $PKG/$ACT --es tela home --es fonte "$FONTE" ${est:+--es estilo $est} >/dev/null
+  sleep 7
+  adb shell rm -f /sdcard/v.mp4
+  adb shell screenrecord --time-limit 26 --bit-rate 5000000 /sdcard/v.mp4 &
+  local rec=$!
+  sleep 2
+  if [ "${est:0:1}" = "G" ]; then
+    sleep 5; adb shell input swipe $X $Y1 $X $Y2 900; sleep 3; adb shell input swipe $X $Y2 $X $Y1 700; sleep 13
+  else
+    for i in 1 2 3 4; do adb shell input swipe $X $Y1 $X $Y2 1100; sleep 2; done
+    for i in 1 2 3 4; do adb shell input swipe $X $Y2 $X $Y1 700; sleep 1.2; done
+    sleep 3
+  fi
+  wait $rec 2>/dev/null
+  sleep 1
+  adb pull /sdcard/v.mp4 "/tmp/v_$nome.mp4" >/dev/null 2>&1
+  if [ -s "/tmp/v_$nome.mp4" ] && [ $(stat -c%s "/tmp/v_$nome.mp4") -gt 60000 ]; then
+    ffmpeg -y -loglevel error -i "/tmp/v_$nome.mp4" -vf "scale=540:-2" -c:v libx264 -crf 25 -preset veryfast -pix_fmt yuv420p -an "$OUT/$nome.mp4" \
+      || cp "/tmp/v_$nome.mp4" "$OUT/$nome.mp4"
+    echo "ok video $nome"
+  else
+    # o gravador do emulador falhou: monta o vídeo com prints seguidos
+    mkdir -p "/tmp/q_$nome"; local n=0
+    for i in 1 2 3 4 5 6; do adb exec-out screencap -p > "/tmp/q_$nome/$(printf %03d $n).png"; n=$((n+1)); adb shell input swipe $X $Y1 $X $Y2 900; sleep 1; done
+    ffmpeg -y -loglevel error -framerate 1.5 -i "/tmp/q_$nome/%03d.png" -vf "scale=540:-2" -c:v libx264 -pix_fmt yuv420p "$OUT/$nome.mp4" && echo "ok video (prints) $nome"
+  fi
+  anim 0
+}
+
 # 1ª passada: tela ESTREITA (320dp de largura, como celular pequeno ou com "tamanho da tela" aumentado)
 adb shell wm density 540
 sleep 3
@@ -99,5 +135,10 @@ INICIO=D; shot 35_largo_inicio_d home; INICIO=""
 shot 32_largo_conexao conexao
 shot 33_largo_bypass bypass
 shot 34_largo_bot bot 2 true
+# ideias novas de organização e botões (só na prévia): E lista organizada, F blocos, G abas
+for e in E F G; do ESTILO=$e; shot 7${e}_inicio home; shot 7${e}_bypass bypass; shot 7${e}_estudio estudio; shot 7${e}_conexao conexao; done
+ESTILO=G1; shot 7G1_inicio home; ESTILO=G2; shot 7G2_inicio home; ESTILO=""
+shot 70_atual_inicio home
+video 8_video_atual ""; video 8E_video E; video 8F_video F; video 8G_video Gv
 rm -rf "$OUT/cru"
 ls -la "$OUT"
