@@ -22,7 +22,8 @@ import kotlin.system.exitProcess
  *  - travada: a tela ficou parada mais de 3 s (com o que a thread principal estava fazendo)
  *  - saídas antigas: no Android 11+, o próprio sistema conta por que fechou o app da última vez
  *    (travamento/ANR, falta de memória, erro nativo...)
- * Fica em files/erros, no máximo [MAX_ARQ] arquivos. Nada daqui sai do celular sozinho.
+ * Fica em files/erros, no máximo [MAX_ARQ] arquivos. Estes arquivos não saem do celular;
+ * o envio pro painel do dono é separado (Sentinela/Sentry) e passa por uma limpeza de dados antes.
  */
 object Erros {
     class Item(val arquivo: File, val tipo: String, val titulo: String, val quando: Long)

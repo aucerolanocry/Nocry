@@ -7,6 +7,8 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         // primeiro de tudo: se algo der errado daqui pra frente, fica registrado (Logs › Relatório de erros)
+        // painel de erros do dono (Sentry): antes do Erros, pra os dois registrarem o mesmo crash
+        Sentinela.instalar(this)
         Erros.instalar(this)
         // só na prévia do CI: avisa no logcat quando a tela faz trabalho pesado (arquivo/rede) na thread principal
         if (BuildConfig.PREVIEW) {

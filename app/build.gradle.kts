@@ -28,6 +28,9 @@ android {
         ndk { abiFilters.addAll(if (preview) listOf("arm64-v8a", "armeabi-v7a", "x86_64") else listOf("arm64-v8a", "armeabi-v7a")) }
         buildConfigField("boolean", "PREVIEW", preview.toString())
         buildConfigField("String", "API_URL", "\"" + apiUrl + "\"")
+        // Sentry (painel de erros do dono). Vem de segredo do GitHub; sem ele o app nao manda nada.
+        buildConfigField("String", "SENTRY_DSN", "\"" + (System.getenv("SENTRY_DSN")?.trim() ?: "") + "\"")
+        buildConfigField("String", "SENTRY_ENV", "\"" + (System.getenv("NOCRY_SENTRY_ENV")?.trim() ?: "") + "\"")
         
         // 👇 ADICIONADO AQUI: Puxa o token do repositório privado do GitHub Secrets
         buildConfigField("String", "GH_TOKEN", "\"${System.getenv("GH_TOKEN_DOWNLOAD") ?: ""}\"")
@@ -91,4 +94,6 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // QR code do pix
     implementation("com.google.zxing:core:3.5.3")
+    // painel de erros (so liga com o SENTRY_DSN)
+    implementation("io.sentry:sentry-android:8.16.0")
 }

@@ -44,6 +44,9 @@
         android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.Nocry">
 
+        <!-- Sentry liga pelo código (Sentinela), só quando o build tem o DSN -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
