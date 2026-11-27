@@ -48,6 +48,10 @@
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <!-- achar o reconhecimento de voz do Google (no Xiaomi o padrão às vezes falha) -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
     </queries>
 
     <application

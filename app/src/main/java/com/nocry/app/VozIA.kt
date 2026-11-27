@@ -87,7 +87,12 @@ class BordaIA(c: Context) : View(c) {
             p.alpha = (255 * a * alfa).toInt().coerceIn(0, 255)
             cv.drawRoundRect(r, raio, raio, p)
         }
-        if (sumindo && alfa <= 0f) { aoSumir?.invoke(); aoSumir = null; return }
+        if (sumindo && alfa <= 0f) {
+            // nunca tirar a view da tela no meio do desenho (era o "DecorView contains null child" que fechava o app)
+            val cb = aoSumir; aoSumir = null
+            if (cb != null) post { try { cb() } catch (_: Throwable) {} }
+            return
+        }
         postInvalidateOnAnimation()
     }
 }
@@ -306,7 +311,7 @@ object SessaoIA {
     private fun mostra(a: MainActivity) {
         val f0 = camada
         if (f0 != null && f0.context === a && f0.parent != null) { borda?.sumindo = false; return }
-        if (f0 != null) (f0.parent as? ViewGroup)?.removeView(f0)
+        if (f0 != null) f0.post { try { (f0.parent as? ViewGroup)?.removeView(f0) } catch (_: Throwable) {} }
         val raiz = a.window.decorView as? ViewGroup ?: return
         val f = FrameLayout(a)
         val b = BordaIA(a)
@@ -432,7 +437,18 @@ object SessaoIA {
         trocarReconhecedor()
         if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) texto("Sem internet pra entender a voz... tentando de novo")
         else if (error == SpeechRecognizer.ERROR_AUDIO) texto("Microfone ocupado (outro app usando)... tentando de novo")
-        deNovo(when { errosSeguidos <= 2 -> 600L; errosSeguidos <= 6 -> 2500L; else -> 10_000L })
+        deNovo(when { errosSeguidos <= 2 -> 500L; else -> 3000L })
+    }
+
+    /** usa o reconhecimento de voz do Google quando tem (o do Xiaomi às vezes não responde) */
+    private fun criarReconhecedor(a: Context): SpeechRecognizer {
+        try {
+            val l = a.packageManager.queryIntentServices(Intent(android.speech.RecognitionService.SERVICE_INTERFACE), 0)
+            val g = l.firstOrNull { it.serviceInfo.packageName == "com.google.android.googlequicksearchbox" }
+                ?: l.firstOrNull { it.serviceInfo.packageName.startsWith("com.google") }
+            if (g != null) return SpeechRecognizer.createSpeechRecognizer(a, android.content.ComponentName(g.serviceInfo.packageName, g.serviceInfo.name))
+        } catch (_: Throwable) {}
+        return SpeechRecognizer.createSpeechRecognizer(a)
     }
 
     private fun trocarReconhecedor() {
@@ -461,7 +477,7 @@ object SessaoIA {
         try {
             // um reconhecedor novo a cada escuta: reaproveitar o antigo dava "ocupado" e derrubava a escuta
             trocarReconhecedor()
-            val s = SpeechRecognizer.createSpeechRecognizer(a)
+            val s = criarReconhecedor(a)
             s.setRecognitionListener(ouvinte(id))
             sr = s
             val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -483,7 +499,7 @@ object SessaoIA {
     }
 
     /** a tela da IA está aberta na frente? (na tela ela pega tudo; fora dela, filtra o ruído) */
-    private fun naTelaIAagora() = act?.let { it.naFrente && it.atual() is AssistenteScreen } == true
+    private fun naTelaIAagora() = act?.naFrente == true
 
     /** o que fazer com o que ela ouviu */
     private fun decidir(fala: String) {
@@ -578,7 +594,7 @@ object SessaoIA {
         ultimaParcial = ""
         try {
             trocarReconhecedor()
-            val s = SpeechRecognizer.createSpeechRecognizer(a)
+            val s = criarReconhecedor(a)
             s.setRecognitionListener(ouvinte(id, durante = true))
             sr = s
             s.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
@@ -655,7 +671,7 @@ object SessaoIA {
             f.getChildAt(1)?.animate()?.alpha(0f)?.setDuration(250)?.start()
             b.aoSumir = { (f.parent as? ViewGroup)?.removeView(f) }
             b.sumindo = true
-        } else if (f != null) (f.parent as? ViewGroup)?.removeView(f)
+        } else if (f != null) f.post { try { (f.parent as? ViewGroup)?.removeView(f) } catch (_: Throwable) {} }
     }
 }
 
