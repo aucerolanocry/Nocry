@@ -186,6 +186,14 @@ object SessaoIA {
         get() = Prefs.lerNum("ia_nome", 1L) == 1L
         set(v) = Prefs.gravaNum("ia_nome", if (v) 1L else 0L)
 
+    /** o nome que você fala pra chamar ela (padrão "Nocry") */
+    var nomeChamada: String
+        get() = Prefs.extraTxt("ia_chamada")?.trim()?.takeIf { it.isNotEmpty() } ?: "Nocry"
+        set(v) { Prefs.extraTxt("ia_chamada", v.trim().take(30)) }
+
+    /** depois de chamar ela (ou dela responder), por uns segundos ela entende que o próximo pedido é pra ela */
+    private var conversaAte = 0L
+
     val ativa get() = ligada || estado != Estado.PARADO
 
     private fun temMic(c: Context) = Build.VERSION.SDK_INT < 23 || c.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -419,14 +427,14 @@ object SessaoIA {
         // 1) uma palavra-chave sua: faz na hora
         val pc = PalavrasChave.achar(fala)
         if (pc != null) { responder(fala, pc, true); return }
-        // 2) chamou pelo nome ("Nocry, ..."): conversa com a IA
-        val semNome = PalavrasChave.tirarNome(fala)
+        // 2) chamou pelo nome ("Ô João!" → "Oi!"; ou tudo junto: "João, abre o jogo")
+        val semNome = PalavrasChave.tirarNome(fala, nomeChamada)
         if (semNome != null) {
-            if (semNome.isBlank()) falar("Oi! Pode falar.") else responder(fala, semNome, false)
+            if (semNome.isBlank()) { Assistente.anotar(true, fala); Assistente.anotar(false, "Oi!"); falar("Oi!") } else responder(fala, semNome, false)
             return
         }
-        // 3) na tela da IA (ou com "só com o nome" desligado): tudo vai pra IA
-        if (naTelaIA || !soComNome) { responder(fala, fala, false); return }
+        // 3) na tela da IA, logo depois de chamar ela, ou com "só quando me chamar" desligado: tudo vai pra IA
+        if (naTelaIA || !soComNome || System.currentTimeMillis() < conversaAte) { responder(fala, fala, false); return }
         // 4) fora da tela: comandos que ela entende sozinha (liga o bypass, abre o jogo...)
         val ps = Comandos.entender(fala).filter { it.acao != "pesquisar" && it.acao != "youtube" }
         if (ps.isNotEmpty()) { responder(fala, fala, true); return }
@@ -472,7 +480,11 @@ object SessaoIA {
         borda?.estado = 2
         texto(r.lines().firstOrNull { it.isNotBlank() }?.trim()?.trimStart('✓', '✗', '⚠', '⏰', ' ') ?: "")
         val depois = {
-            if (estado == Estado.FALANDO) { if (ligada) ouvir() else parar() }
+            if (estado == Estado.FALANDO) {
+                // por uns segundos depois de falar, o que você disser é pra ela (sem precisar chamar de novo)
+                conversaAte = System.currentTimeMillis() + 10_000L
+                if (ligada) ouvir() else parar()
+            }
         }
         Voz.aoTerminar = { fimFala?.let { main.removeCallbacks(it) }; depois() }
         // se a voz não avisar que terminou, não fica presa: confere de tempos em tempos
@@ -570,13 +582,16 @@ object PalavrasChave {
         return lista().sortedByDescending { it.palavra.length }.firstOrNull { val k = limpa(it.palavra); k.isNotEmpty() && n.contains(" $k ") }?.faz
     }
 
-    /** o nome dela do jeito que o Google costuma escrever: "nocry", "no cry", "nocri", "nó cry", "nokri"... (ou "assistente") */
-    private val NOME = Regex("(?:^|\\s)(?:(?:ei|oi|ok|ola|fala|e ai)\\s+)?(?:no\\s?[ck]\\s?r(?:i|y|ai)e?|assistente)(?=\\s|$)")
+    /** "Nocry" do jeito que o Google costuma escrever: "nocry", "no cry", "nocri", "nó cry", "nokri"... */
+    private const val NOCRY = "no\\s?[ck]\\s?r(?:i|y|ai)e?"
 
-    /** tira o nome dela da fala. null = não chamou pelo nome */
-    fun tirarNome(fala: String): String? {
+    /** tira o nome dela da fala ("ô joão, abre o jogo" → "abre o jogo"). null = não chamou */
+    fun tirarNome(fala: String, nome: String): String? {
         val n = limpa(fala)
-        val m = NOME.find(n) ?: return null
+        val k = limpa(nome)
+        val dela = if (k.isEmpty() || Regex(NOCRY).matches(k)) NOCRY else k.split(" ").joinToString("\\s+") { Regex.escape(it) } + "|" + NOCRY
+        val re = Regex("(?:^|\\s)(?:(?:o|oh|ei|oi|ok|ola|fala|e ai)\\s+)?(?:$dela)(?=\\s|$)")
+        val m = re.find(n) ?: return null
         return (n.substring(0, m.range.first) + " " + n.substring(m.range.last + 1)).replace(Regex("\\s+"), " ").trim()
     }
 }
@@ -620,7 +635,7 @@ class IaFundoService : android.app.Service() {
         return android.app.Notification.Builder(this, Notif.CH_SVC)
             .setSmallIcon(R.drawable.ic_ia)
             .setContentTitle(if (ouvindo) "IA do NOCRY ouvindo" else "IA do NOCRY pausada")
-            .setContentText(s ?: if (ouvindo) "Fale um comando. Pra conversar, comece com \"Nocry\"" else "Toque em Ouvir pra ela voltar a te ouvir")
+            .setContentText(s ?: if (ouvindo) "Fale um comando. Pra conversar, me chame: \"${SessaoIA.nomeChamada}\"" else "Toque em Ouvir pra ela voltar a te ouvir")
             .setContentIntent(abrir)
             .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_mic), if (ouvindo) "Pausar" else "Ouvir", alternar).build())
             .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_xcircle), "Desligar", fechar).build())
@@ -685,8 +700,9 @@ class IaTile : android.service.quicksettings.TileService() {
             SessaoIA.ligada -> SessaoIA.desligar(this)
             IaFundoService.ativo -> SessaoIA.ligarFundo(this)
             else -> {
-                // o Android só deixa começar a ouvir com o app aberto: abre o NOCRY já ouvindo (depois pode minimizar)
-                val i = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("ia_ouvir", true)
+                // o Android só deixa ligar o microfone em segundo plano com uma tela do app na frente:
+                // abre uma tela invisível que liga tudo e fecha na hora (você continua onde estava)
+                val i = Intent(this, IaLigarActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
                 try {
                     if (Build.VERSION.SDK_INT >= 34) startActivityAndCollapse(android.app.PendingIntent.getActivity(this, 80, i, android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
                     else @Suppress("DEPRECATION") startActivityAndCollapse(i)
@@ -694,5 +710,32 @@ class IaTile : android.service.quicksettings.TileService() {
             }
         }
         onStartListening()
+    }
+}
+
+/** tela invisível do bloco "IA NOCRY": liga o microfone da IA em segundo plano e fecha na hora (sem entrar no app) */
+class IaLigarActivity : android.app.Activity() {
+    private var ok = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        try { Prefs.init(applicationContext) } catch (_: Throwable) {}
+        val mic = Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        ok = mic && SpeechRecognizer.isRecognitionAvailable(this)
+        if (!ok) {
+            // falta liberar o microfone (só na primeira vez): aí abre o app pra pedir
+            try { startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("ia_ouvir", true)) } catch (_: Throwable) {}
+            finish()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!ok || isFinishing) return
+        ok = false
+        // com esta tela (invisível) na frente, o Android deixa ligar o serviço do microfone
+        IaFundoService.iniciar(this)
+        SessaoIA.ligarFundo(this)
+        Handler(Looper.getMainLooper()).postDelayed({ finish(); @Suppress("DEPRECATION") overridePendingTransition(0, 0) }, 300)
     }
 }

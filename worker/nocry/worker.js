@@ -649,7 +649,11 @@ async function extrasRoute(req, env, ip) {
     } catch (e) {
       return json({ ok: false, reason: "voz_erro" });
     }
-    if (!r.ok) { if (r.status === 404 || r.status === 400) vozCache = null; return json({ ok: false, reason: "voz_erro", status: r.status }); }
+    if (!r.ok) {
+      // a voz sumiu da conta: esquece e procura de novo na próxima
+      if (r.status === 404 || r.status === 400) { vozCache = null; try { await env.DB.prepare("DELETE FROM ia_cfg WHERE k = 'voz_id'").run(); } catch (e) {} }
+      return json({ ok: false, reason: "voz_erro", status: r.status });
+    }
     const bytes = new Uint8Array(await r.arrayBuffer());
     let bin = "";
     for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
@@ -1217,30 +1221,63 @@ async function apiRoute(req, env, ip, op) {
 }
 
 // ---------------------------------------------------------------- entrada
-// voz da IA: a escolhida no segredo ELEVENLABS_VOZ; sem ela, a voz feminina mais fofa da conta da ElevenLabs
+// voz da IA: UMA voz só, feminina estilo anime (kawaii). Se o dono guardar ELEVENLABS_VOZ, usa ela.
+// Sem isso, o servidor procura sozinho na biblioteca da ElevenLabs uma voz de anime feminina fofa,
+// coloca na conta uma vez (nome "NOCRY Anime") e guarda o código no banco (não procura de novo).
 let vozCache = null;
 async function vozPadrao(env) {
   if (env.ELEVENLABS_VOZ) return env.ELEVENLABS_VOZ;
-  if (vozCache && Date.now() - vozCache.t < 6 * 3600 * 1000) return vozCache.id;
-  let id = "EXAVITQu4vr4xnSDxMaL";
+  if (vozCache && Date.now() - vozCache.t < 12 * 3600 * 1000) return vozCache.id;
+  const H = { "xi-api-key": env.ELEVENLABS_API_KEY };
+  let id = null;
   try {
-    const r = await fetch("https://api.elevenlabs.io/v1/voices", { headers: { "xi-api-key": env.ELEVENLABS_API_KEY } });
-    if (r.ok) {
-      const j = await r.json();
-      let melhor = -1;
-      for (const v of (j.voices || [])) {
-        const l = v.labels || {};
-        const txt = [v.name, l.description, l.descriptive, l.use_case, l.age, v.description].join(" ").toLowerCase();
-        let n = 0;
-        if (String(l.gender || "").toLowerCase() === "female") n += 6;
-        if (/young|teen|child/.test(String(l.age || "").toLowerCase())) n += 3;
-        if (/anime|kawaii|cute|sweet|girl|childish|playful|cheerful|bright|upbeat|soft/.test(txt)) n += 3;
-        if (/anime|kawaii/.test(txt)) n += 5;
-        if (/male|deep|old|raspy|narrat/.test(txt) && String(l.gender || "").toLowerCase() !== "female") n -= 6;
-        if (n > melhor) { melhor = n; id = v.voice_id; }
-      }
-    }
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS ia_cfg (k TEXT PRIMARY KEY, v TEXT)").run();
+    const salvo = await env.DB.prepare("SELECT v FROM ia_cfg WHERE k = 'voz_id'").first();
+    if (salvo && salvo.v) id = salvo.v;
   } catch (e) {}
+  // já está na conta?
+  if (!id) {
+    try {
+      const r = await fetch("https://api.elevenlabs.io/v1/voices", { headers: H });
+      if (r.ok) { const j = await r.json(); const v = (j.voices || []).find((x) => x.name === "NOCRY Anime"); if (v) id = v.voice_id; }
+    } catch (e) {}
+  }
+  // procura na biblioteca uma voz de anime feminina fofa e coloca na conta
+  if (!id) {
+    let melhor = null, nota = -1;
+    for (const busca of ["anime girl", "kawaii", "anime", "cute girl"]) {
+      try {
+        const q = new URLSearchParams({ page_size: "60", gender: "female", search: busca });
+        const r = await fetch("https://api.elevenlabs.io/v1/shared-voices?" + q.toString(), { headers: H });
+        if (!r.ok) continue;
+        const j = await r.json();
+        for (const v of (j.voices || [])) {
+          if (v.free_users_allowed === false) continue;
+          const txt = [v.name, v.description, v.descriptive, v.use_case, v.category].join(" ").toLowerCase();
+          let n = 0;
+          if (/anime|kawaii|waifu/.test(txt)) n += 8;
+          if (/cute|sweet|girly|bubbly|childish|soft|adorable/.test(txt)) n += 4;
+          if (String(v.age || "").toLowerCase() === "young") n += 3;
+          if (String(v.language || "").toLowerCase() === "pt") n += 3;
+          if (/old|deep|raspy|seductive|asmr|whisper/.test(txt)) n -= 6;
+          n += Math.min(5, Math.log10(1 + Number(v.cloned_by_count || 0)));
+          if (n > nota) { nota = n; melhor = v; }
+        }
+        if (nota >= 12) break;
+      } catch (e) {}
+    }
+    if (melhor) {
+      try {
+        const r = await fetch("https://api.elevenlabs.io/v1/voices/add/" + encodeURIComponent(melhor.public_owner_id) + "/" + encodeURIComponent(melhor.voice_id), {
+          method: "POST", headers: { ...H, "content-type": "application/json" }, body: JSON.stringify({ new_name: "NOCRY Anime" }),
+        });
+        if (r.ok) { const j = await r.json(); id = j.voice_id || null; }
+      } catch (e) {}
+    }
+  }
+  if (id) { try { await env.DB.prepare("INSERT INTO ia_cfg (k, v) VALUES ('voz_id', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v").bind(id).run(); } catch (e) {} }
+  // sem conseguir a da biblioteca: uma voz feminina jovem padrão da ElevenLabs
+  if (!id) id = "EXAVITQu4vr4xnSDxMaL";
   vozCache = { id, t: Date.now() };
   return id;
 }

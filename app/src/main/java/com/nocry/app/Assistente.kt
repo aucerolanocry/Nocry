@@ -733,10 +733,8 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
         } catch (_: Throwable) {}
     }
 
-    /** voz anime da nuvem (ElevenLabs, pelo servidor): liga sozinha quando o dono configura lá */
-    var nuvem: Boolean
-        get() = Prefs.lerNum("ia_voz_nuvem", 1L) == 1L
-        set(v) = Prefs.gravaNum("ia_voz_nuvem", if (v) 1L else 0L)
+    /** voz anime da nuvem (ElevenLabs, pelo servidor): sempre tenta ela primeiro; sem ela, a do celular */
+    private val nuvem = true
 
     override fun onInit(status: Int) {
         val t = tts ?: return
@@ -810,13 +808,8 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
 
     fun falando(): Boolean = try { tts?.isSpeaking == true || player?.isPlaying == true } catch (_: Throwable) { false }
 
-    /** tom da voz: 0 normal, 1 fofa, 2 anime (agudinha e animada) */
-    var tom: Int
-        get() = Prefs.lerNum("ia_tom", 2L).toInt()
-        set(v) { Prefs.gravaNum("ia_tom", v.toLong()); aplicar() }
-
     /** vozes em português do Brasil que o celular tem */
-    fun vozes(): List<android.speech.tts.Voice> = try {
+    private fun vozes(): List<android.speech.tts.Voice> = try {
         tts?.voices?.filter { it.locale.language == "pt" && (it.locale.country.isEmpty() || it.locale.country == "BR") }
             ?.filter { !it.features.contains(android.speech.tts.TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) }
             ?.sortedBy { it.name } ?: emptyList()
@@ -824,26 +817,17 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
 
     /** a voz feminina mais bonita: as do Google em pt-BR com "afs" são femininas; depois, qualquer "female" */
     private fun melhorFeminina(l: List<android.speech.tts.Voice>): android.speech.tts.Voice? =
-        // a da internet é a de melhor qualidade (a IA já usa internet); a do celular fica de reserva
         l.firstOrNull { it.name.contains("afs") && it.isNetworkConnectionRequired } ?: l.firstOrNull { it.name.contains("afs") }
             ?: l.firstOrNull { it.name.contains("female", true) || it.features.any { f -> f.contains("female", true) } }
             ?: l.firstOrNull { !it.isNetworkConnectionRequired } ?: l.firstOrNull()
 
-    fun escolherVoz(nome: String) { Prefs.extraTxt("ia_voz_nome", nome); aplicar() }
-    fun vozAtual(): String = try { tts?.voice?.name ?: "" } catch (_: Throwable) { "" }
-
     private fun aplicar() {
         val t = tts ?: return
         try {
-            val l = vozes()
-            val v = l.firstOrNull { it.name == Prefs.extraTxt("ia_voz_nome") } ?: melhorFeminina(l)
-            if (v != null) t.setVoice(v)
-            when (tom) {
-                // tom mais agudo, mas sem passar do ponto (acima de ~1.3 a voz fica robótica/"zoada")
-                1 -> { t.setPitch(1.08f); t.setSpeechRate(1.02f) }
-                2 -> { t.setPitch(1.16f); t.setSpeechRate(1.04f) }
-                else -> { t.setPitch(1.0f); t.setSpeechRate(1.02f) }
-            }
+            // uma voz só: a feminina mais bonita do celular, um pouco mais fofinha (sem passar do ponto e ficar robótica)
+            melhorFeminina(vozes())?.let { t.setVoice(it) }
+            t.setPitch(1.14f)
+            t.setSpeechRate(1.04f)
         } catch (_: Throwable) {}
     }
 }
@@ -872,7 +856,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|${SessaoIA.ligada}|${SessaoIA.foraDoApp}|${SessaoIA.soComNome}|${PalavrasChave.lista().size}"
+    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|${SessaoIA.ligada}|${SessaoIA.foraDoApp}|${SessaoIA.soComNome}|${PalavrasChave.lista().size}|${SessaoIA.nomeChamada}"
 
     fun enviar(texto: String? = null, porVoz: Boolean = false) {
         var t = (texto ?: campo.text.toString()).trim()
@@ -913,15 +897,41 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         val l = PalavrasChave.lista()
         val ops = ArrayList<String>()
         ops += "+ Nova palavra-chave"
-        ops += (if (SessaoIA.soComNome) "✓ " else "") + "Fora da tela da IA, conversar só quando eu falar \"Nocry\""
+        ops += "Nome pra me chamar: \"${SessaoIA.nomeChamada}\" (toque pra trocar)"
+        ops += (if (SessaoIA.soComNome) "✓ " else "") + "Fora da tela da IA, conversar só quando me chamar"
         l.forEach { ops += "✗ \"${it.palavra}\" → ${it.faz}" }
         Ui.dialogEscolha(act, "PALAVRAS-CHAVE", ops) { i ->
             when (i) {
                 0 -> novaPalavra()
-                1 -> { SessaoIA.soComNome = !SessaoIA.soComNome; redesenha() }
-                else -> l.getOrNull(i - 2)?.let { PalavrasChave.remover(it.palavra); Ui.toast(act, "palavra \"${it.palavra}\" apagada"); redesenha() }
+                1 -> trocarNome()
+                2 -> { SessaoIA.soComNome = !SessaoIA.soComNome; redesenha() }
+                else -> l.getOrNull(i - 3)?.let { PalavrasChave.remover(it.palavra); Ui.toast(act, "palavra \"${it.palavra}\" apagada"); redesenha() }
             }
         }
+    }
+
+    /** o nome que você fala pra chamar ela (ex.: "Ô João!" e ela responde "Oi!") */
+    private fun trocarNome() {
+        val c = act
+        val box = Ui.vbox(c)
+        box.setPadding(Ui.dp(c, 20), Ui.dp(c, 8), Ui.dp(c, 20), 0)
+        val e = Ui.field(c, "nome (ex.: João)", false)
+        e.setText(SessaoIA.nomeChamada)
+        box.addView(e)
+        android.app.AlertDialog.Builder(c)
+            .setTitle("Nome pra me chamar")
+            .setMessage("Fale o nome e ela responde \"Oi!\". Depois é só pedir. Também dá pra falar tudo junto: \"Ô João, abre o jogo\".")
+            .setView(box)
+            .setPositiveButton("Salvar") { _, _ ->
+                val n = e.text.toString().trim()
+                if (PalavrasChave.limpa(n).length < 2) { Ui.toast(c, "escreva um nome"); return@setPositiveButton }
+                SessaoIA.nomeChamada = n
+                Ui.toast(c, "pronto: me chame de \"$n\"")
+                redesenha()
+            }
+            .setNeutralButton("Voltar pra Nocry") { _, _ -> SessaoIA.nomeChamada = "Nocry"; redesenha() }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun novaPalavra() {
@@ -964,29 +974,6 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             @Suppress("DEPRECATION")
             act.startActivityForResult(it, REQ_VOZ)
         } catch (_: Throwable) { Ui.toast(act, "esse celular não tem reconhecimento de voz (instale o app Google)") }
-    }
-
-    /** escolher como ela fala: sempre ou só quando você fala, o tom (anime, fofa, normal) e a voz do celular */
-    private fun escolherVoz() {
-        val vozes = Voz.vozes()
-        val atual = Voz.vozAtual()
-        val tons = listOf("Anime (agudinha)", "Fofa", "Normal")
-        val idxTom = listOf(2, 1, 0)
-        val ops = ArrayList<String>()
-        ops += if (falarSempre) "✓ Falar sempre as respostas" else "Falar sempre as respostas (agora: só quando você fala)"
-        ops += if (Voz.nuvem) "✓ Voz anime da nuvem (quando o dono configurar)" else "Voz anime da nuvem: desligada"
-        tons.forEachIndexed { i, n -> ops += (if (Voz.tom == idxTom[i]) "✓ " else "") + "Tom: $n" }
-        vozes.forEachIndexed { i, v -> ops += (if (v.name == atual) "✓ " else "") + "Voz ${i + 1}" + (if (v.isNetworkConnectionRequired) " (internet)" else "") + (if (v.name.contains("afs")) " · feminina" else "") }
-        Ui.dialogEscolha(act, "VOZ DA IA", ops) { i ->
-            when {
-                i == 0 -> { falarSempre = !falarSempre; if (!falarSempre) Voz.parar() }
-                i == 1 -> Voz.nuvem = !Voz.nuvem
-                i in 2..4 -> Voz.tom = idxTom[i - 2]
-                else -> vozes.getOrNull(i - 5)?.let { Voz.escolherVoz(it.name) }
-            }
-            if (i > 0) Voz.falar("Oi! Eu sou a IA do NOCRY, criada pelo Aucerola. Assim que eu falo.")
-            redesenha()
-        }
     }
 
     /** pede pro Android colocar o bloco "IA NOCRY" no menu do topo */
@@ -1165,7 +1152,11 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         // opções: mandar imagem, sempre falar, conversa por voz
         val op = Ui.hbox(c)
         op.addView(opcao(R.drawable.ic_image, "imagem", imagem != null) { escolherImagem() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        op.addView(opcao(R.drawable.ic_volume, "voz", falarSempre) { escolherVoz() },
+        op.addView(opcao(R.drawable.ic_volume, if (falarSempre) "voz: on" else "voz: off", falarSempre) {
+            falarSempre = !falarSempre
+            if (falarSempre) Voz.falar("Oi! Eu sou a IA do NOCRY.") else Voz.parar()
+            redesenha()
+        },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
         val np = PalavrasChave.lista().size
         op.addView(opcao(R.drawable.ic_bolt, if (np > 0) "palavras: $np" else "palavras", np > 0) { palavras() },

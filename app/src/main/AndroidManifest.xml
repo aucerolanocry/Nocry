@@ -126,7 +126,16 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
-        <!-- bloco "IA NOCRY" no menu do topo: toque e fale -->
+        <!-- tela invisível do bloco "IA NOCRY": liga o microfone sem entrar no app -->
+        <activity
+            android:name=".IaLigarActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- bloco "IA NOCRY" no menu do topo: liga e desliga o microfone da IA -->
         <service
             android:name=".IaTile"
             android:exported="true"
