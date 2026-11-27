@@ -66,6 +66,7 @@ const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // lista de releases guardada na memória do servidor por 10 min: menos perguntas pro GitHub = menos "HTTP 500"
 let memo = { t: 0, releases: null };
+let saude = { t: 0, r: null };
 
 function acharId(releases, arquivo) {
   for (const release of releases || []) {
@@ -105,6 +106,35 @@ export default {
 
     if (!arquivo) {
       return new Response("Arquivo nao especificado", { status: 400 });
+    }
+
+    // checagem de saúde (sem segredo nenhum): o servidor consegue falar com o GitHub e baixar um pedacinho?
+    if (arquivo === "saude") {
+      if (saude.r && Date.now() - saude.t < 60000) return new Response(JSON.stringify(saude.r), { headers: { "Content-Type": "application/json" } });
+      const h = { Authorization: `Bearer ${env.GITHUB_TOKEN}`, Accept: "application/vnd.github.v3+json", "User-Agent": "Cloudflare-Worker" };
+      const r = { token: !!env.GITHUB_TOKEN };
+      try {
+        const rel = await fetch("https://api.github.com/repos/aucerolanocry/ff-installer/releases?per_page=100", { headers: h });
+        r.releases = rel.status;
+        r.limite_restante = rel.headers.get("x-ratelimit-remaining");
+        if (rel.ok) {
+          const lista = await rel.json();
+          memo = { t: Date.now(), releases: lista };
+          const id = acharId(lista, "android.zip");
+          r.achou_android_zip = !!id;
+          if (id) {
+            const a = await fetch(`https://api.github.com/repos/aucerolanocry/ff-installer/releases/assets/${id}`,
+              { headers: { Authorization: h.Authorization, Accept: "application/octet-stream", "User-Agent": "Cloudflare-Worker", Range: "bytes=0-15" }, redirect: "follow" });
+            r.pedacinho = a.status;
+            r.content_range = a.headers.get("Content-Range");
+            try { await a.arrayBuffer(); } catch (e) {}
+          }
+        }
+      } catch (e) {
+        r.erro = String(e && e.message ? e.message : e).slice(0, 120);
+      }
+      saude = { t: Date.now(), r };
+      return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json" } });
     }
 
     const keyHeader = request.headers.get("X-Key") || "";
