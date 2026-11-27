@@ -7,6 +7,10 @@ binding = "DB"
 database_name = "nocry"
 database_id = "b32af7f2-079a-4cb5-a3d0-8351226ed928"
 
+# IA grátis do Cloudflare (Workers AI): usada pela IA do app quando não tem a chave paga
+[ai]
+binding = "AI"
+
 # Os secrets (OWNER_KEY, SIGN_KEY) NAO ficam aqui.
 # Eles continuam guardados so no Cloudflare e sao definidos manualmente com:
 #   wrangler secret put OWNER_KEY --name nocry

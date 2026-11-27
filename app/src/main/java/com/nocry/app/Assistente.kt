@@ -593,7 +593,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         val vazio = synchronized(Assistente.conversa) { Assistente.conversa.isEmpty() }
         if (vazio) {
             add(Ui.dica(c, "Escreva do seu jeito o que você quer e eu faço. Ex.: \"liga o bypass, liga o bot e desliga o bot em 5 minutos\". " +
-                (if (IA.ligada) "IA de verdade ligada: entendo qualquer frase e explico os erros." else "Por enquanto entendo os comandos do app (bypass, bot, jogo, otimização, competitivo, menu do topo, horários). A IA de verdade liga quando o dono colocar a chave no servidor."),
+                "Entendo qualquer frase e explico os erros do app. Se a IA do servidor estiver fora do ar (ou a cota grátis do dia acabar), continuo entendendo os comandos: bypass, bot, jogo, otimização, competitivo, menu do topo e horários.",
                 Ui.Dica.INFO), 0)
             add(Ui.secao(c, "experimente"), 18)
             val sug = listOf("Liga o bypass e o bot", "Liga o bot por 30 minutos", "Abre o jogo", "Verifica os erros e arruma",

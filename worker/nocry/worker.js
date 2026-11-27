@@ -525,7 +525,8 @@ async function extrasRoute(req, env, ip) {
   // ---- IA do NOCRY: entende o pedido e devolve as ações. Quem faz é o app, e só ações da lista fechada.
   // A chave da IA fica SÓ no segredo ANTHROPIC_API_KEY deste Worker (nunca no app nem no repositório).
   if (op === "ia") {
-    if (!env.ANTHROPIC_API_KEY) return json({ ok: false, reason: "sem_ia" });
+    // sem chave paga: usa a IA grátis do próprio Cloudflare (Workers AI, cota grátis todo dia)
+    if (!env.ANTHROPIC_API_KEY && !env.AI) return json({ ok: false, reason: "sem_ia" });
     const texto = clean(b.texto, 500).trim();
     if (!texto) return json({ ok: false, reason: "vazio" });
     const dia = new Date(now).toISOString().slice(0, 10);
@@ -562,19 +563,31 @@ async function extrasRoute(req, env, ip) {
     if (msgs.length && msgs[msgs.length - 1].role === "user") msgs[msgs.length - 1].content += "\n" + final;
     else msgs.push({ role: "user", content: final });
 
-    let r;
+    let txt = "";
     try {
-      r = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({ model: env.IA_MODELO || "claude-haiku-5-5", max_tokens: 700, system: sistema, messages: msgs }),
-      });
+      if (env.ANTHROPIC_API_KEY) {
+        // IA paga (Claude), se o dono colocar a chave
+        const r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+          body: JSON.stringify({ model: env.IA_MODELO || "claude-haiku-5-5", max_tokens: 700, system: sistema, messages: msgs }),
+        });
+        if (!r.ok) return json({ ok: false, reason: "ia_erro", status: r.status });
+        const d = await r.json();
+        txt = (d.content || []).filter((x) => x && x.type === "text").map((x) => x.text).join("");
+      } else {
+        // IA grátis do Cloudflare (acabou a cota do dia: o app volta pros comandos simples)
+        const out = await env.AI.run(env.IA_MODELO_CF || "@cf/google/gemma-4-26b-a4b-it", {
+          messages: [{ role: "system", content: sistema }].concat(msgs),
+          max_tokens: 700,
+        });
+        const v = out && (out.response !== undefined ? out.response : out.choices && out.choices[0] && out.choices[0].message ? out.choices[0].message.content : "");
+        txt = typeof v === "string" ? v : JSON.stringify(v || "");
+      }
     } catch (e) {
+      console.log("ia erro", e && e.message ? e.message : String(e));
       return json({ ok: false, reason: "ia_erro" });
     }
-    if (!r.ok) return json({ ok: false, reason: "ia_erro", status: r.status });
-    const d = await r.json();
-    const txt = (d.content || []).filter((x) => x && x.type === "text").map((x) => x.text).join("");
     let o = null;
     try {
       const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
