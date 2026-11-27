@@ -645,6 +645,8 @@ object Assistente {
         mudou++
     }
 
+    val CRIADOR = "Quem me criou foi o Aucerola, o criador e dono do NOCRY: foi ele que desenvolveu o app e eu. O NOCRY nasceu pra ajudar os jogadores de Free Fire: começou com a conexão e o bypass, depois vieram a otimização, o modo competitivo, a instalação das pastas, o bot de fila, o caderninho, o rank, os eventos e os temas do Estúdio. Por último ele me colocou aqui, pra você falar comigo por voz e eu fazer as coisas por você. Tudo sempre é testado primeiro pelo Aucerola antes de chegar pra todo mundo."
+
     val AJUDA = "Não entendi. Exemplos do que eu faço:\n• liga o bypass, liga o bot e desliga o bot em 5 minutos\n• liga o bot por 30 minutos\n• abre o jogo\n• coloca o Meet e o toque rápido no menu do topo\n• às 22h desliga o bot\n• verifica os erros e arruma\n• cancela os agendados"
 
     /** responde e faz tudo (bloqueia: chame fora da tela). imagem = foto em base64 (jpeg) */
@@ -652,6 +654,7 @@ object Assistente {
         val hist = synchronized(conversa) { conversa.dropLast(1).takeLast(8).map { (if (it.eu) "user" else "assistant") to it.texto } }
         val ia = try { IA.perguntar(c, texto, hist, imagem) } catch (_: Throwable) { null }
         if (ia == null && imagem != null) return "Não consegui olhar a imagem agora: a IA do servidor não respondeu. Tenta de novo daqui a pouco."
+        if (ia == null && Regex("(?i)(quem (te|lhe|voce|vc)? ?(criou|fez|desenvolveu|programou)|seu criador|criador|quem (e|é) o dono|historia (do|desse) app|como (o app|o nocry|voce) (foi|nasceu))").containsMatchIn(texto)) return CRIADOR
         val passos = ia?.passos ?: Comandos.entender(texto)
         val linhas = ArrayList<String>()
         if (ia != null && ia.texto.isNotBlank()) linhas += ia.texto
@@ -679,7 +682,7 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
         if (status != android.speech.tts.TextToSpeech.SUCCESS) return
         val r = try { t.setLanguage(Locale("pt", "BR")) } catch (_: Throwable) { android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED }
         pronto = r != android.speech.tts.TextToSpeech.LANG_MISSING_DATA && r != android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED
-        try { t.setSpeechRate(1.05f) } catch (_: Throwable) {}
+        aplicar()
         t.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) {}
             override fun onDone(utteranceId: String?) { main.post { aoTerminar?.invoke() } }
@@ -698,6 +701,43 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
     }
 
     fun parar() { try { tts?.stop() } catch (_: Throwable) {} }
+
+    fun falando(): Boolean = try { tts?.isSpeaking == true } catch (_: Throwable) { false }
+
+    /** tom da voz: 0 normal, 1 fofa, 2 anime (agudinha e animada) */
+    var tom: Int
+        get() = Prefs.lerNum("ia_tom", 2L).toInt()
+        set(v) { Prefs.gravaNum("ia_tom", v.toLong()); aplicar() }
+
+    /** vozes em português do Brasil que o celular tem */
+    fun vozes(): List<android.speech.tts.Voice> = try {
+        tts?.voices?.filter { it.locale.language == "pt" && (it.locale.country.isEmpty() || it.locale.country == "BR") }
+            ?.filter { !it.features.contains(android.speech.tts.TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) }
+            ?.sortedBy { it.name } ?: emptyList()
+    } catch (_: Throwable) { emptyList() }
+
+    /** a voz feminina mais bonita: as do Google em pt-BR com "afs" são femininas; depois, qualquer "female" */
+    private fun melhorFeminina(l: List<android.speech.tts.Voice>): android.speech.tts.Voice? =
+        l.firstOrNull { it.name.contains("afs") && !it.isNetworkConnectionRequired } ?: l.firstOrNull { it.name.contains("afs") }
+            ?: l.firstOrNull { it.name.contains("female", true) || it.features.any { f -> f.contains("female", true) } }
+            ?: l.firstOrNull { !it.isNetworkConnectionRequired } ?: l.firstOrNull()
+
+    fun escolherVoz(nome: String) { Prefs.extraTxt("ia_voz_nome", nome); aplicar() }
+    fun vozAtual(): String = try { tts?.voice?.name ?: "" } catch (_: Throwable) { "" }
+
+    private fun aplicar() {
+        val t = tts ?: return
+        try {
+            val l = vozes()
+            val v = l.firstOrNull { it.name == Prefs.extraTxt("ia_voz_nome") } ?: melhorFeminina(l)
+            if (v != null) t.setVoice(v)
+            when (tom) {
+                1 -> { t.setPitch(1.22f); t.setSpeechRate(1.05f) }
+                2 -> { t.setPitch(1.48f); t.setSpeechRate(1.1f) }
+                else -> { t.setPitch(1.0f); t.setSpeechRate(1.02f) }
+            }
+        } catch (_: Throwable) {}
+    }
 }
 
 class AssistenteScreen(a: MainActivity) : Screen(a) {
@@ -757,8 +797,14 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    /** abre o microfone (reconhecimento de voz do Google, grátis) */
+    /** fala com a IA: a luz contorna a tela e ela ouve sem janela (se não der, usa a janela do Google) */
     fun ouvir() {
+        if (SessaoIA.ativa) { SessaoIA.parar(); return }
+        SessaoIA.iniciar(act) { ouvirJanela() }
+    }
+
+    /** reserva: janela de voz do Google */
+    private fun ouvirJanela() {
         Voz.parar()
         val it = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -773,6 +819,27 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             @Suppress("DEPRECATION")
             act.startActivityForResult(it, REQ_VOZ)
         } catch (_: Throwable) { Ui.toast(act, "esse celular não tem reconhecimento de voz (instale o app Google)") }
+    }
+
+    /** escolher como ela fala: sempre ou só quando você fala, o tom (anime, fofa, normal) e a voz do celular */
+    private fun escolherVoz() {
+        val vozes = Voz.vozes()
+        val atual = Voz.vozAtual()
+        val tons = listOf("Anime (agudinha)", "Fofa", "Normal")
+        val idxTom = listOf(2, 1, 0)
+        val ops = ArrayList<String>()
+        ops += if (falarSempre) "✓ Falar sempre as respostas" else "Falar sempre as respostas (agora: só quando você fala)"
+        tons.forEachIndexed { i, n -> ops += (if (Voz.tom == idxTom[i]) "✓ " else "") + "Tom: $n" }
+        vozes.forEachIndexed { i, v -> ops += (if (v.name == atual) "✓ " else "") + "Voz ${i + 1}" + (if (v.isNetworkConnectionRequired) " (internet)" else "") + (if (v.name.contains("afs")) " · feminina" else "") }
+        Ui.dialogEscolha(act, "VOZ DA IA", ops) { i ->
+            when {
+                i == 0 -> { falarSempre = !falarSempre; if (!falarSempre) Voz.parar() }
+                i in 1..3 -> Voz.tom = idxTom[i - 1]
+                else -> vozes.getOrNull(i - 4)?.let { Voz.escolherVoz(it.name) }
+            }
+            if (i > 0) Voz.falar("Oi! Eu sou a IA do NOCRY, criada pelo Aucerola. Assim que eu falo.")
+            redesenha()
+        }
     }
 
     private fun escolherImagem() {
@@ -865,7 +932,11 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             // microfone grande
             val col = Ui.vbox(c)
             col.gravity = Gravity.CENTER_HORIZONTAL
-            col.addView(botaoRedondo(R.drawable.ic_mic, "falar com a IA", true, 76) { ouvir() }, LinearLayout.LayoutParams(Ui.dp(c, 76), Ui.dp(c, 76)))
+            val orbe = OrbeMic(c, 96)
+            orbe.contentDescription = "falar com a IA"
+            orbe.isClickable = true
+            orbe.setOnClickListener { ouvir() }
+            col.addView(orbe)
             col.addView(Ui.text(c, "toque e fale", 10.5f, Ui.MUTED, true, mono = true), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 8, c = c))
             add(col, 22)
             add(Ui.secao(c, "experimente"), 20)
@@ -931,7 +1002,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         // opções: mandar imagem, sempre falar, conversa por voz
         val op = Ui.hbox(c)
         op.addView(opcao(R.drawable.ic_image, "imagem", imagem != null) { escolherImagem() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        op.addView(opcao(R.drawable.ic_volume, if (falarSempre) "voz: sempre" else "voz: ao falar", falarSempre) { falarSempre = !falarSempre; if (!falarSempre) Voz.parar(); redesenha() },
+        op.addView(opcao(R.drawable.ic_volume, "voz", falarSempre) { escolherVoz() },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
         op.addView(opcao(R.drawable.ic_mic, if (maosLivres) "conversa: on" else "conversa: off", maosLivres) { maosLivres = !maosLivres; redesenha() },
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
@@ -942,7 +1013,11 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         linha.gravity = Gravity.CENTER_VERTICAL
         (campo.parent as? ViewGroup)?.removeView(campo)
         linha.addView(campo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        linha.addView(botaoRedondo(R.drawable.ic_mic, "falar", false, 46) { ouvir() }, LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)).also { it.leftMargin = Ui.dp(c, 8) })
+        val mic = OrbeMic(c, 50)
+        mic.contentDescription = "falar"
+        mic.isClickable = true
+        mic.setOnClickListener { ouvir() }
+        linha.addView(mic, LinearLayout.LayoutParams(Ui.dp(c, 50), Ui.dp(c, 50)).also { it.leftMargin = Ui.dp(c, 6) })
         linha.addView(botaoRedondo(R.drawable.ic_play, "enviar", true, 46) { enviar() }, LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)).also { it.leftMargin = Ui.dp(c, 6) })
         add(linha, 10)
     }

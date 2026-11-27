@@ -128,6 +128,8 @@ class MainActivity : Activity() {
 
     /** quem pediu uma tela do sistema (escolher video/imagem) recebe a resposta aqui */
     var aoResultado: ((Int, Int, Intent?) -> Unit)? = null
+    /** resposta de um pedido de permissão (ex.: microfone da IA): código do pedido e se liberou */
+    var aoPermissao: ((Int, Boolean) -> Unit)? = null
 
     private val ciclo = object : Runnable {
         override fun run() {
@@ -443,6 +445,7 @@ class MainActivity : Activity() {
     private fun abrirPrevia(i: android.content.Intent?) {
         if (!BuildConfig.PREVIEW || i == null) return
         if (i.getBooleanExtra("demo", false)) Sniper.demo()
+        if (i.getBooleanExtra("glow", false)) android.os.Handler(mainLooper).postDelayed({ SessaoIA.demo(this) }, 1800)
         // telas que tem aba propria na barra de baixo: abre pela aba, pra barra marcar certo
         when (i.getStringExtra("tela") ?: "") {
             "conexao" -> { irAba(1); return }
@@ -513,7 +516,7 @@ class MainActivity : Activity() {
     }
 
     // ------------------------------------------------------------------ telas
-    private fun atual(): Screen? = pilha.lastOrNull()
+    fun atual(): Screen? = pilha.lastOrNull()
 
     /** abre uma tela por cima da atual */
     fun abre(s: Screen) {
@@ -585,6 +588,11 @@ class MainActivity : Activity() {
             (pilha.firstOrNull()?.aba ?: 0) != 0 -> irAba(0)
             else -> super.onBackPressed()
         }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        aoPermissao?.invoke(requestCode, grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED)
     }
 
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")

@@ -33,7 +33,6 @@ android {
         buildConfigField("String", "SENTRY_ENV", "\"" + (System.getenv("NOCRY_SENTRY_ENV")?.trim() ?: "") + "\"")
         
         // 👇 ADICIONADO AQUI: Puxa o token do repositório privado do GitHub Secrets
-        buildConfigField("String", "GH_TOKEN", "\"${System.getenv("GH_TOKEN_DOWNLOAD") ?: ""}\"")
     }
 
     buildFeatures { buildConfig = true }

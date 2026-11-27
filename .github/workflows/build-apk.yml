@@ -113,7 +113,6 @@ jobs:
           NOCRY_KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
           NOCRY_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           NOCRY_KEY_PASS: ${{ secrets.KEY_PASS }}
-          GH_TOKEN_DOWNLOAD: ${{ secrets.GH_TOKEN_DOWNLOAD }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
           NOCRY_SENTRY_ENV: ${{ github.event.inputs.so_dono == 'true' && 'dono' || 'publico' }}
         run: |
