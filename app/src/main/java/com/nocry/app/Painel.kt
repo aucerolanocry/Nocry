@@ -150,7 +150,7 @@ class Painel(
         val ins = 1.2f * d
         pLine.color = Theme.alpha(Theme.accent, if (on) 0xF2 else 0xB4)
         pLine.strokeWidth = 2f * d
-        Hud.cantos(cv, b.left + ins, b.top + ins, b.right - ins, b.bottom - ins, (if (on) 16f else 11f) * d, pLine)
+        Hud.cantos(cv, b.left + ins, b.top + ins, b.right - ins, b.bottom - ins, (if (on) 16f else 11f) * d, pLine, quatro = on)
         // risquinho na cor 2 no alto (marca do painel)
         if (b.width() > 120f * d) {
             pLine.color = Theme.alpha(Theme.accent2, if (on) 0xD0 else 0x80)

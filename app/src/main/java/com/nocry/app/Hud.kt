@@ -32,13 +32,14 @@ object Hud {
 
     private fun ruido(i: Int): Float { val x = sin(i * 12.9898 + 78.233) * 43758.5453; return (x - Math.floor(x)).toFloat() }
 
-    /** os 4 colchetes dos cantos (a marca do painel HUD) */
-    fun cantos(cv: Canvas, l: Float, t: Float, r: Float, b: Float, tam: Float, p: Paint) {
+    /** colchetes dos cantos (a marca do painel HUD): [quatro] = os 4 cantos; senão só em cima-esquerda e embaixo-direita */
+    fun cantos(cv: Canvas, l: Float, t: Float, r: Float, b: Float, tam: Float, p: Paint, quatro: Boolean = true) {
         val k = min(tam, min((r - l) / 3f, (b - t) / 3f))
         cv.drawLine(l, t, l + k, t, p); cv.drawLine(l, t, l, t + k, p)
+        cv.drawLine(r, b, r - k, b, p); cv.drawLine(r, b, r, b - k, p)
+        if (!quatro) return
         cv.drawLine(r, t, r - k, t, p); cv.drawLine(r, t, r, t + k, p)
         cv.drawLine(l, b, l + k, b, p); cv.drawLine(l, b, l, b - k, p)
-        cv.drawLine(r, b, r - k, b, p); cv.drawLine(r, b, r, b - k, p)
     }
 
     // ------------------------------------------------------------------ fundos animados novos
@@ -50,6 +51,9 @@ object Hud {
     private val hexPath = Path()
     private var hexW = -1f
     private var hexH = -1f
+    /** a colmeia da tela inteira desenhada uma vez só (só a transparência; a cor vem na hora de desenhar) */
+    private var hexBmp: android.graphics.Bitmap? = null
+    private val pb = Paint(Paint.FILTER_BITMAP_FLAG)
     private val arco = RectF()
 
     /** desenha o fundo [id] com o tempo [t] (segundos). Serve pro fundo do app e pra miniatura do Estúdio */
@@ -73,24 +77,33 @@ object Hud {
     /** Holograma: colmeia fininha, uma faixa de luz passando devagar, anéis girando no alto e pontinhos de dados subindo */
     private fun holo(cv: Canvas, w: Float, h: Float, t: Float, d: Float, c1: Int, c2: Int) {
         val s = max(18f * d, w / 9f)
+        val grande = w * h > 300_000f
+        if (grande) {
+            // tela inteira: usa a colmeia já desenhada (antes refazia o desenho todo a cada quadro)
+            var bmp = hexBmp
+            if (bmp == null || bmp.width != w.toInt() || bmp.height != h.toInt()) {
+                bmp?.recycle()
+                bmp = android.graphics.Bitmap.createBitmap(max(1, w.toInt()), max(1, h.toInt()), android.graphics.Bitmap.Config.ALPHA_8)
+                val c2v = Canvas(bmp)
+                val pp = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = max(1f, 0.6f * d); color = Color.WHITE }
+                c2v.drawPath(montaHex(w, h, s), pp)
+                hexBmp = bmp
+            }
+            pb.color = Theme.alpha(c1, 0x16)
+            cv.drawBitmap(bmp, 0f, 0f, pb)
+            val ciclo = 7f
+            val y0 = ((t % ciclo) / ciclo) * (h + h * 0.4f) - h * 0.2f
+            cv.save()
+            cv.clipRect(0f, y0 - h * 0.08f, w, y0 + h * 0.08f)
+            pb.color = Theme.alpha(c1, 0x40)
+            cv.drawBitmap(bmp, 0f, 0f, pb)
+            cv.restore()
+            holoResto(cv, w, h, t, d, c1, c2, y0)
+            return
+        }
         if (hexW != w || hexH != h) {
             hexW = w; hexH = h
-            hexPath.reset()
-            val hw = s * 0.866f
-            var row = 0
-            var y = -s
-            while (y < h + s) {
-                var x = if (row % 2 == 0) 0f else hw
-                while (x < w + hw * 2) {
-                    for (k in 0 until 6) {
-                        val a1 = Math.toRadians((60 * k - 30).toDouble()); val a2 = Math.toRadians((60 * (k + 1) - 30).toDouble())
-                        hexPath.moveTo(x + (s * cos(a1)).toFloat(), y + (s * sin(a1)).toFloat())
-                        hexPath.lineTo(x + (s * cos(a2)).toFloat(), y + (s * sin(a2)).toFloat())
-                    }
-                    x += hw * 2
-                }
-                y += s * 1.5f; row++
-            }
+            hexPath.set(montaHex(w, h, s))
         }
         pl.shader = null
         pl.strokeWidth = max(1f, 0.6f * d)
@@ -104,6 +117,32 @@ object Hud {
         pl.color = Theme.alpha(c1, 0x40)
         cv.drawPath(hexPath, pl)
         cv.restore()
+        holoResto(cv, w, h, t, d, c1, c2, y0)
+    }
+
+    /** a colmeia (só o desenho das linhas) */
+    private fun montaHex(w: Float, h: Float, s: Float): Path {
+        val path = Path()
+        val hw = s * 0.866f
+        var row = 0
+        var y = -s
+        while (y < h + s) {
+            var x = if (row % 2 == 0) 0f else hw
+            while (x < w + hw * 2) {
+                for (k in 0 until 6) {
+                    val a1 = Math.toRadians((60 * k - 30).toDouble()); val a2 = Math.toRadians((60 * (k + 1) - 30).toDouble())
+                    path.moveTo(x + (s * cos(a1)).toFloat(), y + (s * sin(a1)).toFloat())
+                    path.lineTo(x + (s * cos(a2)).toFloat(), y + (s * sin(a2)).toFloat())
+                }
+                x += hw * 2
+            }
+            y += s * 1.5f; row++
+        }
+        return path
+    }
+
+    /** faixa de luz, anéis e dados subindo do fundo Holograma */
+    private fun holoResto(cv: Canvas, w: Float, h: Float, t: Float, d: Float, c1: Int, c2: Int, y0: Float) {
         pf.shader = LinearGradient(0f, y0 - h * 0.1f, 0f, y0 + h * 0.1f, intArrayOf(Theme.alpha(c1, 0), Theme.alpha(c1, 0x1C), Theme.alpha(c1, 0)), null, Shader.TileMode.CLAMP)
         cv.drawRect(0f, y0 - h * 0.1f, w, y0 + h * 0.1f, pf)
         pf.shader = null
