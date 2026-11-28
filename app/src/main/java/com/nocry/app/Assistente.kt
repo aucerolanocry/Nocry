@@ -821,7 +821,8 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
 
     /** a voz feminina mais bonita: as do Google em pt-BR com "afs" são femininas; depois, qualquer "female" */
     private fun melhorFeminina(l: List<android.speech.tts.Voice>): android.speech.tts.Voice? =
-        l.firstOrNull { it.name.contains("afs") && it.isNetworkConnectionRequired } ?: l.firstOrNull { it.name.contains("afs") }
+        // a voz que já está no celular (sem internet) fala na hora; a da internet às vezes demora ou trava em segundo plano
+        l.firstOrNull { it.name.contains("afs") && !it.isNetworkConnectionRequired } ?: l.firstOrNull { it.name.contains("afs") }
             ?: l.firstOrNull { it.name.contains("female", true) || it.features.any { f -> f.contains("female", true) } }
             ?: l.firstOrNull { !it.isNetworkConnectionRequired } ?: l.firstOrNull()
 

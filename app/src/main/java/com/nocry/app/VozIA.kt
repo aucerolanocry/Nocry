@@ -426,8 +426,16 @@ object SessaoIA {
         if (!nada) NLog.add("ia", "escuta: erro $error (${nomeErro(error)})")
         if (caiu && ligada) { errosSeguidos = 0; deNovo(200); return }
         if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-            (act ?: ctx)?.let { Ui.toast(it, "libere o microfone pro NOCRY nas configurações do celular") }
-            desligar(ctx); return
+            if (act?.naFrente == true) {
+                (act ?: ctx)?.let { Ui.toast(it, "libere o microfone pro NOCRY nas configurações do celular") }
+                desligar(ctx); return
+            }
+            // fora da tela: o Android tirou o microfone (normal quando ele fecha e reabre o app sozinho)
+            NLog.add("ia", "o Android tirou o microfone com o app fora da tela")
+            ligada = false
+            parar()
+            ctx?.let { IaFundoService.avisarVoltar(it) }
+            return
         }
         if (!ligada) { parar(); return }
         // ouvindo sempre: silêncio ou erro passageiro → volta a ouvir sozinha, sem aviso
@@ -515,7 +523,8 @@ object SessaoIA {
         // 2) chamou pelo nome ("Ô João!" → "Oi!"; ou tudo junto: "João, abre o jogo")
         val semNome = PalavrasChave.tirarNome(fala, nomeChamada)
         if (semNome != null) {
-            if (semNome.isBlank()) { Assistente.anotar(true, fala); Assistente.anotar(false, "Oi!"); falar("Oi!") } else responder(fala, semNome, false)
+            if (semNome.isBlank()) { Assistente.anotar(true, fala); Assistente.anotar(false, "Oi!"); falar("Oi!") }
+            else responder(fala, semNome, Comandos.entender(semNome).any { it.acao != "pesquisar" && it.acao != "youtube" })
             return
         }
         // 3) na tela da IA, logo depois de chamar ela, ou com "só quando me chamar" desligado: tudo vai pra IA
@@ -538,11 +547,18 @@ object SessaoIA {
         orbe?.ativo = false
         texto("Pensando...")
         Assistente.anotar(true, fala)
+        val minha = sessao
+        main.postDelayed({
+            if (estado == Estado.PENSANDO && sessao == minha) {
+                NLog.add("ia", "resposta demorou mais de 25s")
+                falar("Demorou pra responder. Fala de novo?")
+            }
+        }, 25_000)
         Bg.io {
             val r = try { Assistente.responder(c, a, pedido, localPrimeiro = localPrimeiro) } catch (t: Throwable) { "Deu um erro aqui (${t.javaClass.simpleName}). Tenta de novo." }
             Bg.ui {
                 Assistente.anotar(false, r)
-                if (estado == Estado.PENSANDO) falar(r)
+                if (estado == Estado.PENSANDO && sessao == minha) falar(r)
             }
         }
     }
@@ -576,10 +592,15 @@ object SessaoIA {
         Voz.aoTerminar = { fimFala?.let { main.removeCallbacks(it) }; depois() }
         // se a voz não avisar que terminou, não fica presa: confere de tempos em tempos
         fimFala?.let { main.removeCallbacks(it) }
+        val comecou = System.currentTimeMillis()
+        val limite = 8_000L + r.length * 120L
         val f = object : Runnable {
             override fun run() {
                 if (estado != Estado.FALANDO) return
-                if (Voz.falando() || Voz.buscando) main.postDelayed(this, 700) else depois()
+                val ainda = Voz.falando() || Voz.buscando
+                if (ainda && System.currentTimeMillis() - comecou < limite) { main.postDelayed(this, 700); return }
+                if (ainda) { NLog.add("ia", "fala travou: cortei e voltei a ouvir"); cortarFala() }
+                depois()
             }
         }
         fimFala = f
@@ -747,13 +768,32 @@ class IaFundoService : android.app.Service() {
         /** mostra na notificação o que a IA está fazendo (null = esperando) */
         fun status(s: String?) { eu?.let { sv -> Handler(Looper.getMainLooper()).post { sv.notifica(s) } } }
 
-        /** liga o serviço (só com o app aberto: o Android não deixa começar a ouvir escondido) */
+        /** liga o serviço (só com o app aberto: o Android só dá o microfone em segundo plano se começar com o app na tela).
+         *  Se já está ligado, "renova": pega o microfone de novo enquanto o app está na tela */
         fun iniciar(c: Context) {
-            if (ativo) return
             try {
                 val i = Intent(c, IaFundoService::class.java)
+                if (ativo) i.action = "renovar"
                 if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i)
             } catch (t: Throwable) { NLog.add("ia", "segundo plano não ligou (${t.javaClass.simpleName})") }
+        }
+
+        /** o celular fechou o NOCRY (ex.: Game Turbo ao abrir o jogo) e o Android não devolve o microfone sozinho:
+         *  avisa com uma notificação; tocar nela liga de novo sem abrir o app */
+        fun avisarVoltar(c: Context) {
+            try {
+                val pi = android.app.PendingIntent.getActivity(c, 81,
+                    Intent(c, IaLigarActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
+                    android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+                val n = android.app.Notification.Builder(c, Notif.CH_SVC)
+                    .setSmallIcon(R.drawable.ic_ia)
+                    .setContentTitle("A IA parou de ouvir")
+                    .setContentText("O celular fechou o NOCRY. Toque aqui pra ela voltar a te ouvir.")
+                    .setContentIntent(pi)
+                    .setAutoCancel(true)
+                    .build()
+                c.getSystemService(android.app.NotificationManager::class.java)?.notify(ID + 1, n)
+            } catch (_: Throwable) {}
         }
 
         fun fechar(c: Context) {
@@ -765,7 +805,8 @@ class IaFundoService : android.app.Service() {
 
     private fun montar(s: String?): android.app.Notification {
         val abrir = android.app.PendingIntent.getActivity(this, 77, Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
-        val alternar = android.app.PendingIntent.getService(this, 79, Intent(this, IaFundoService::class.java).setAction("alternar"), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val alternar = if (SessaoIA.ligada) android.app.PendingIntent.getService(this, 79, Intent(this, IaFundoService::class.java).setAction("alternar"), android.app.PendingIntent.FLAG_IMMUTABLE)
+            else android.app.PendingIntent.getActivity(this, 82, Intent(this, IaLigarActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION), android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
         val fechar = android.app.PendingIntent.getService(this, 78, Intent(this, IaFundoService::class.java).setAction("fechar"), android.app.PendingIntent.FLAG_IMMUTABLE)
         val ic = { r: Int -> android.graphics.drawable.Icon.createWithResource(this, r) }
         val ouvindo = SessaoIA.ligada
@@ -791,16 +832,30 @@ class IaFundoService : android.app.Service() {
         try {
             if (Build.VERSION.SDK_INT >= 30) startForeground(ID, montar(null), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
             else startForeground(ID, montar(null))
-        } catch (t: Throwable) { NLog.add("ia", "segundo plano não ligou (${t.javaClass.simpleName})"); stopSelf(); return }
+        } catch (t: Throwable) {
+            // o Android reabriu o serviço com o app fora da tela e não deixou pegar o microfone
+            NLog.add("ia", "segundo plano não ligou (${t.javaClass.simpleName})")
+            if (Prefs.lerNum("ia_ouvindo", 0L) == 1L) avisarVoltar(this)
+            stopSelf(); return
+        }
         eu = this
         ativo = true
         Voz.init(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // não conseguiu ficar em primeiro plano (o Android não deu o microfone): já avisou, só fecha
+        if (!ativo) { stopSelf(); return START_NOT_STICKY }
         when (intent?.action) {
             "fechar", "parar" -> { SessaoIA.desligar(this, fecharServico = false); stopSelf(); return START_NOT_STICKY }
             "alternar", "falar" -> { if (SessaoIA.ligada) SessaoIA.desligar(this, fecharServico = false) else SessaoIA.ligarFundo(this); notifica(null) }
+            // o app está na tela agora: pega o microfone de novo (vale pra continuar ouvindo depois de minimizar)
+            "renovar" -> {
+                try {
+                    if (Build.VERSION.SDK_INT >= 30) startForeground(ID, montar(null), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                    else startForeground(ID, montar(null))
+                } catch (t: Throwable) { NLog.add("ia", "não renovou o microfone (${t.javaClass.simpleName})") }
+            }
             // o Android reiniciou o serviço (tinha fechado): volta a ouvir sozinho
             null -> { if (Prefs.lerNum("ia_ouvindo", 0L) == 1L && !SessaoIA.ligada) SessaoIA.ligarFundo(this) }
         }
