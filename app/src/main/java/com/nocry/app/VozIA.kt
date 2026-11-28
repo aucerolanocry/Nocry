@@ -671,7 +671,7 @@ object SessaoIA {
             texto("Entendendo...", notif = false)
             val dica = dica()
             // se por algum motivo a resposta nunca voltar, não deixa o microfone mudo pra sempre
-            main.postDelayed({ if (entendendo && sessao == minha) entendendo = false }, 35_000)
+            main.postDelayed({ if (entendendo && sessao == minha) entendendo = false }, 50_000)
             Bg.io {
                 val r = try { Ouvido.transcrever(c, wav, seg, dica) } catch (_: Throwable) { Ouvido.Texto(null, "rede") }
                 Bg.ui { aoTexto(r, minha, seg, dica) }
@@ -691,7 +691,7 @@ object SessaoIA {
                 "indisponivel" -> nuvemPausa(2 * 60_000L, "servidor sem o ouvido novo")
                 else -> {
                     falhasNuvem++
-                    if (falhasNuvem >= 3) nuvemPausa(90_000L, "sem resposta do servidor")
+                    if (falhasNuvem >= 4) nuvemPausa(45_000L, "sem resposta do servidor")
                     else texto("Sem internet pra entender a voz... fala de novo")
                 }
             }

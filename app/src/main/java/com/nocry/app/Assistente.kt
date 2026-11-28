@@ -127,7 +127,7 @@ object Acoes {
             val atualGat = if (Prefs.bypassVolAtivo) "volume" else Prefs.bypassGatilho
             val mudaGat = gat != null && gat != atualGat
             val mudaTipo = tipo != null && tipo != Prefs.bypassTipo
-            if ((ativo || Prefs.bypassMark) && (mudaGat || mudaTipo)) "✗ o bypass já está ligado (${nomeGatilho(atualGat)} · ${Prefs.bypassTipo}). Peça \"desliga o bypass\" antes de trocar o gatilho ou o tipo"
+            if ((ativo || Prefs.bypassMark) && (mudaGat || mudaTipo)) religarBypass(app, act, p)
             else if (ativo) "✓ o bypass já estava ligado"
             else {
                 // o gatilho e o tipo que você pediu viram a escolha do app (só dá pra trocar com o bypass desligado)
@@ -147,14 +147,27 @@ object Acoes {
         "bypass_aplicar" -> {
             val tipo = bypassArgs(p.arg).second
             val parado = !(Prefs.bypassAtivo || Prefs.bypassVolAtivo)
-            if (Prefs.bypassMark && tipo != null && tipo != Prefs.bypassTipo) "✗ o bypass já está aplicado (${Prefs.bypassTipo}). Peça \"desliga o bypass\" antes de mudar o tipo"
+            if (Prefs.bypassMark && tipo != null && tipo != Prefs.bypassTipo) religarBypass(app, act, p)
             else (if (Prefs.bypassMark) null else ((if (parado) perguntarFf(app, p) else null) ?: antesDoBypass(app, false, parado, p))) ?: when (EngineBypass.aplicarAgora(tipo)) {
                 0 -> "✓ bypass ${Prefs.bypassTipo} aplicado agora no ${nomeFfBypass()}"
                 2 -> "✓ o bypass já estava aplicado"
                 else -> "✗ não consegui aplicar o bypass (ADB). Peça \"liga o ADB\" e tente de novo"
             }
         }
-        "bypass_ff" -> escolherFf(p.arg)
+        "bypass_ff" -> {
+            val quer = ffDoArg(p.arg)
+            val ligado = Prefs.bypassMark || Prefs.bypassAtivo || Prefs.bypassVolAtivo
+            if (quer != null && ligado && quer != Prefs.bypassFf) {
+                // trocar de Free Fire com o bypass ligado: desliga (o jogo antigo volta ao normal), escolhe o novo e liga de novo do mesmo jeito
+                val rc = EngineBypass.parar()
+                if (rc == 1 || Prefs.bypassMark || Prefs.bypassAtivo || Prefs.bypassVolAtivo) "✗ não consegui desligar o bypass pra trocar de Free Fire (ADB). Peça \"liga o ADB\" e tente de novo"
+                else {
+                    val escolha = escolherFf(p.arg)
+                    if (!escolha.startsWith("✓")) escolha
+                    else escolha + "\n" + fazerSeguro(app, act, Passo("bypass_ligar", 0L, "", 0L, true))
+                }
+            } else escolherFf(p.arg)
+        }
         "bypass_desligar" -> when (EngineBypass.parar()) {
             0 -> "✓ bypass desligado e o jogo restaurado"
             1 -> "⚠ bypass desligado, mas não deu pra restaurar o jogo (ADB). Peça \"liga o ADB\" e de novo \"desliga o bypass\""
@@ -382,14 +395,28 @@ object Acoes {
         return "Pra qual Free Fire é o bypass: o normal ou o MAX? Me responde só \"normal\" ou \"max\"."
     }
 
-    /** guarda a escolha do Free Fire do bypass (só dá pra trocar com o bypass desligado) */
-    private fun escolherFf(arg: String): String {
+    /** o bypass está ligado e você pediu outro gatilho, tipo ou Free Fire: desliga (o jogo volta ao normal) e liga do jeito novo, de uma vez */
+    private fun religarBypass(app: Context, act: MainActivity?, p: Passo): String {
+        val rc = EngineBypass.parar()
+        if (rc == 1 || Prefs.bypassMark || Prefs.bypassAtivo || Prefs.bypassVolAtivo)
+            return "✗ não consegui desligar o bypass pra trocar (ADB). Peça \"liga o ADB\" e tente de novo"
+        ffEscolhidoEm = System.currentTimeMillis()     // o Free Fire já era conhecido (estava em uso): não pergunta de novo
+        return fazerSeguro(app, act, p)
+    }
+
+    /** "max" / "normal" dentro do que a pessoa disse (null = não disse) */
+    private fun ffDoArg(arg: String): String? {
         val a = Comandos.limpa(arg)
-        val novo = when {
+        return when {
             Regex("\\bmax\\b").containsMatchIn(a) -> "max"
             Regex("\\b(normal|comum|original)\\b").containsMatchIn(a) -> "normal"
-            else -> return "✗ diga qual Free Fire: normal ou max"
+            else -> null
         }
+    }
+
+    /** guarda a escolha do Free Fire do bypass (com o bypass ligado, quem chama desliga antes) */
+    private fun escolherFf(arg: String): String {
+        val novo = ffDoArg(arg) ?: return "✗ diga qual Free Fire: normal ou max"
         val nome = if (novo == "max") "Free Fire MAX" else "Free Fire"
         if (novo != Prefs.bypassFf && (Prefs.bypassMark || Prefs.bypassAtivo || Prefs.bypassVolAtivo))
             return "✗ o bypass já está ligado no ${nomeFfBypass()}. Peça \"desliga o bypass\" antes de trocar pro $nome"
@@ -766,7 +793,7 @@ object IA {
     /** pedido pro servidor com tempo maior que o normal (a IA pode levar uns segundos pensando) */
     private fun postIa(c: Context, corpo: JSONObject): JSONObject? = post(c, "ia", corpo, if (corpo.has("imagem")) 50000 else 30000)
 
-    fun post(c: Context, op: String, corpo: JSONObject, leitura: Int = 50000): JSONObject? {
+    fun post(c: Context, op: String, corpo: JSONObject, leitura: Int = 50000, conexao: Int = 15000): JSONObject? {
         val base = BuildConfig.API_URL.trim().trimEnd('/')
         val key = Prefs.licKey ?: return null
         if (base.isEmpty()) return null
@@ -774,7 +801,7 @@ object IA {
         return try {
             val cx = java.net.URL("$base/v1/x").openConnection() as java.net.HttpURLConnection
             cx.requestMethod = "POST"
-            cx.connectTimeout = 15000
+            cx.connectTimeout = conexao
             cx.readTimeout = leitura
             cx.doOutput = true
             cx.setRequestProperty("Content-Type", "application/json")

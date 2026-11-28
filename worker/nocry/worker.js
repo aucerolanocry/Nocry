@@ -16,6 +16,11 @@ const OWNER_REC = { key: "OWNER", role: "owner", label: "aucerola", exp: null, m
 const KINDS = ["bypass_on", "bypass_off", "bypass_aplicou", "bypass_restaurou", "modo_on", "modo_off", "recurso"];
 
 let ready = false;
+// atalhos pra IA e o ouvido responderem mais rápido: tabela criada só uma vez por instância, contagem de uso gravada depois da resposta
+let iaTabelaOk = false;
+let sttTabelaOk = false;
+let CTX = null;
+
 let signKeyCache = null;
 
 // ---------------------------------------------------------------- revogação geral (pedido do dono, 23/11/2026)
@@ -530,11 +535,16 @@ async function extrasRoute(req, env, ip) {
     const texto = clean(b.texto, 800).trim();
     if (!texto) return json({ ok: false, reason: "vazio" });
     const dia = new Date(now).toISOString().slice(0, 10);
-    await env.DB.prepare("CREATE TABLE IF NOT EXISTS ia_uso (key TEXT NOT NULL, dia TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (key, dia))").run();
+    if (!iaTabelaOk) {
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS ia_uso (key TEXT NOT NULL, dia TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (key, dia))").run();
+      iaTabelaOk = true;
+    }
     const uso = await env.DB.prepare("SELECT n FROM ia_uso WHERE key = ? AND dia = ?").bind(key, dia).first();
     const limite = a.rec.role === "owner" ? 400 : Number(env.IA_LIMITE_DIA || 40);
     if (uso && uso.n >= limite) return json({ ok: false, reason: "ia_limite" });
-    await env.DB.prepare("INSERT INTO ia_uso (key, dia, n) VALUES (?, ?, 1) ON CONFLICT (key, dia) DO UPDATE SET n = n + 1").bind(key, dia).run();
+    // a contagem é gravada enquanto a IA já está pensando (não faz a pessoa esperar mais uma ida ao banco)
+    const gravaIa = env.DB.prepare("INSERT INTO ia_uso (key, dia, n) VALUES (?, ?, 1) ON CONFLICT (key, dia) DO UPDATE SET n = n + 1").bind(key, dia).run().catch(() => {});
+    if (CTX && CTX.waitUntil) CTX.waitUntil(gravaIa); else await gravaIa;
 
     const acoes = b.acoes && typeof b.acoes === "object" ? b.acoes : {};
     const nomes = Object.keys(acoes).filter((k) => /^[a-z_]{2,32}$/.test(k)).slice(0, 40);
@@ -637,20 +647,32 @@ async function extrasRoute(req, env, ip) {
     const bytes = Math.floor(audio.length * 3 / 4) - (audio.endsWith("==") ? 2 : audio.endsWith("=") ? 1 : 0);
     const seg = Math.max(0.5, Math.min(30, (bytes - 44) / 32000));
     const dia = new Date(now).toISOString().slice(0, 10);
-    await env.DB.prepare("CREATE TABLE IF NOT EXISTS stt_uso (key TEXT NOT NULL, dia TEXT NOT NULL, seg REAL NOT NULL DEFAULT 0, PRIMARY KEY (key, dia))").run();
-    const uso = await env.DB.prepare("SELECT seg FROM stt_uso WHERE key = ? AND dia = ?").bind(key, dia).first();
+    if (!sttTabelaOk) {
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS stt_uso (key TEXT NOT NULL, dia TEXT NOT NULL, seg REAL NOT NULL DEFAULT 0, PRIMARY KEY (key, dia))").run();
+      sttTabelaOk = true;
+    }
     const limite = a.rec.role === "owner" ? Number(env.STT_LIMITE_DONO || 3600) : Number(env.STT_LIMITE_DIA || 300);
-    if (uso && uso.seg + seg > limite) return json({ ok: false, reason: "stt_limite" });
     const dica = clean(b.dica, 200).trim();
-    const entrada = { audio: audio, language: "pt" };
+    const entrada = { audio: audio, language: "pt", beam_size: 2 };
     if (dica) entrada.initial_prompt = dica;
+    // confere o limite do dia ao mesmo tempo que o Whisper trabalha (um não espera o outro)
+    const usoP = env.DB.prepare("SELECT seg FROM stt_uso WHERE key = ? AND dia = ?").bind(key, dia).first().catch(() => null);
     let r;
     try {
       r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", entrada);
     } catch (e) {
-      return json({ ok: false, reason: "stt_erro" });
+      // se foi o ajuste de velocidade que o modelo não aceitou, tenta do jeito simples antes de desistir
+      try {
+        delete entrada.beam_size;
+        r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", entrada);
+      } catch (e2) {
+        return json({ ok: false, reason: "stt_erro" });
+      }
     }
-    await env.DB.prepare("INSERT INTO stt_uso (key, dia, seg) VALUES (?, ?, ?) ON CONFLICT (key, dia) DO UPDATE SET seg = seg + ?").bind(key, dia, seg, seg).run();
+    const uso = await usoP;
+    if (uso && uso.seg + seg > limite) return json({ ok: false, reason: "stt_limite" });
+    const gravaStt = env.DB.prepare("INSERT INTO stt_uso (key, dia, seg) VALUES (?, ?, ?) ON CONFLICT (key, dia) DO UPDATE SET seg = seg + ?").bind(key, dia, seg, seg).run().catch(() => {});
+    if (CTX && CTX.waitUntil) CTX.waitUntil(gravaStt); else await gravaStt;
     return json({ ok: true, texto: clean(r && r.text, 600).trim() });
   }
 
@@ -1363,7 +1385,8 @@ async function vozPadrao(env) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
+    CTX = ctx || null;
     try {
       const url = new URL(req.url);
       const path = url.pathname;

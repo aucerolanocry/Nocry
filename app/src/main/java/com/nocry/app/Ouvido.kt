@@ -49,6 +49,8 @@ object Ouvido {
     private const val MANTEM_FIM = 25         // deixa 500 ms de silêncio no final (não corta a última sílaba fraca)
     private const val LIMIAR_MIN = -50f       // abaixo disso nunca é voz (o Xiaomi chia até uns -57 dB com a fonte "de voz"; sua fala fica em -17 a -35)
     private const val FIM_RELATIVO = 24f      // também é "quieto" o que está 24 dB abaixo do nível da sua própria voz
+    private const val JANELA_CHAO = 150       // o "chão" de barulho é o volume mais baixo dos últimos 3 s (acompanha o barulho do ambiente)
+    private const val FOLGA_CHAO = 10f        // quieto = a menos de 10 dB do chão (barulho de fundo fraco e constante não segura a frase)
     private const val MAX_QUADROS = 700       // frase mais longa: 14 s
     private const val MIN_VOZ = 12            // menos de 240 ms de voz = estalo, não é fala
     private const val MUDO_QUADROS = 200      // 4 s só de silêncio absoluto numa fonte = troca de fonte
@@ -217,6 +219,9 @@ object Ouvido {
         val dbs = FloatArray(MAX_QUADROS + 8)   // volume de cada quadro da fala em andamento (pra conferir se era fala ou só barulho)
         var nDbs = 0
         var ref = -90f                 // nível da sua voz nesta fala: sobe depressa com as sílabas fortes, desce bem devagar
+        val anel = FloatArray(JANELA_CHAO)   // volume suavizado dos últimos 3 s
+        var nAnel = 0
+        var suave = -90f
 
         fun zera() { emFala = false; recentes = 0; vozTotal = 0; quadrosFala = 0; silencio = 0; somaDb = 0.0; somaDb2 = 0.0; nDb = 0; nDbs = 0; ref = -90f; saida.reset(); pre.clear() }
 
@@ -284,6 +289,14 @@ object Ouvido {
             // ela pensando/falando/escrevendo: joga o som fora e recomeça do zero
             if (quieto) { if (emFala || pre.isNotEmpty()) zera(); continue }
 
+            // chão de barulho: volume (suavizado) mais baixo dos últimos 3 s. Sobe sozinho se o ambiente ficar mais barulhento
+            suave = if (nAnel == 0) db else suave + (db - suave) * 0.35f
+            anel[nAnel % JANELA_CHAO] = suave
+            nAnel++
+            var chao = suave
+            for (i in 0 until minOf(nAnel, JANELA_CHAO)) if (anel[i] < chao) chao = anel[i]
+            chao = chao.coerceIn(-75f, -20f)
+
             // primeiros 0,8 s: só mede o barulho de fundo (a menor média de 5 quadros) e guarda o som pra não cortar o começo
             if (nMed < CALIBRA) {
                 medidas[nMed++] = db
@@ -313,7 +326,7 @@ object Ouvido {
                 pisoDb = piso
             }
             val limiar = maxOf(piso + 12f, LIMIAR_MIN)
-            val voz = db > (if (emFala) limiar - 4f else limiar)
+            val voz = db > (if (emFala) limiar - 4f else maxOf(limiar, chao + 8f))
             recentes = ((recentes shl 1) or (if (voz) 1 else 0)) and 0x3F
 
             if (!emFala) {
@@ -339,7 +352,10 @@ object Ouvido {
                 if (db > ref) ref += minOf(db - ref, 3f) * 0.3f else ref -= 0.01f
                 // quieto = abaixo do limiar OU bem abaixo da sua própria voz (o chiado do microfone aparece quando você para de falar
                 // e antes ele ficava "acima do limiar" pra sempre: a fala nunca terminava e ia até 14 s)
-                val quietoAgora = !voz || db < ref - FIM_RELATIVO
+                // e também quando o volume (suavizado) está perto do chão de barulho: um chiado ou ventilador fraco e constante
+                // que fica por cima do limiar não segura mais a frase (antes ele fazia a fala ir até os 14 s e juntar com a próxima)
+                val tetoQuieto = minOf(chao + FOLGA_CHAO, ref - 14f)
+                val quietoAgora = !voz || db < ref - FIM_RELATIVO || suave < tetoQuieto
                 if (!quietoAgora) { vozTotal++; silencio = 0 } else silencio++
                 // 3 s seguidos de "voz" com volume quase constante = é barulho (ventilador, chiado), não fala: descarta
                 if (quadrosFala == 150) {
@@ -420,7 +436,16 @@ object Ouvido {
         val b64 = android.util.Base64.encodeToString(wav, android.util.Base64.NO_WRAP)
         val t0 = System.currentTimeMillis()
         val corpo = JSONObject().put("audio", b64).put("seg", seg.toDouble()).put("dica", dica.take(200))
-        val j = IA.post(c, "ouvir", corpo, 25000)
+        // o normal é 1,5 a 4 s. Se travar, não fica 25 s esperando (e com o microfone mudo): corta cedo e tenta mais uma vez
+        val leitura = (9000 + seg * 600f).toInt().coerceIn(9000, 18000)
+        var j: JSONObject? = null
+        for (tentativa in 1..2) {
+            j = IA.post(c, "ouvir", corpo, leitura, 5000)
+            val rr = j?.optString("reason") ?: ""
+            val passageiro = j == null || (!j.optBoolean("ok") && (rr == "stt_erro" || rr == "server"))
+            if (!passageiro) break
+            if (tentativa == 1) NLog.add("ia", "escuta: o servidor demorou ou falhou, tentando de novo")
+        }
         if (j == null) {
             ultimoMotivo = "servidor não respondeu"
             NLog.add("ia", "escuta: o servidor não respondeu")
@@ -430,6 +455,8 @@ object Ouvido {
             val r = j.optString("reason")
             ultimoMotivo = "servidor: $r"
             NLog.add("ia", "escuta: servidor não escreveu a fala ($r)")
+            // erro passageiro do servidor (ou muitos pedidos de uma vez) não pausa o ouvido novo: é só falar de novo
+            if (r == "stt_erro" || r == "server" || r == "limit") return Texto(null, "rede")
             return Texto(null, if (r == "stt_limite") "limite" else "indisponivel")
         }
         val t = j.optString("texto").trim()

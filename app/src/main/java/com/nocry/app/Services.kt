@@ -284,7 +284,8 @@ class NocryService : Service() {
                     if (Prefs.otmAuto) OtmAuto.tick(this)
                     if (Prefs.otmVigia) OtmVigia.tick()
                 } catch (t: Throwable) {
-                    NLog.add("servico", "adb: $t")
+                    // o bypass/otimização foi desligado enquanto este ciclo esperava o ADB: a espera é cortada de propósito, não é erro
+                    if (t !is InterruptedException && t.cause !is InterruptedException) NLog.add("servico", "adb: $t")
                 }
                 n++
                 try { Thread.sleep(3000) } catch (_: InterruptedException) { break }
