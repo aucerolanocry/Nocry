@@ -263,6 +263,14 @@ class Miniatura private constructor(c: Context, private val tema: Tema?, private
         fun fundo(c: Context, id: String, sel: Boolean) = Miniatura(c, null, id, sel)
     }
 
+    init {
+        // cantos redondos pelo contorno da view (leve), em vez de recortar o desenho a cada quadro da tela
+        outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(v: View, o: android.graphics.Outline) { o.setRoundRect(0, 0, v.width, v.height, 12f * d) }
+        }
+        clipToOutline = true
+    }
+
     override fun onDraw(cv: Canvas) {
         val w = width.toFloat()
         val h = height.toFloat()
@@ -271,9 +279,6 @@ class Miniatura private constructor(c: Context, private val tema: Tema?, private
         val ac2 = tema?.c2 ?: Theme.accent2
         val base = tema?.base ?: Theme.base
         cv.save()
-        path.reset()
-        path.addRoundRect(RectF(0f, 0f, w, h), raio, raio, Path.Direction.CW)
-        cv.clipPath(path)
         p.shader = null
         p.color = base
         cv.drawRect(0f, 0f, w, h, p)

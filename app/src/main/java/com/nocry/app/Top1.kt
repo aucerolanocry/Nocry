@@ -82,14 +82,24 @@ object EstiloPerfil {
 }
 
 /** efeito animado por cima do cartão do dono (sangue, fogo ou caveira), recortado no formato do cartão */
-class EfeitoCartao(c: Context, private val tipo: String) : View(c) {
+class EfeitoCartao(c: Context, private val tipo: String, private val raioDp: Float = -1f, private val quadroMs: Long = 33L) : View(c) {
     private val d = c.resources.displayMetrics.density
     private val path = Path()
-    init { isClickable = false; isFocusable = false }
+    private var raio = 0f
+    init {
+        isClickable = false; isFocusable = false
+        // os cantos redondos são cortados pelo contorno da própria view (leve). Antes era um recorte de desenho
+        // refeito a cada quadro, pesado com vários efeitos na tela ao mesmo tempo (o Estúdio mostra até 6)
+        outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(v: View, o: android.graphics.Outline) { o.setRoundRect(0, 0, v.width, v.height, raio) }
+        }
+        clipToOutline = true
+    }
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        raio = min((if (raioDp >= 0f) raioDp else Prefs.raio.toFloat()) * d, min(w, h) / 2f)
         path.reset()
-        val r = min(Prefs.raio * d, min(w, h) / 2f)
-        path.addRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), r, r, Path.Direction.CW)
+        path.addRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), Path.Direction.CW)
+        invalidateOutline()
     }
     private val vis = android.graphics.Rect()
     override fun onDraw(cv: Canvas) {
@@ -98,7 +108,7 @@ class EfeitoCartao(c: Context, private val tipo: String) : View(c) {
         // Antes todos ficavam animando 30x por segundo mesmo escondidos lá embaixo
         if (!getGlobalVisibleRect(vis)) { if (isAttachedToWindow) postInvalidateDelayed(300); return }
         val mais = Efeitos.noCartao(cv, path, 0f, 0f, width.toFloat(), height.toFloat(), d, 7, tipo, 1.7f)
-        if (mais && isAttachedToWindow) postInvalidateDelayed(33)
+        if (mais && isAttachedToWindow) postInvalidateDelayed(quadroMs)
     }
 }
 

@@ -550,7 +550,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
         // miniatura com o efeito animado do tema por cima (fogo, sangue...) e o selo NOVO
         val mini = android.widget.FrameLayout(c)
         mini.addView(Miniatura.tema(c, t, sel), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        if (t.efeito.isNotEmpty()) mini.addView(EfeitoCartao(c, t.efeito), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        if (t.efeito.isNotEmpty()) mini.addView(EfeitoCartao(c, t.efeito, raioDp = 12f, quadroMs = 50L), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         if (Temas.novo(t.id)) mini.addView(Ui.selo(c, "NOVO", t.c1, true), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).also { it.topMargin = Ui.dp(c, 6); it.rightMargin = Ui.dp(c, 6) })
         box.addView(mini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(c, 112)))
         val nome = Ui.text(c, t.nome, 12.5f, if (sel) Ui.RED else Ui.TEXT, true, mono = true)
