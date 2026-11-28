@@ -66,6 +66,32 @@ object Hud {
         }
     }
 
+    /** miniatura do Estúdio: desenho parado e leve (o fundo animado inteiro é só pra tela) */
+    fun miniatura(cv: Canvas, id: String, w: Float, h: Float, d: Float, c1: Int, c2: Int) {
+        when (id) {
+            "reator" -> aneis(cv, w * 0.5f, h * 0.4f, min(w, h) * 0.55f, 0.4f, d, c1, c2, 0x40)
+            "radar" -> {
+                pl.shader = null; pl.pathEffect = null; pl.strokeWidth = max(1f, 0.8f * d)
+                for (k in 1..3) { pl.color = Theme.alpha(c1, 0x40); cv.drawCircle(w * 0.5f, h * 0.55f, w * 0.18f * k, pl) }
+                pl.color = Theme.alpha(c1, 0x30)
+                cv.drawLine(0f, h * 0.55f, w, h * 0.55f, pl); cv.drawLine(w * 0.5f, 0f, w * 0.5f, h, pl)
+            }
+            "plasma" -> {
+                pl.shader = null; pl.pathEffect = null; pl.strokeWidth = 1.6f * d
+                val path = Path()
+                for (k in 0 until 3) {
+                    path.reset()
+                    var x = 0f
+                    path.moveTo(0f, h * (0.3f + k * 0.2f))
+                    while (x < w) { x += w / 12f; path.lineTo(x, h * (0.3f + k * 0.2f) + h * 0.06f * sin(x / w * 6f + k)) }
+                    pl.color = Theme.alpha(if (k % 2 == 0) c1 else c2, 0x80)
+                    cv.drawPath(path, pl)
+                }
+            }
+            else -> aneis(cv, w * 0.85f, h * 0.15f, w * 0.5f, 0.3f, d, c1, c2, 0x40)
+        }
+    }
+
     /** fundo da tela (antes dos desenhos): escuro, com a cor do tema bem de leve */
     fun ceu(id: String, w: Float, h: Float, base: Int, c1: Int): Shader = when (id) {
         "reator" -> RadialGradient(w * 0.5f, h * 0.34f, max(w, h) * 0.75f, intArrayOf(Theme.mix(base, c1, 0.14f), base, Theme.mix(base, Color.BLACK, 0.5f)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)

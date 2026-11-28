@@ -324,7 +324,7 @@ class Miniatura private constructor(c: Context, private val tema: Tema?, private
             p.shader = Hud.ceu(tipo, w, h, base, ac)
             cv.drawRect(0f, 0f, w, h, p)
             p.shader = null
-            Hud.desenha(cv, tipo, w, h, 3.2f, d, ac, ac2)
+            Hud.miniatura(cv, tipo, w, h, d, ac, ac2)
             return
         }
         when (tipo) {
