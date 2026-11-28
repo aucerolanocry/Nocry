@@ -200,10 +200,11 @@ object SessaoIA {
         set(v) = Prefs.gravaNum("ia_fundo", if (v) 1L else 0L)
 
     /** fora da tela da IA: conversa só quando você fala o nome dela ("Nocry").
+     *  Já vem DESLIGADO (ela responde normal, sem precisar do nome). Chave nova pra valer pra todo mundo.
      *  Comandos (liga o bypass, abre o jogo...) e palavras-chave valem sempre */
     var soComNome: Boolean
-        get() = Prefs.lerNum("ia_nome", 1L) == 1L
-        set(v) = Prefs.gravaNum("ia_nome", if (v) 1L else 0L)
+        get() = Prefs.lerNum("ia_nome2", 0L) == 1L
+        set(v) = Prefs.gravaNum("ia_nome2", if (v) 1L else 0L)
 
     /** o nome que você fala pra chamar ela (padrão "Nocry") */
     var nomeChamada: String
