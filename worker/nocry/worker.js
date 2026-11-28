@@ -531,7 +531,7 @@ async function extrasRoute(req, env, ip) {
   // A chave da IA fica SÓ no segredo ANTHROPIC_API_KEY deste Worker (nunca no app nem no repositório).
   if (op === "ia") {
     // sem chave paga: usa a IA grátis do próprio Cloudflare (Workers AI, cota grátis todo dia)
-    if (!env.ANTHROPIC_API_KEY && !env.AI) return json({ ok: false, reason: "sem_ia" });
+    if (!env.ANTHROPIC_API_KEY && !env.GEMINI_API_KEY && !env.GROQ_API_KEY && !env.AI) return json({ ok: false, reason: "sem_ia" });
     const texto = clean(b.texto, 800).trim();
     if (!texto) return json({ ok: false, reason: "vazio" });
     const dia = new Date(now).toISOString().slice(0, 10);
@@ -585,67 +585,52 @@ async function extrasRoute(req, env, ip) {
     if (msgs.length && msgs[msgs.length - 1].role === "user") msgs[msgs.length - 1].content += "\n" + final;
     else msgs.push({ role: "user", content: final });
 
-    let txt = "";
-    const ultimo = msgs[msgs.length - 1];
-    const textoDe = (out) => {
-      const v = out && (out.response !== undefined ? out.response : out.choices && out.choices[0] && out.choices[0].message ? out.choices[0].message.content : "");
-      return typeof v === "string" ? v : JSON.stringify(v || "");
-    };
-    try {
-      if (env.ANTHROPIC_API_KEY) {
-        // IA paga (Claude), se o dono colocar a chave
-        if (img) ultimo.content = [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: img } }, { type: "text", text: ultimo.content }];
-        const r = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST",
-          headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-          body: JSON.stringify({ model: env.IA_MODELO || "claude-haiku-5-5", max_tokens: 600, system: sistema, messages: msgs }),
-        });
-        if (!r.ok) return json({ ok: false, reason: "ia_erro", status: r.status });
-        const d = await r.json();
-        txt = (d.content || []).filter((x) => x && x.type === "text").map((x) => x.text).join("");
-      } else {
-        // IA grátis do Cloudflare (acabou a cota do dia: o app volta pros comandos simples)
-        const modelo = env.IA_MODELO_CF || "@cf/google/gemma-4-26b-a4b-it";
-        const textoUltimo = ultimo.content;
-        if (img) ultimo.content = [{ type: "text", text: textoUltimo }, { type: "image_url", image_url: { url: "data:image/jpeg;base64," + img } }];
-        const entrada = { messages: [{ role: "system", content: sistema }].concat(msgs), max_tokens: 600, chat_template_kwargs: { enable_thinking: false } };
-        try {
-          txt = textoDe(await env.AI.run(modelo, entrada));
-        } catch (e1) {
-          console.log("ia tentativa 1", e1 && e1.message ? e1.message : String(e1));
-          if (img) {
-            // o modelo não aceitou a imagem: tenta o modelo de visão da Meta
-            ultimo.content = textoUltimo;
-            try { await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { prompt: "agree" }); } catch (e) {}
-            txt = textoDe(await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
-              messages: [{ role: "system", content: sistema }].concat(msgs), image: "data:image/jpeg;base64," + img, max_tokens: 600,
-            }));
-          } else {
-            delete entrada.chat_template_kwargs;
-            txt = textoDe(await env.AI.run(modelo, entrada));
-          }
-        }
+    // cérebros em fila: o primeiro que responder ganha. Se um cansar (cota do dia, fora do ar, demorou), passa pro próximo.
+    // O app espera até 30 s: a fila toda tem 26 s.
+    const prazo = Date.now() + 26000;
+    let txt = "", fonte = "";
+    const tentar = async (nome, max, fn) => {
+      if (txt || descansando(nome)) return;
+      const ms = Math.min(max, prazo - Date.now());
+      if (ms < 2500) return;
+      const t0 = Date.now();
+      try {
+        const r = await fn(ms);
+        if (typeof r === "string" && r.trim()) { txt = r; fonte = nome; }
+        console.log("ia " + nome + ": " + (txt ? "respondeu" : "sem resposta") + " em " + (Date.now() - t0) + " ms");
+      } catch (e) {
+        const demorou = e && (e.name === "AbortError" || e.message === "demorou");
+        descansa(nome, demorou ? 20000 : 30000);
+        console.log("ia " + nome + ": " + (demorou ? "demorou demais" : "erro " + ((e && e.message) || String(e)).slice(0, 160)));
       }
-    } catch (e) {
-      console.log("ia erro", e && e.message ? e.message : String(e));
-      return json({ ok: false, reason: "ia_erro" });
+    };
+    if (env.ANTHROPIC_API_KEY) await tentar("claude", 20000, (ms) => pensarClaude(env, sistema, msgs, img, ms));
+    if (env.GEMINI_API_KEY) {
+      await tentar("gemini", 13000, (ms) => pensarGemini(env, "gemini", env.IA_MODELO_GEMINI || "gemini-flash-latest", sistema, msgs, img, ms));
+      await tentar("gemini-lite", 10000, (ms) => pensarGemini(env, "gemini-lite", env.IA_MODELO_GEMINI_LITE || "gemini-flash-lite-latest", sistema, msgs, img, ms));
     }
+    if (env.GROQ_API_KEY && !img) {
+      await tentar("groq", 10000, (ms) => pensarGroq(env, "groq", env.IA_MODELO_GROQ || "openai/gpt-oss-120b", sistema, msgs, ms));
+      await tentar("groq-leve", 8000, (ms) => pensarGroq(env, "groq-leve", env.IA_MODELO_GROQ_LEVE || "openai/gpt-oss-20b", sistema, msgs, ms));
+    }
+    if (env.AI) await tentar("cloudflare", 26000, (ms) => pensarCloudflare(env, sistema, msgs, img, ms));
+    if (!txt) return json({ ok: false, reason: "ia_erro" });
     let o = null;
     try {
       const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
       if (i >= 0 && j > i) o = JSON.parse(txt.slice(i, j + 1));
     } catch (e) {}
-    if (!o) return json({ ok: true, resposta: clean(txt, 1200), passos: [] });
+    if (!o) return json({ ok: true, resposta: clean(txt, 1200), passos: [], fonte });
     const passos = (Array.isArray(o.passos) ? o.passos : []).slice(0, 12)
       .filter((p) => p && nomes.includes(String(p.acao)))
       .map((p) => ({ acao: String(p.acao), min: Math.max(0, Math.min(1440, Number(p.min) || 0)), arg: clean(p.arg, 220) }));
-    return json({ ok: true, resposta: clean(o.resposta, 1200), passos });
+    return json({ ok: true, resposta: clean(o.resposta, 1200), passos, fonte });
   }
 
   // ---- ouvido da IA: o app grava só o pedaço em que a pessoa falou (WAV 16 kHz) e o Whisper do Cloudflare escreve o texto.
   // O áudio não é guardado em lugar nenhum e o texto só volta pro app; aqui só se conta quantos segundos cada key usou no dia.
   if (op === "ouvir") {
-    if (!env.AI) return json({ ok: false, reason: "sem_ia" });
+    if (!env.AI && !env.GROQ_API_KEY) return json({ ok: false, reason: "sem_ia" });
     const audio = typeof b.audio === "string" ? b.audio : "";
     // WAV de verdade ("RIFF" em base64 = "UklGR") e no máximo uns 25 s (16 kHz, 16 bits, mono = 32 000 bytes por segundo)
     if (audio.length < 2000 || audio.length > 1200000 || !audio.startsWith("UklGR")) return json({ ok: false, reason: "audio_invalido" });
@@ -662,23 +647,41 @@ async function extrasRoute(req, env, ip) {
     if (dica) entrada.initial_prompt = dica;
     // confere o limite do dia ao mesmo tempo que o Whisper trabalha (um não espera o outro)
     const usoP = env.DB.prepare("SELECT seg FROM stt_uso WHERE key = ? AND dia = ?").bind(key, dia).first().catch(() => null);
-    let r;
-    try {
-      r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", entrada);
-    } catch (e) {
-      // se foi o ajuste de velocidade que o modelo não aceitou, tenta do jeito simples antes de desistir
+    // 1º o Groq (grátis e bem rápido); se ele cansar ou falhar, o Whisper do próprio Cloudflare
+    let escrito = null, fonte = "";
+    if (env.GROQ_API_KEY && !descansando("groq-voz")) {
+      const t0 = Date.now();
       try {
-        delete entrada.beam_size;
-        r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", entrada);
-      } catch (e2) {
-        return json({ ok: false, reason: "stt_erro" });
+        escrito = await ouvirGroq(env, audio, dica, 6000);
+        if (escrito !== null) fonte = "groq";
+      } catch (e) {
+        descansa("groq-voz", 20000);
+        console.log("voz groq: " + (e && e.name === "AbortError" ? "demorou demais" : "erro " + ((e && e.message) || String(e)).slice(0, 160)));
       }
+      console.log("voz groq: " + (escrito !== null ? "escreveu" : "não escreveu") + " em " + (Date.now() - t0) + " ms");
+    }
+    if (escrito === null) {
+      if (!env.AI) return json({ ok: false, reason: "stt_erro" });
+      let r;
+      try {
+        r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", entrada);
+      } catch (e) {
+        // se foi o ajuste de velocidade que o modelo não aceitou, tenta do jeito simples antes de desistir
+        try {
+          delete entrada.beam_size;
+          r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", entrada);
+        } catch (e2) {
+          return json({ ok: false, reason: "stt_erro" });
+        }
+      }
+      escrito = (r && r.text) || "";
+      fonte = "cloudflare";
     }
     const uso = await usoP;
     if (uso && uso.seg + seg > limite) return json({ ok: false, reason: "stt_limite" });
     const gravaStt = env.DB.prepare("INSERT INTO stt_uso (key, dia, seg) VALUES (?, ?, ?) ON CONFLICT (key, dia) DO UPDATE SET seg = seg + ?").bind(key, dia, seg, seg).run().catch(() => {});
     if (CTX && CTX.waitUntil) CTX.waitUntil(gravaStt); else await gravaStt;
-    return json({ ok: true, texto: clean(r && r.text, 600).trim() });
+    return json({ ok: true, texto: clean(escrito, 600).trim(), fonte });
   }
 
   // ---- voz da IA pela nuvem (ElevenLabs). A chave fica SÓ no segredo ELEVENLABS_API_KEY; a voz em ELEVENLABS_VOZ.
@@ -1324,6 +1327,173 @@ async function adicionarDaBiblioteca(env, voz) {
 // voz da IA: UMA voz só, feminina estilo anime (kawaii). Se o dono guardar ELEVENLABS_VOZ, usa ela.
 // Sem isso, o servidor procura sozinho na biblioteca da ElevenLabs uma voz de anime feminina fofa,
 // coloca na conta uma vez (nome "NOCRY Anime") e guarda o código no banco (não procura de novo).
+// ---- IA e escuta grátis em fila (Gemini, Groq, Cloudflare). As chaves ficam SÓ nos segredos GEMINI_API_KEY e GROQ_API_KEY.
+// Um serviço que cansou (cota do dia, fora do ar) fica de lado um tempo e o próximo da fila responde.
+const frio = {};
+function descansando(nome) { return (frio[nome] || 0) > Date.now(); }
+function descansa(nome, ms) { frio[nome] = Math.max(frio[nome] || 0, Date.now() + ms); }
+
+async function comPrazo(ms, fn) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  try { return await fn(ctl.signal); } finally { clearTimeout(t); }
+}
+
+/** o serviço respondeu com erro: anota (sem chave nenhuma) e deixa ele descansar se for cota, chave errada ou queda */
+async function respostaRuim(nome, r) {
+  let det = "";
+  try { det = (await r.text()).replace(/\s+/g, " ").slice(0, 180); } catch (e) {}
+  const ra = Number(r.headers.get("retry-after")) || 0;
+  const pausa = r.status === 429 ? Math.min(3600, Math.max(20, ra || 60)) * 1000
+    : (r.status === 401 || r.status === 403) ? 600000
+    : r.status >= 500 ? 20000 : 0;
+  if (pausa) descansa(nome, pausa);
+  console.log("ia " + nome + " -> " + r.status + " " + det);
+  return null;
+}
+
+function base64ParaBytes(b64) {
+  if (typeof Uint8Array.fromBase64 === "function") return Uint8Array.fromBase64(b64);
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+/** escuta pelo Groq (Whisper). null = não deu (aí o Cloudflare escreve) */
+async function ouvirGroq(env, audioB64, dica, ms) {
+  const fd = new FormData();
+  fd.append("file", new Blob([base64ParaBytes(audioB64)], { type: "audio/wav" }), "fala.wav");
+  fd.append("model", env.STT_MODELO_GROQ || "whisper-large-v3-turbo");
+  fd.append("language", "pt");
+  fd.append("response_format", "json");
+  fd.append("temperature", "0");
+  if (dica) fd.append("prompt", dica);
+  const r = await comPrazo(ms, (signal) => fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    method: "POST", headers: { authorization: "Bearer " + env.GROQ_API_KEY }, body: fd, signal,
+  }));
+  if (!r.ok) return respostaRuim("groq-voz", r);
+  const d = await r.json();
+  return d && typeof d.text === "string" ? d.text : null;
+}
+
+/** os modelos do Gemini que não aceitam o ajuste de "pensar pouco" (pra não tentar de novo) */
+const geminiSemAjuste = {};
+
+async function pensarGemini(env, nome, modelo, sistema, msgs, img, ms) {
+  const contents = msgs.map((m, i) => {
+    const parts = [{ text: m.content }];
+    if (img && i === msgs.length - 1) parts.push({ inlineData: { mimeType: "image/jpeg", data: img } });
+    return { role: m.role === "assistant" ? "model" : "user", parts };
+  });
+  const fim = Date.now() + ms;
+  for (let vez = 0; vez < 2; vez++) {
+    const ajuste = !geminiSemAjuste[modelo];
+    const generationConfig = { maxOutputTokens: 1024, temperature: 0.6, responseMimeType: "application/json" };
+    // responde rápido (conversa e comandos não precisam de raciocínio longo)
+    if (ajuste) generationConfig.thinkingConfig = { thinkingLevel: "minimal" };
+    const resta = fim - Date.now();
+    if (resta < 1500) return null;
+    const r = await comPrazo(resta, (signal) => fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelo) + ":generateContent", {
+      method: "POST",
+      headers: { "x-goog-api-key": env.GEMINI_API_KEY, "content-type": "application/json" },
+      body: JSON.stringify({ systemInstruction: { parts: [{ text: sistema }] }, contents, generationConfig }),
+      signal,
+    }));
+    if (r.status === 400 && ajuste) { geminiSemAjuste[modelo] = true; console.log("ia " + nome + ": sem o ajuste de pensar pouco, tentando de novo"); continue; }
+    if (!r.ok) return respostaRuim(nome, r);
+    const d = await r.json();
+    const parts = (d && d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
+    return parts.filter((p) => p && typeof p.text === "string" && !p.thought).map((p) => p.text).join("");
+  }
+  return null;
+}
+
+/** os modelos do Groq que não aceitam o modo JSON / o ajuste de raciocínio */
+const groqSemAjuste = {};
+
+async function pensarGroq(env, nome, modelo, sistema, msgs, ms) {
+  const fim = Date.now() + ms;
+  for (let vez = 0; vez < 2; vez++) {
+    const ajuste = !groqSemAjuste[modelo];
+    const corpo = { model: modelo, messages: [{ role: "system", content: sistema }].concat(msgs), max_tokens: 1024, temperature: 0.6 };
+    if (ajuste) {
+      corpo.response_format = { type: "json_object" };
+      if (/gpt-oss/.test(modelo)) corpo.reasoning_effort = "low";
+    }
+    const resta = fim - Date.now();
+    if (resta < 1500) return null;
+    const r = await comPrazo(resta, (signal) => fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { authorization: "Bearer " + env.GROQ_API_KEY, "content-type": "application/json" },
+      body: JSON.stringify(corpo),
+      signal,
+    }));
+    if (r.status === 400 && ajuste) { groqSemAjuste[modelo] = true; console.log("ia " + nome + ": sem o modo JSON, tentando de novo"); continue; }
+    if (!r.ok) return respostaRuim(nome, r);
+    const d = await r.json();
+    const v = d && d.choices && d.choices[0] && d.choices[0].message ? d.choices[0].message.content : "";
+    return typeof v === "string" ? v : "";
+  }
+  return null;
+}
+
+/** IA paga (Claude), só se o dono colocar a chave ANTHROPIC_API_KEY */
+async function pensarClaude(env, sistema, msgs, img, ms) {
+  const m = msgs.map((x) => ({ role: x.role, content: x.content }));
+  if (img) {
+    const u = m[m.length - 1];
+    u.content = [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: img } }, { type: "text", text: u.content }];
+  }
+  const r = await comPrazo(ms, (signal) => fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "x-api-key": env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({ model: env.IA_MODELO || "claude-haiku-5-5", max_tokens: 600, system: sistema, messages: m }),
+    signal,
+  }));
+  if (!r.ok) return respostaRuim("claude", r);
+  const d = await r.json();
+  return (d.content || []).filter((x) => x && x.type === "text").map((x) => x.text).join("");
+}
+
+/** espera uma promessa no máximo [ms] (o AI.run do Cloudflare não tem como cancelar) */
+function noMaximo(ms, p) {
+  let t;
+  return Promise.race([p, new Promise((_, n) => { t = setTimeout(() => n(new Error("demorou")), ms); })]).finally(() => clearTimeout(t));
+}
+
+/** IA grátis do próprio Cloudflare (reserva: tem cota pequena por dia) */
+async function pensarCloudflare(env, sistema, msgs, img, ms) {
+  const textoDe = (out) => {
+    const v = out && (out.response !== undefined ? out.response : out.choices && out.choices[0] && out.choices[0].message ? out.choices[0].message.content : "");
+    return typeof v === "string" ? v : JSON.stringify(v || "");
+  };
+  const fim = Date.now() + ms;
+  const resta = () => Math.max(1000, fim - Date.now());
+  const modelo = env.IA_MODELO_CF || "@cf/google/gemma-4-26b-a4b-it";
+  const m = msgs.map((x) => ({ role: x.role, content: x.content }));
+  const ultimo = m[m.length - 1];
+  const textoUltimo = ultimo.content;
+  if (img) ultimo.content = [{ type: "text", text: textoUltimo }, { type: "image_url", image_url: { url: "data:image/jpeg;base64," + img } }];
+  const entrada = { messages: [{ role: "system", content: sistema }].concat(m), max_tokens: 600, chat_template_kwargs: { enable_thinking: false } };
+  try {
+    return textoDe(await noMaximo(resta(), env.AI.run(modelo, entrada)));
+  } catch (e1) {
+    if (e1 && e1.message === "demorou") throw e1;
+    console.log("ia cloudflare tentativa 1", e1 && e1.message ? e1.message : String(e1));
+    if (img) {
+      // o modelo não aceitou a imagem: tenta o modelo de visão da Meta
+      ultimo.content = textoUltimo;
+      try { await env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", { prompt: "agree" }); } catch (e) {}
+      return textoDe(await noMaximo(resta(), env.AI.run("@cf/meta/llama-3.2-11b-vision-instruct", {
+        messages: [{ role: "system", content: sistema }].concat(m), image: "data:image/jpeg;base64," + img, max_tokens: 600,
+      })));
+    }
+    delete entrada.chat_template_kwargs;
+    return textoDe(await noMaximo(resta(), env.AI.run(modelo, entrada)));
+  }
+}
+
 let vozCache = null;
 // a voz do app: "NOCRY IA", criada na conta do dono (garota jovem, fofa e kawaii no jeito de falar).
 // Voz criada na própria conta funciona no plano grátis (as da biblioteca não funcionam pelo app no grátis).

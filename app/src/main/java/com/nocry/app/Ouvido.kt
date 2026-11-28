@@ -478,7 +478,8 @@ object Ouvido {
             return Texto(null, if (r == "stt_limite") "limite" else "indisponivel")
         }
         val t = j.optString("texto").trim()
-        NLog.add("ia", "escuta: ${"%.1f".format(seg)}s de fala escritos em ${System.currentTimeMillis() - t0} ms")
+        val fonte = j.optString("fonte").takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""
+        NLog.add("ia", "escuta: ${"%.1f".format(seg)}s de fala escritos em ${System.currentTimeMillis() - t0} ms$fonte")
         return Texto(t, "")
     }
 

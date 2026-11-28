@@ -983,6 +983,8 @@ object IA {
             return null
         }
         ligada = true
+        // qual cérebro respondeu (gemini, groq, cloudflare): só o nome, pra saber pelo log se a fila está funcionando
+        j.optString("fonte").takeIf { it.isNotBlank() }?.let { NLog.add("ia", "cérebro: $it") }
         val passos = ArrayList<Passo>()
         val arr = j.optJSONArray("passos") ?: JSONArray()
         for (i in 0 until minOf(arr.length(), 12)) {

@@ -8,44 +8,45 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # voz anime da IA (ElevenLabs): só a chave já basta (o servidor escolhe uma voz feminina fofa da conta).
-      # ELEVENLABS_VOZ é opcional: o código de uma voz escolhida na biblioteca. Nunca aparecem no log.
-      - name: Conferir chaves da voz da IA
+      # chaves do servidor da IA, todas opcionais (cada uma só vai pro servidor se existir aqui nos segredos):
+      #  - GROQ_API_KEY: escuta (voz) rápida e cérebro de reserva, grátis
+      #  - GEMINI_API_KEY: cérebro principal, grátis
+      #  - ELEVENLABS_API_KEY / ELEVENLABS_VOZ: voz anime da IA
+      # Aqui só aparece o NOME de cada chave encontrada, nunca o valor.
+      - name: Conferir as chaves da IA e da voz
         env:
           V_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           V_VOZ: ${{ secrets.ELEVENLABS_VOZ }}
+          G_KEY: ${{ secrets.GROQ_API_KEY }}
+          M_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          if [ -n "$V_KEY" ] && [ -n "$V_VOZ" ]; then echo "VOZ_OK=2" >> "$GITHUB_ENV"; echo "voz da nuvem: chave e voz escolhida encontradas"
-          elif [ -n "$V_KEY" ]; then echo "VOZ_OK=1" >> "$GITHUB_ENV"; echo "voz da nuvem: chave encontrada (voz escolhida sozinha)"
-          else echo "voz da nuvem: sem chave (a IA usa a voz do celular)"; fi
-      - name: Publicar worker "nocry" (com a voz da nuvem e a voz escolhida)
-        if: env.VOZ_OK == '2'
+          L=""
+          if [ -n "$G_KEY" ]; then L="$L GROQ_API_KEY"; echo "Groq: chave encontrada"; else echo "Groq: sem chave"; fi
+          if [ -n "$M_KEY" ]; then L="$L GEMINI_API_KEY"; echo "Gemini: chave encontrada"; else echo "Gemini: sem chave"; fi
+          if [ -n "$V_KEY" ]; then L="$L ELEVENLABS_API_KEY"; echo "voz da nuvem: chave encontrada"; else echo "voz da nuvem: sem chave (a IA usa a voz do celular)"; fi
+          if [ -n "$V_VOZ" ]; then L="$L ELEVENLABS_VOZ"; echo "voz da nuvem: voz escolhida encontrada"; fi
+          {
+            echo "SEGREDOS<<FIM_DOS_SEGREDOS"
+            for s in $L; do echo "$s"; done
+            echo "FIM_DOS_SEGREDOS"
+          } >> "$GITHUB_ENV"
+          if [ -n "$L" ]; then echo "TEM_SEGREDOS=1" >> "$GITHUB_ENV"; fi
+      - name: Publicar worker "nocry" (com as chaves)
+        if: env.TEM_SEGREDOS == '1'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: "worker/nocry"
           command: deploy
-          secrets: |
-            ELEVENLABS_API_KEY
-            ELEVENLABS_VOZ
+          secrets: ${{ env.SEGREDOS }}
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           ELEVENLABS_VOZ: ${{ secrets.ELEVENLABS_VOZ }}
-      - name: Publicar worker "nocry" (com a voz da nuvem)
-        if: env.VOZ_OK == '1'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: "worker/nocry"
-          command: deploy
-          secrets: |
-            ELEVENLABS_API_KEY
-        env:
-          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       - name: Publicar worker "nocry"
-        if: env.VOZ_OK == ''
+        if: env.TEM_SEGREDOS != '1'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
