@@ -182,5 +182,38 @@ TEMA=x_plasma; shot 63_plasma_inicio home; shot 63_plasma_ia ia; video 67_plasma
 # o Estúdio por último (o emulador do CI já caiu nele)
 TEMA=x_holo; shot 60_hud_estudio estudio
 TEMA=""
+# investigação: abre o Estúdio em vários temas, rola devagar e anota memória, quadros e o log do app até o emulador cair
+diag_estudio() {
+  echo "=== diag $(date +%T) ===" > "$OUT/diag.txt"
+  ( while true; do echo "$(date +%T) host_mem=$(free -m | awk '/Mem/{print $3"/"$2}') $(top -bn1 | awk 'NR>7&&NR<11{printf "%s%% %s | ", $9, $12}')" >> "$OUT/diag_host.txt"; sleep 2; done ) &
+  local hp=$!
+  for tm in ${DIAG_TEMAS:-vidro t_inferno x_reator x_holo}; do
+    local nome=diag_$tm
+    adb get-state >/dev/null 2>&1 || { echo "$(date +%T) EMULADOR MORTO antes de $tm" >> "$OUT/diag.txt"; break; }
+    adb shell am force-stop $PKG
+    adb logcat -c 2>/dev/null
+    adb logcat -v time > "$OUT/log_$nome.txt" 2>&1 &
+    local lp=$!
+    adb shell am start -n $PKG/$ACT --es tela estudio --es fonte "$FONTE" --es tema $tm >/dev/null
+    sleep 7
+    adb shell dumpsys gfxinfo $PKG reset >/dev/null 2>&1
+    adb exec-out screencap -p > "$OUT/cru/${nome}_0.png"
+    for i in 1 2 3 4 5 6 7 8; do
+      adb shell input swipe $X $Y1 $X $Y2 600
+      sleep 2.5
+      echo "$(date +%T) $tm rolagem $i estado=$(adb get-state 2>&1) host_mem=$(free -m | awk '/Mem/{print $3"/"$2}')" >> "$OUT/diag.txt"
+      adb shell dumpsys gfxinfo $PKG 2>/dev/null | grep -E "Total frames|Janky|Graphics memory|Total GPU|Total memory|Number Slow" | tr '\n' ' ' >> "$OUT/diag.txt"; echo >> "$OUT/diag.txt"
+      adb shell dumpsys meminfo $PKG 2>/dev/null | grep -E "TOTAL PSS|Graphics:|GL mtrack|Native Heap:" | tr -s ' ' | tr '\n' ' ' >> "$OUT/diag.txt"; echo >> "$OUT/diag.txt"
+      adb exec-out screencap -p > "$OUT/cru/${nome}_$i.png" 2>/dev/null || true
+    done
+    kill $lp 2>/dev/null
+    montage "$OUT"/cru/${nome}_[0-8].png -tile 9x1 -geometry 300x666+4+0 -background '#111111' "$OUT/${nome}.jpg" 2>/dev/null || true
+  done
+  kill $hp 2>/dev/null
+  cp -r /tmp/android-runner "$OUT/runner" 2>/dev/null || true
+  ls ~/.android/avd/*.avd/*.txt ~/.android/avd/*.avd/*.log 2>/dev/null | head >> "$OUT/diag.txt"
+  cp ~/.android/avd/*.avd/*.log "$OUT/" 2>/dev/null || true
+}
+if echo " ${TELAS:-} " | grep -q " diag_estudio "; then diag_estudio; fi
 rm -rf "$OUT/cru"
 ls -la "$OUT"
