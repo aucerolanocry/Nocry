@@ -39,9 +39,11 @@ class Passo(val acao: String, val atrasoMs: Long = 0L, val arg: String = "", val
 object Acoes {
     /** tudo que a IA sabe fazer (os mesmos nomes vão pro servidor da IA) */
     val nomes: Map<String, String> = linkedMapOf(
-        "bypass_ligar" to "ligar o bypass",
+        "bypass_ligar" to "ligar o bypass e ficar esperando o gatilho (arg opcional: o gatilho dnd = não perturbe, bt = bluetooth, carga = carregador ou volume, e/ou o tipo completo, normal ou simples; ex.: \"dnd completo\")",
+        "bypass_aplicar" to "aplicar o bypass AGORA no jogo, na hora, sem esperar gatilho (arg opcional: o tipo completo, normal ou simples)",
         "bypass_desligar" to "desligar o bypass (restaura o jogo)",
-        "bot_ligar" to "ligar o bot de fila e começar a buscar",
+        "bot_ligar" to "ligar o bot de fila e começar a buscar (arg opcional: modo e valores em reais, ex.: \"2x2 4 3\" = modo 2x2 e valores R$ 4 e R$ 3)",
+        "bot_configurar" to "só escolher o modo e os valores do bot de fila, sem ligar (arg: ex.: \"2x2 4 3\")",
         "bot_desligar" to "desligar o bot de fila",
         "bot_pausar" to "pausar a busca do bot (continua conectado)",
         "jogo_abrir" to "abrir o Free Fire (arg: normal ou max)",
@@ -68,7 +70,7 @@ object Acoes {
 
     /** o contrário de cada ação (pra "liga o bot por 30 minutos") */
     val contrario = mapOf(
-        "bypass_ligar" to "bypass_desligar", "bot_ligar" to "bot_desligar",
+        "bypass_ligar" to "bypass_desligar", "bypass_aplicar" to "bypass_desligar", "bot_ligar" to "bot_desligar",
         "otm_ligar" to "otm_desligar", "comp_ligar" to "comp_desligar"
     )
 
@@ -117,21 +119,34 @@ object Acoes {
 
     private fun fazerSeguro(app: Context, act: MainActivity?, p: Passo): String = when (p.acao) {
         "bypass_ligar" -> {
-            if (Prefs.bypassAtivo || Prefs.bypassVolAtivo) "✓ o bypass já estava ligado"
-            else if (!Adb.ensure(app)) "✗ bypass: o ADB não está conectado. Peça \"liga o ADB\" ou abra a Conexão"
+            val (gat, tipo) = bypassArgs(p.arg)
+            val ativo = Prefs.bypassAtivo || Prefs.bypassVolAtivo
+            val atualGat = if (Prefs.bypassVolAtivo) "volume" else Prefs.bypassGatilho
+            val mudaGat = gat != null && gat != atualGat
+            val mudaTipo = tipo != null && tipo != Prefs.bypassTipo
+            if ((ativo || Prefs.bypassMark) && (mudaGat || mudaTipo)) "✗ o bypass já está ligado (${nomeGatilho(atualGat)} · ${Prefs.bypassTipo}). Peça \"desliga o bypass\" antes de trocar o gatilho ou o tipo"
+            else if (ativo) "✓ o bypass já estava ligado"
             else {
-                Downloader.esquecerPastas()
-                val ff = Prefs.bypassFf
-                val volume = Prefs.bypassGatilho == "volume"
-                when {
-                    !Downloader.pastasInstaladas(ff).first -> "✗ bypass: falta a pasta suja. Peça \"instala as pastas\""
-                    volume && !(Sys.acessibilidadeLigada() || Sys.ligarAcessibilidade()) -> "✗ bypass: a escuta do volume está desligada (precisa do ADB)"
-                    !Config.verificarLimite() -> "✗ bypass: chegou no limite de hoje"
-                    else -> {
-                        if (volume) EngineBypass.iniciarVolume() else EngineBypass.iniciar(Prefs.bypassGatilho, ff, Prefs.bypassTipo)
-                        "✓ bypass ligado"
-                    }
+                // o gatilho e o tipo que você pediu viram a escolha do app (só dá pra trocar com o bypass desligado)
+                val gatFinal = if (Prefs.bypassMark) Prefs.bypassGatilho else (gat ?: Prefs.bypassGatilho)
+                val volume = gatFinal == "volume"
+                val erro = antesDoBypass(app, volume, true)
+                if (erro != null) erro
+                else {
+                    if (!Prefs.bypassMark) { Prefs.bypassGatilho = gatFinal; tipo?.let { Prefs.bypassTipo = it } }
+                    if (volume) EngineBypass.iniciarVolume() else EngineBypass.iniciar(Prefs.bypassGatilho, Prefs.bypassFf, Prefs.bypassTipo)
+                    "✓ bypass ${Prefs.bypassTipo} ligado · gatilho: ${nomeGatilho(Prefs.bypassGatilho)}"
                 }
+            }
+        }
+        "bypass_aplicar" -> {
+            val tipo = bypassArgs(p.arg).second
+            val ff = if (Prefs.bypassFf == "max") "Free Fire MAX" else "Free Fire"
+            if (Prefs.bypassMark && tipo != null && tipo != Prefs.bypassTipo) "✗ o bypass já está aplicado (${Prefs.bypassTipo}). Peça \"desliga o bypass\" antes de mudar o tipo"
+            else (if (Prefs.bypassMark) null else antesDoBypass(app, false, !(Prefs.bypassAtivo || Prefs.bypassVolAtivo))) ?: when (EngineBypass.aplicarAgora(tipo)) {
+                0 -> "✓ bypass ${Prefs.bypassTipo} aplicado agora no $ff"
+                2 -> "✓ o bypass já estava aplicado"
+                else -> "✗ não consegui aplicar o bypass (ADB). Peça \"liga o ADB\" e tente de novo"
             }
         }
         "bypass_desligar" -> when (EngineBypass.parar()) {
@@ -139,7 +154,8 @@ object Acoes {
             1 -> "⚠ bypass desligado, mas não deu pra restaurar o jogo (ADB). Peça \"liga o ADB\" e de novo \"desliga o bypass\""
             else -> "✓ bypass desligado"
         }
-        "bot_ligar" -> ligarBot()
+        "bot_ligar" -> ligarBot(p.arg)
+        "bot_configurar" -> configurarBot(p.arg) ?: "✗ diga o modo e os valores, ex.: \"bot no modo 2x2 valores 4 e 3\""
         "bot_desligar" -> {
             naTela { Sniper.desligar() }
             "✓ bot de fila desligado"
@@ -302,7 +318,68 @@ object Acoes {
         return if (ok) okTxt else "✗ não consegui abrir o navegador"
     }
 
-    private fun ligarBot(): String {
+    /** o gatilho e o tipo do bypass que vieram no pedido (null = não falou) */
+    private fun bypassArgs(arg: String): Pair<String?, String?> {
+        val a = Comandos.limpa(arg)
+        val g = when {
+            Regex("\\b(dnd|nao perturb\\w*|nao pertub\\w*)\\b").containsMatchIn(a) -> "dnd"
+            Regex("\\b(bt|bluetooth|blutuf\\w*)\\b").containsMatchIn(a) -> "bt"
+            Regex("\\b(carga|carregador|tomada)\\b").containsMatchIn(a) -> "carga"
+            Regex("\\b(volume|vol)\\b").containsMatchIn(a) -> "volume"
+            else -> null
+        }
+        val t = when {
+            a.contains("completo") -> "completo"
+            a.contains("simples") -> "simples"
+            Regex("\\bnormal\\b").containsMatchIn(a) -> "normal"
+            else -> null
+        }
+        return g to t
+    }
+
+    private fun nomeGatilho(g: String) = when (g) { "dnd" -> "não perturbe"; "bt" -> "bluetooth"; "carga" -> "carregador"; "volume" -> "volume"; else -> g }
+
+    /** o que precisa estar certo antes de ligar ou aplicar o bypass. null = tudo certo */
+    private fun antesDoBypass(app: Context, volume: Boolean, contaLimite: Boolean): String? {
+        if (!Adb.ensure(app)) return "✗ bypass: o ADB não está conectado. Peça \"liga o ADB\" ou abra a Conexão"
+        Downloader.esquecerPastas()
+        if (!Downloader.pastasInstaladas(Prefs.bypassFf).first) return "✗ bypass: falta a pasta suja. Peça \"instala as pastas\""
+        if (volume && !(Sys.acessibilidadeLigada() || Sys.ligarAcessibilidade())) return "✗ bypass: a escuta do volume está desligada (precisa do ADB)"
+        // o limite do dia só gasta quando o bypass é ligado (se já estava ligado, já foi contado)
+        if (contaLimite && !Config.verificarLimite()) return "✗ bypass: chegou no limite de hoje"
+        return null
+    }
+
+    private val MODO_ARG = Regex("\\b([1-4]|um|dois|tres|quatro)\\s*(?:x|por|vs|v|contra)\\s*([1-4]|um|dois|tres|quatro)\\b")
+    private val NUM_ARG = Regex("\\d+(?:[.,]\\d+)?|\\b(?:um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|quinze|vinte|trinta)\\b")
+    private val PALAVRA_NUM = mapOf("um" to 1, "uma" to 1, "dois" to 2, "duas" to 2, "tres" to 3, "quatro" to 4, "cinco" to 5, "seis" to 6,
+        "sete" to 7, "oito" to 8, "nove" to 9, "dez" to 10, "quinze" to 15, "vinte" to 20, "trinta" to 30)
+
+    /** escolhe o modo e os valores do bot pelo texto ("2x2 4 3" = modo 2x2, valores R$ 4 e R$ 3). null = não achou nada */
+    private fun configurarBot(arg: String): String? {
+        val a = Comandos.limpa(arg)
+        fun n(s: String): Int? = s.toIntOrNull() ?: PALAVRA_NUM[s]
+        val modos = MODO_ARG.findAll(a).mapNotNull { m ->
+            val x = n(m.groupValues[1]); val y = n(m.groupValues[2])
+            if (x != null && y != null) "${x}X$y" else null
+        }.filter { it in Sniper.MODOS }.toSet()
+        val resto = MODO_ARG.replace(a, " ")
+        val valores = NUM_ARG.findAll(resto).mapNotNull { m ->
+            val d = m.value.replace(',', '.').toDoubleOrNull() ?: n(m.value)?.toDouble()
+            d?.toInt()?.takeIf { it in 1..999 }?.let { (it * 100).toString() }
+        }.toList().distinct()
+        if (modos.isEmpty() && valores.isEmpty()) return null
+        return Sniper.escolherPeloComando(modos, valores)
+    }
+
+    private fun ligarBot(arg: String = ""): String {
+        // "no modo 2x2 valores 4 e 3": escolhe antes de ligar
+        val cfg = if (arg.isNotBlank()) configurarBot(arg) else null
+        val r = ligarBotSemEscolha()
+        return if (cfg != null) cfg + "\n" + r else r
+    }
+
+    private fun ligarBotSemEscolha(): String {
         if (Sniper.buscando) return "✓ o bot já estava buscando"
         if (!Sniper.conectado) {
             val ok = naTela { Sniper.ligar() } ?: false
@@ -373,7 +450,7 @@ object Acoes {
 
 // ---------------------------------------------------------------- comandos grátis (sem IA)
 object Comandos {
-    private fun limpa(s: String): String =
+    internal fun limpa(s: String): String =
         Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
 
     private val LIGA = Regex("\\b(liga|ligar|ligue|ativa|ativar|ative|inicia|iniciar|inicie|comeca|comecar|comece|abre|abrir|abra|coloca|colocar|coloque|adiciona|adicionar|adicione|add|bota|botar|bote|poe|joga|jogar|entra|entrar|conecta|conectar|conecte|instala|instalar|instale|roda|rodar)\\b")
@@ -387,13 +464,68 @@ object Comandos {
 
     private fun tem(p: String, r: String) = Regex(r).containsMatchIn(p)
 
-    /** entende o pedido. Vazio = não entendeu nada */
-    fun entender(texto: String): List<Passo> {
-        val partes = limpa(texto)
+    // ---- bypass: "agora" (aplica na hora), tipo (completo/normal/simples) e gatilho (não perturbe, bluetooth, carregador, volume)
+    private val AGORA = Regex("\\b(agora|ja|na hora|imediat\\w*|nesse segundo|neste segundo|nesse instante|neste instante|aplica|aplicar|aplique)\\b")
+
+    private fun bypassLigar(p: String): String {
+        val tipo = when {
+            tem(p, "\\bcompleto\\b") -> "completo"
+            tem(p, "\\bsimples\\b") -> "simples"
+            tem(p, "\\b(bypass|bypas|baipas)\\s+(do\\s+tipo\\s+|tipo\\s+|modo\\s+)?normal\\b|\\b(tipo|modo)\\s+normal\\b") -> "normal"
+            else -> ""
+        }
+        val gat = when {
+            tem(p, "\\b(dnd|nao perturb\\w*|nao pertub\\w*)\\b") -> "dnd"
+            tem(p, "\\b(bt|bluetooth|blutuf\\w*)\\b") -> "bt"
+            tem(p, "\\b(carregador|tomada)\\b") -> "carga"
+            tem(p, "\\bvolume\\b") -> "volume"
+            else -> ""
+        }
+        if (AGORA.containsMatchIn(p)) return "bypass_aplicar" + (if (tipo.isNotEmpty()) ":$tipo" else "")
+        val args = listOf(gat, tipo).filter { it.isNotEmpty() }.joinToString(" ")
+        return "bypass_ligar" + (if (args.isNotEmpty()) ":$args" else "")
+    }
+
+    // ---- bot de fila: "no modo 2x2 valores 4 e 3". Tira isso do texto antes de separar os pedidos (o "e" separaria)
+    private const val NUMP = "(?:\\d+(?:[.,]\\d{1,2})?|um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|quinze|vinte|trinta)"
+    private val MODO_FILA = Regex("\\b(?:(?:no|nos|de|do)?\\s*modos?\\s+)?([1-4]|um|dois|tres|quatro)\\s*(?:x|por|vs|v|contra)\\s*([1-4]|um|dois|tres|quatro)\\b")
+    private val VALORES_FILA = Regex("\\b(?:(?:nos?|de)\\s+)?(?:valor(?:es)?|r\\$)\\s*(?:de\\s+)?(?:r\\$\\s*)?($NUMP(?:\\s*(?:,|e|ou|mais|\\+)\\s*$NUMP)*)(?:\\s*(?:reais|real|conto|contos|pila|pilas))?")
+    private val NUM_PALAVRA = mapOf("um" to 1, "uma" to 1, "dois" to 2, "duas" to 2, "tres" to 3, "quatro" to 4, "cinco" to 5, "seis" to 6,
+        "sete" to 7, "oito" to 8, "nove" to 9, "dez" to 10, "quinze" to 15, "vinte" to 20, "trinta" to 30)
+
+    /** (texto sem o modo/valores, "2x2 4 3" ou null) */
+    private fun separarConfigBot(limpo: String): Pair<String, String?> {
+        if (!tem(limpo, "\\b(bot|bots|fila|sniper|robo)\\b")) return limpo to null
+        fun n(s: String): Int? = s.toIntOrNull() ?: NUM_PALAVRA[s]
+        val modos = ArrayList<String>()
+        MODO_FILA.findAll(limpo).forEach { m ->
+            val x = n(m.groupValues[1]); val y = n(m.groupValues[2])
+            if (x != null && y != null) modos += "${x}x$y"
+        }
+        val valores = ArrayList<String>()
+        VALORES_FILA.findAll(limpo).forEach { m ->
+            Regex("\\d+|\\b(?:um|uma|dois|duas|tres|quatro|cinco|seis|sete|oito|nove|dez|quinze|vinte|trinta)\\b").findAll(m.groupValues[1].replace(',', ' ')).forEach { v ->
+                val num = n(v.value)
+                if (num != null) valores += num.toString()
+            }
+        }
+        if (modos.isEmpty() && valores.isEmpty()) return limpo to null
+        val sem = VALORES_FILA.replace(MODO_FILA.replace(limpo, " "), " ").replace(Regex("\\s+"), " ").trim()
+        return sem to (modos.distinct() + valores.distinct()).joinToString(" ")
+    }
+
+    /** "e a otimização?", "também o bot", "e o outro": continua o que você pediu antes (liga/desliga) */
+    private val CONTINUA = Regex("^\\s*(e|tambem|e tambem|mais|mas tambem|pode ser|agora)\\b")
+
+    /** entende o pedido. Vazio = não entendeu nada. [anterior] = o que você pediu por último (true = ligar, false = desligar) */
+    fun entender(texto: String, anterior: Boolean? = null): List<Passo> {
+        val limpo = limpa(texto)
+        val (limpoSem, cfgBot) = separarConfigBot(limpo)
+        val partes = limpoSem
             .split(Regex("\\s*(?:,|;|\\.|!|\\be depois\\b|\\bdepois disso\\b|\\bem seguida\\b|\\be entao\\b|\\bentao\\b|\\be\\b)\\s*"))
             .map { it.trim() }.filter { it.isNotEmpty() }
         val passos = ArrayList<Passo>()
-        var ultimoLiga: Boolean? = null
+        var ultimoLiga: Boolean? = if (anterior != null && CONTINUA.containsMatchIn(limpo)) anterior else null
         var ultimoAtraso = 0L
         var ultimoQuando = 0L
         for (p in partes) {
@@ -447,8 +579,14 @@ object Comandos {
                     if (tem(p, "\\bmeet\\b")) achados += if (liga == false) "menu_tirar_meet" else "menu_meet"
                     if (tem(p, "toque rapido") && (menu || tem(p, "\\bmeet\\b"))) achados += if (liga == false) "menu_tirar_toque" else "menu_toque"
                     else if (tem(p, "\\b(competitivo|comp|toque rapido)\\b")) achados += if (liga == false) "comp_desligar" else "comp_ligar"
-                    if (tem(p, "\\b(bypass|bypas|baipas|bai pass)\\b")) achados += if (liga == false) "bypass_desligar" else "bypass_ligar"
-                    if (tem(p, "\\b(bot|bots|fila|sniper|robo)\\b")) achados += if (liga == false) (if (PAUSA.containsMatchIn(p)) "bot_pausar" else "bot_desligar") else "bot_ligar"
+                    if (tem(p, "\\b(bypass|bypas|baipas|bai pass)\\b")) achados += if (liga == false) "bypass_desligar" else bypassLigar(p)
+                    if (tem(p, "\\b(bot|bots|fila|sniper|robo)\\b")) achados += when {
+                        liga == false -> if (PAUSA.containsMatchIn(p)) "bot_pausar" else "bot_desligar"
+                        // só falou o modo e os valores, sem "liga": só escolhe
+                        cfgBot != null && !lig -> "bot_configurar:$cfgBot"
+                        cfgBot != null -> "bot_ligar:$cfgBot"
+                        else -> "bot_ligar"
+                    }
                     if (tem(p, "\\b(jogo|free ?fire|ff|freefire|partida)\\b") && liga != false)
                         achados += "jogo_abrir" + (if (tem(p, "\\bmax\\b")) ":max" else if (tem(p, "\\bnormal\\b")) ":normal" else "")
                     if (tem(p, "otimiz")) achados += if (liga == false) "otm_desligar" else "otm_ligar"
@@ -502,9 +640,9 @@ object IA {
         private set
 
     /** pedido pro servidor com tempo maior que o normal (a IA pode levar uns segundos pensando) */
-    private fun postIa(c: Context, corpo: JSONObject): JSONObject? = post(c, "ia", corpo)
+    private fun postIa(c: Context, corpo: JSONObject): JSONObject? = post(c, "ia", corpo, if (corpo.has("imagem")) 50000 else 30000)
 
-    fun post(c: Context, op: String, corpo: JSONObject): JSONObject? {
+    fun post(c: Context, op: String, corpo: JSONObject, leitura: Int = 50000): JSONObject? {
         val base = BuildConfig.API_URL.trim().trimEnd('/')
         val key = Prefs.licKey ?: return null
         if (base.isEmpty()) return null
@@ -513,7 +651,7 @@ object IA {
             val cx = java.net.URL("$base/v1/x").openConnection() as java.net.HttpURLConnection
             cx.requestMethod = "POST"
             cx.connectTimeout = 15000
-            cx.readTimeout = 50000
+            cx.readTimeout = leitura
             cx.doOutput = true
             cx.setRequestProperty("Content-Type", "application/json")
             cx.outputStream.use { it.write(corpo.toString().toByteArray(Charsets.UTF_8)) }
@@ -687,22 +825,85 @@ object Assistente {
         mudou++
     }
 
+    /** o que você pediu por último (true = ligar, false = desligar): "e a otimização?" continua daí */
+    @Volatile private var ultimoLiga: Boolean? = null
+
+    /** o que estava escrito no campo quando você saiu da tela (volta quando você voltar) */
+    @Volatile var rascunho = ""
+
+    private val pendentes = java.util.concurrent.atomic.AtomicInteger(0)
+    /** tem pedido sendo feito agora (continua mesmo se você sair da tela) */
+    val pensando: Boolean get() = pendentes.get() > 0
+    private val fila = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "nocry-ia").apply { isDaemon = true } }
+    private val CUTUCA = Regex("^\\W*(cad[eê]|e a[ií]|al[oô]|responde\\w*|ei|t[aá] a[ií]|demor\\w+|oi)\\W*$", RegexOption.IGNORE_CASE)
+
+    /**
+     * faz o pedido escrito FORA da tela: você pode sair da conversa, minimizar o app ou digitar outro pedido
+     * que ela continua, faz o que você mandou e deixa a resposta no chat (e avisa na tela se você estiver em outra).
+     * Vários pedidos seguidos entram numa fila e são respondidos na ordem.
+     */
+    fun pedir(c: Context, act: MainActivity?, texto: String, imagem: String? = null, aoFim: ((String) -> Unit)? = null) {
+        val app = c.applicationContext
+        // "cadê?", "e aí?" enquanto ela ainda está fazendo o pedido anterior: responde na hora, sem entrar na fila
+        if (imagem == null && pensando && CUTUCA.matches(texto.trim())) {
+            val r = "Já estou cuidando do seu pedido, só mais um segundinho."
+            anotar(false, r)
+            if (aoFim != null) Bg.ui { aoFim(r) }
+            return
+        }
+        pendentes.incrementAndGet()
+        mudou++
+        IaPedidoService.segurar(app)
+        fila.execute {
+            val trava = try {
+                (app.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager)
+                    ?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "nocry:ia")?.also { it.setReferenceCounted(false); it.acquire(90_000L) }
+            } catch (_: Throwable) { null }
+            // trava de segurança: se algo travar de vez, não deixa a fila presa pra sempre
+            val caixa = arrayOfNulls<String>(1)
+            val feito = CountDownLatch(1)
+            Bg.io {
+                caixa[0] = try { responder(app, act, texto, imagem) } catch (t: Throwable) {
+                    NLog.add("erro", "ia: ${t.javaClass.simpleName}")
+                    "Deu um erro aqui, mas já estou de volta. Pode pedir de novo."
+                }
+                feito.countDown()
+            }
+            val ok = try { feito.await(75, TimeUnit.SECONDS) } catch (_: InterruptedException) { false }
+            val r = caixa[0] ?: if (ok) "Pronto." else "Demorei demais pra pensar nisso. Pode pedir de novo?"
+            if (!ok) NLog.add("ia", "pedido demorou mais de 75s")
+            try { if (trava?.isHeld == true) trava.release() } catch (_: Throwable) {}
+            anotar(false, r)
+            if (pendentes.decrementAndGet() <= 0) IaPedidoService.soltar(app)
+            if (aoFim != null) Bg.ui { aoFim(r) }
+        }
+    }
+
+    /** guarda se o último pedido foi ligar ou desligar, pra entender "e a otimização?" depois */
+    private fun lembrar(passos: List<Passo>) {
+        val a = (passos.firstOrNull { it.atrasoMs == 0L } ?: passos.firstOrNull())?.acao ?: return
+        val liga = a.endsWith("_ligar") || a == "bypass_aplicar" || a == "bot_configurar" || a.startsWith("menu_") || a == "jogo_abrir"
+        val desliga = a.endsWith("_desligar") || a.endsWith("_pausar") || a.startsWith("menu_tirar")
+        if (liga || desliga) ultimoLiga = !desliga
+    }
+
     val CRIADOR = "Quem me criou foi o Aucerola, o criador e dono do NOCRY: foi ele que desenvolveu o app e eu. O NOCRY nasceu pra ajudar os jogadores de Free Fire: começou com a conexão e o bypass, depois vieram a otimização, o modo competitivo, a instalação das pastas, o bot de fila, o caderninho, o rank, os eventos e os temas do Estúdio. Por último ele me colocou aqui, pra você falar comigo por voz e eu fazer as coisas por você. Tudo sempre é testado primeiro pelo Aucerola antes de chegar pra todo mundo."
 
-    val AJUDA = "Não entendi. Exemplos do que eu faço:\n• liga o bypass, liga o bot e desliga o bot em 5 minutos\n• liga o bot por 30 minutos\n• abre o jogo\n• coloca o Meet e o toque rápido no menu do topo\n• às 22h desliga o bot\n• verifica os erros e arruma\n• cancela os agendados"
+    val AJUDA = "Não entendi. Exemplos do que eu faço:\n• liga o bypass completo agora (aplica na hora)\n• liga o bypass no não perturbe (ou bluetooth, carregador, volume)\n• liga o bot no modo 2x2 valores 4 e 3\n• liga o bot e desliga o bot em 5 minutos\n• liga o bot por 30 minutos\n• abre o jogo\n• coloca o Meet e o toque rápido no menu do topo\n• às 22h desliga o bot\n• verifica os erros e arruma\n• cancela os agendados"
 
     /** responde e faz tudo (bloqueia: chame fora da tela). imagem = foto em base64 (jpeg) */
     fun responder(c: Context, act: MainActivity?, texto: String, imagem: String? = null, localPrimeiro: Boolean = false): String {
         // palavra-chave ou comando falado fora da tela: o que ela entende sozinha faz na hora, sem esperar a IA
         if (localPrimeiro && imagem == null) {
-            val ps = Comandos.entender(texto)
-            if (ps.isNotEmpty()) return ps.joinToString("\n") { Acoes.fazerOuAgendar(c, act, it) }.ifBlank { "Pronto." }
+            val ps = Comandos.entender(texto, ultimoLiga)
+            if (ps.isNotEmpty()) { lembrar(ps); return ps.joinToString("\n") { Acoes.fazerOuAgendar(c, act, it) }.ifBlank { "Pronto." } }
         }
         val hist = synchronized(conversa) { conversa.dropLast(1).takeLast(8).map { (if (it.eu) "user" else "assistant") to it.texto } }
         val ia = try { IA.perguntar(c, texto, hist, imagem) } catch (_: Throwable) { null }
         if (ia == null && imagem != null) return "Não consegui olhar a imagem agora: a IA do servidor não respondeu. Tenta de novo daqui a pouco."
         if (ia == null && Regex("(?i)(quem (te|lhe|voce|vc)? ?(criou|fez|desenvolveu|programou)|seu criador|criador|quem (e|é) o dono|historia (do|desse) app|como (o app|o nocry|voce) (foi|nasceu))").containsMatchIn(texto)) return CRIADOR
-        val passos = ia?.passos ?: Comandos.entender(texto)
+        val passos = ia?.passos ?: Comandos.entender(texto, ultimoLiga)
+        lembrar(passos)
         val linhas = ArrayList<String>()
         if (ia != null && ia.texto.isNotBlank()) linhas += ia.texto
         if (passos.isEmpty() && ia == null) return "A IA do servidor não respondeu agora (internet fraca ou ela demorou), e esse pedido eu não sei fazer sem ela. Tenta de novo em alguns segundos.\n\n" + AJUDA.removePrefix("Não entendi. ")
@@ -839,7 +1040,8 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
 
 class AssistenteScreen(a: MainActivity) : Screen(a) {
     override val titulo = "IA do NOCRY"
-    private var pensando = false
+    /** tem pedido sendo feito (vale mesmo se você saiu da tela e voltou) */
+    private val pensando: Boolean get() = Assistente.pensando
     /** foto escolhida pra mandar junto (jpeg em base64) e a miniatura pra mostrar */
     private var imagem: String? = null
     private var miniatura: android.graphics.Bitmap? = null
@@ -847,15 +1049,8 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
     private companion object {
         const val REQ_VOZ = 7701
         const val REQ_IMG = 7702
-        /** a foto da IA (imagem padrão do app), carregada uma vez só */
-        @Volatile private var foto: android.graphics.Bitmap? = null
-        fun fotoIA(c: Context): android.graphics.Bitmap? {
-            foto?.let { return it }
-            return try {
-                val o = android.graphics.BitmapFactory.Options().also { it.inSampleSize = 2 }
-                android.graphics.BitmapFactory.decodeResource(c.resources, R.drawable.perfil_padrao, o).also { foto = it }
-            } catch (_: Throwable) { null }
-        }
+        /** a carinha dela (arte original do NOCRY), carregada uma vez só */
+        fun fotoIA(c: Context): android.graphics.Bitmap? = Mascote.bmp(c, Mascote.Cara.FALANDO)
     }
 
     /** sempre falar as respostas (sem isso, fala só quando você pediu por voz) */
@@ -865,37 +1060,45 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
 
     private val campo: EditText by lazy {
         Ui.field(act, "escreva ou toque no microfone", false).also { e ->
+            // o que você digitou e não mandou fica guardado: se sair da tela e voltar, continua lá
+            e.setText(Assistente.rascunho)
+            e.setSelection(e.text.length)
+            e.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+                override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) { Assistente.rascunho = s?.toString().orEmpty() }
+            })
             e.imeOptions = EditorInfo.IME_ACTION_SEND
             e.setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_SEND) { enviar(); true } else false }
         }
     }
 
-    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|${SessaoIA.ligada}|${SessaoIA.foraDoApp}|${SessaoIA.soComNome}|${PalavrasChave.lista().size}|${SessaoIA.nomeChamada}|${SessaoIA.estado}"
+    override fun key(): String = "${Assistente.mudou}|${Assistente.pensando}|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|${SessaoIA.ligada}|${SessaoIA.foraDoApp}|${SessaoIA.soComNome}|${PalavrasChave.lista().size}|${SessaoIA.nomeChamada}|${SessaoIA.estado}"
 
     fun enviar(texto: String? = null, porVoz: Boolean = false) {
         var t = (texto ?: campo.text.toString()).trim()
         val img = imagem
         if (t.isEmpty() && img != null) t = "O que tem nessa imagem?"
-        if (t.isEmpty() || pensando) return
+        // pode mandar outro pedido enquanto ela ainda faz o anterior: eles entram na fila
+        if (t.isEmpty()) return
         campo.setText("")
+        Assistente.rascunho = ""
         imagem = null
         miniatura = null
         val ouvindo = SessaoIA.ligada
         if (ouvindo) SessaoIA.pausar() else Voz.parar()
         Assistente.anotar(true, if (img != null) "📷 $t" else t)
-        pensando = true
         redesenha()
         val c = act.applicationContext
-        Bg.io {
-            val r = Assistente.responder(c, act, t, img)
-            Bg.ui {
-                Assistente.anotar(false, r)
-                pensando = false
-                redesenha()
-                // microfone ligado: fala a resposta e volta a ouvir
-                if (ouvindo && SessaoIA.ligada) SessaoIA.falarEVoltar(r)
-                else if (porVoz || falarSempre) { Voz.aoTerminar = null; Voz.falar(r) }
-            }
+        // o pedido roda fora da tela: pode sair da conversa ou minimizar o app que ela continua e faz o que você mandou
+        Assistente.pedir(c, act, t, img) { r ->
+            val aqui = act.naFrente && act.atual() === this@AssistenteScreen
+            if (aqui) redesenha()
+            // microfone ligado: fala a resposta e volta a ouvir
+            if (ouvindo && SessaoIA.ligada) SessaoIA.falarEVoltar(r)
+            else if (porVoz || falarSempre) { Voz.aoTerminar = null; Voz.falar(r) }
+            // você está em outra tela: avisa em cima do que ela fez
+            else if (!aqui) Ui.toast(c, "IA: " + r.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().take(100))
         }
     }
 
@@ -1046,15 +1249,15 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         } catch (_: Throwable) { null }
     }
 
-    /** a foto da IA: a mesma imagem padrão do app, redondinha */
+    /** a carinha dela, redondinha (nas mensagens do chat) */
     private fun avatar(tam: Int, anel: Boolean = false): View {
         val c = act
         val f = FrameLayout(c)
         val iv = android.widget.ImageView(c)
         iv.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-        fotoIA(c)?.let { b -> iv.setImageDrawable(androidx.core.graphics.drawable.RoundedBitmapDrawableFactory.create(c.resources, b).also { it.isCircular = true }) }
+        fotoIA(c)?.let { b -> iv.setImageDrawable(androidx.core.graphics.drawable.RoundedBitmapDrawableFactory.create(c.resources, b).also { it.isCircular = true; it.setAntiAlias(true) }) }
         val borda = if (anel) 3 else 0
-        if (anel) f.background = Ui.shape(c, 0, 999, Theme.accent, 2)
+        if (anel) f.background = Ui.shape(c, 0, 999, Theme.alpha(Theme.accent, 0xB0), 2)
         f.addView(iv, FrameLayout.LayoutParams(Ui.dp(c, tam - borda * 2), Ui.dp(c, tam - borda * 2), Gravity.CENTER))
         return f
     }
@@ -1128,41 +1331,44 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             if (!SessaoIA.ligada && !BuildConfig.PREVIEW) SessaoIA.ligar(act) { }
         }
 
-        // topo: foto + nome + o que ela está fazendo + imagem e ajustes
-        val topo = Ui.hbox(c)
-        topo.gravity = Gravity.CENTER_VERTICAL
-        topo.background = Ui.glass(c)
-        topo.setPadding(Ui.dp(c, 12), Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 10))
-        topo.addView(avatar(46, anel = true), LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)).also { it.rightMargin = Ui.dp(c, 12) })
-        val nomes = Ui.vbox(c)
-        nomes.addView(Ui.text(c, SessaoIA.nomeChamada, 15f, Ui.TEXT, true).also { Ui.umaLinha(it, 10) })
+        val vazio = synchronized(Assistente.conversa) { Assistente.conversa.isEmpty() }
         val (st, cor) = when {
             pensando || SessaoIA.estado == SessaoIA.Estado.PENSANDO -> "pensando..." to Ui.MUTED
             SessaoIA.estado == SessaoIA.Estado.FALANDO -> "falando · toque no microfone pra interromper" to Ui.OK
-            SessaoIA.ligada -> "ouvindo" + (if (SessaoIA.foraDoApp) " · também com o app minimizado" else "") to Ui.OK
-            else -> "microfone desligado" to Ui.MUTED
+            SessaoIA.ligada -> "ouvindo · pode falar" to Ui.OK
+            else -> "microfone desligado · toque nele pra falar" to Ui.MUTED
         }
-        nomes.addView(Ui.text(c, st, 10f, cor, true, mono = true).also { Ui.umaLinha(it, 9) }, Ui.lp(top = 2, c = c))
-        topo.addView(nomes, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        // topo: só a carinha dela, o nome, o que ela está fazendo e dois ícones (imagem e ajustes)
+        val topo = Ui.hbox(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        topo.background = Ui.glass(c)
+        topo.setPadding(Ui.dp(c, 10), Ui.dp(c, 8), Ui.dp(c, 10), Ui.dp(c, 8))
+        if (!vazio) topo.addView(MascoteView(c), LinearLayout.LayoutParams(Ui.dp(c, 54), Ui.dp(c, 54)).also { it.rightMargin = Ui.dp(c, 10) })
+        val nomes = Ui.vbox(c)
+        nomes.addView(Ui.text(c, SessaoIA.nomeChamada, 16f, Ui.TEXT, true).also { Ui.umaLinha(it, 10) })
+        nomes.addView(Ui.text(c, if (vazio) "IA do NOCRY" else st, 10f, if (vazio) Ui.MUTED else cor, true, mono = true).also { Ui.umaLinha(it, 9) }, Ui.lp(top = 2, c = c))
+        topo.addView(nomes, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (vazio) it.leftMargin = Ui.dp(c, 6) })
         topo.addView(botaoRedondo(R.drawable.ic_image, "mandar imagem", imagem != null, 40) { escolherImagem() }, LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40)).also { it.leftMargin = Ui.dp(c, 6) })
         topo.addView(botaoRedondo(R.drawable.ic_sliders, "ajustes da IA", false, 40) { ajustes() }, LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40)).also { it.leftMargin = Ui.dp(c, 6) })
         add(topo, 0)
 
-        val vazio = synchronized(Assistente.conversa) { Assistente.conversa.isEmpty() }
         if (vazio) {
+            // primeira vez / conversa limpa: ela aparece grande, de frente, com o que está fazendo
             val col = Ui.vbox(c)
             col.gravity = Gravity.CENTER_HORIZONTAL
-            col.addView(avatar(104, anel = true), LinearLayout.LayoutParams(Ui.dp(c, 104), Ui.dp(c, 104)))
-            col.addView(Ui.text(c, "Oi! Pode falar comigo.", 17f, Ui.TEXT, true).also { it.gravity = Gravity.CENTER }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 14, c = c))
-            col.addView(Ui.text(c, "Eu converso, olho imagens, abro apps, crio alarmes e mexo no NOCRY. É só falar ou escrever.", 11f, Ui.MUTED, false).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 6, c = c))
-            add(col, 26)
-            val sug = listOf("Liga o bot de fila", "Abre o Free Fire MAX", "Abre a Play Store", "Me dá uma dica pra subir de rank")
+            col.addView(MascoteView(c), LinearLayout.LayoutParams(Ui.dp(c, 176), Ui.dp(c, 176)))
+            col.addView(Ui.text(c, "Oi! Pode falar comigo.", 19f, Ui.TEXT, true).also { it.gravity = Gravity.CENTER }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 10, c = c))
+            col.addView(Ui.text(c, st, 10.5f, cor, true, mono = true).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 6, c = c))
+            col.addView(Ui.text(c, "Eu converso, olho imagens, abro apps, crio alarmes e mexo no NOCRY. É só falar ou escrever.", 11.5f, Ui.MUTED, false).also { it.gravity = Gravity.CENTER; it.setLineSpacing(0f, 1.15f) }, Ui.lp(top = 8, c = c))
+            add(col, 18)
+            val sug = listOf("Ligar o bypass completo", "Ligar o bot de fila", "Abrir o Free Fire MAX", "Ligar a otimização")
             sug.chunked(2).forEach { par ->
                 val l = Ui.hbox(c)
                 par.forEachIndexed { i, s ->
                     val b = Ui.text(c, s, 10.5f, Ui.TEXT, true)
                     b.gravity = Gravity.CENTER
-                    b.setPadding(Ui.dp(c, 8), Ui.dp(c, 11), Ui.dp(c, 8), Ui.dp(c, 11))
+                    b.setPadding(Ui.dp(c, 8), Ui.dp(c, 12), Ui.dp(c, 8), Ui.dp(c, 12))
                     b.background = Ui.ripple(c, Ui.glass(c))
                     Ui.clique(b) { enviar(s) }
                     l.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).also { if (i > 0) it.leftMargin = Ui.dp(c, 8) })
@@ -1173,7 +1379,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             val msgs = synchronized(Assistente.conversa) { Assistente.conversa.toList() }
             msgs.forEachIndexed { i, m -> add(balao(m.eu, m.texto), if (i == 0) 14 else 10) }
         }
-        if (pensando) add(balao(false, "..."), 10)
+        if (pensando) add(balao(false, "pensando…"), 10)
 
         // o que está agendado, com botão pra cancelar
         val ag = Agenda.lista()

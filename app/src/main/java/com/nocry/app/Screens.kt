@@ -70,7 +70,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
     Erros.novos(),
     Comp.ligado(), ocupadoComp,
     Update.adiada(act),
-    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica"), Prefs.lerNum("tile_dica_meet"), Perfil.versao, Meet.recente(), Prefs.extraTxt("inicio_estilo")
+    Comunidade.versao, Comunidade.avisoParaMostrar()?.first, Comunidade.supNovas, Prefs.lerNum("tile_dica"), Prefs.lerNum("tile_dica_meet"), Perfil.versao, Meet.recente(), Prefs.extraTxt("inicio_estilo"),
+    SessaoIA.ligada, Assistente.pensando, SessaoIA.nomeChamada
 ).joinToString("|")
 
     private class Atalho(val ico: Int, val nome: String, val alerta: Boolean, val abre: () -> Unit)
@@ -112,6 +113,36 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         box.addView(linha)
         return box
     }
+    /** a IA na tela inicial: a carinha dela, o que ela está fazendo e o microfone (toca = ela fica ouvindo sem parar) */
+    private fun cartaoIA(c: android.content.Context): View {
+        val card = Ui.hbox(c)
+        card.gravity = Gravity.CENTER_VERTICAL
+        card.background = Ui.ripple(c, Ui.glass(c))
+        card.setPadding(Ui.dp(c, 10), Ui.dp(c, 8), Ui.dp(c, 10), Ui.dp(c, 8))
+        card.addView(MascoteView(c), LinearLayout.LayoutParams(Ui.dp(c, 58), Ui.dp(c, 58)).also { it.rightMargin = Ui.dp(c, 10) })
+        val col = Ui.vbox(c)
+        col.addView(Ui.text(c, "Fale com ${SessaoIA.nomeChamada}", 14.5f, Ui.TEXT, true).also { Ui.umaLinha(it, 10) })
+        val (st, cor) = when {
+            Assistente.pensando -> "pensando..." to Ui.MUTED
+            SessaoIA.ligada -> "ouvindo · pode falar" to Ui.OK
+            else -> "toque no microfone pra falar" to Ui.MUTED
+        }
+        col.addView(Ui.text(c, st, 10f, cor, true, mono = true).also { Ui.umaLinha(it, 9) }, Ui.lp(top = 3, c = c))
+        card.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val mic = OrbeMic(c, 48)
+        mic.ativo = SessaoIA.ligada
+        mic.contentDescription = if (SessaoIA.ligada) "parar de ouvir" else "falar com a IA"
+        mic.isClickable = true
+        mic.setOnClickListener {
+            if (!SessaoIA.interromper()) SessaoIA.alternar(act) { act.abre(AssistenteScreen(act)) }
+            redesenha()
+        }
+        card.addView(mic, LinearLayout.LayoutParams(Ui.dp(c, 48), Ui.dp(c, 48)).also { it.leftMargin = Ui.dp(c, 8) })
+        card.contentDescription = "Abrir a IA"
+        Ui.clique(card) { act.abre(AssistenteScreen(act)) }
+        return card
+    }
+
     private fun estiloD() = Prefs.extraTxt("inicio_estilo") == "D"
     /** jeito dos botões em teste: "A" lado a lado, "B" barra de bolinhas, "C" grade */
     private val jeito get() = Ui.estiloBt.takeIf { it == "A" || it == "B" || it == "C" } ?: ""
@@ -604,6 +635,9 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         saudTxt.letterSpacing = 0.2f
         add(saudTxt, 22)
         add(Ui.gradTexto(c, if (nome.isNotEmpty()) nome else "bem-vindo", 36f).also { Ui.umaLinha(it, 20) }, 0)
+
+        // ---------------- IA: a carinha dela e o microfone já na tela inicial ----------------
+        add(cartaoIA(c), 14)
 
         // ---------------- estado geral: anel + 3 pilulas + conexao ----------------
         val adb = Adb.connected

@@ -19,6 +19,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- IA em segundo plano: ouvir com o app minimizado (só voz, nada por cima dos outros apps) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- IA: "cria um alarme às 7h" -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- pedido de "bateria sem restricao" (o Android nao fecha o app em segundo plano) -->
@@ -129,6 +130,12 @@
             android:name=".IaFundoService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+
+        <!-- segura o app vivo só enquanto ela faz um pedido escrito (some sozinho quando termina) -->
+        <service
+            android:name=".IaPedidoService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- tela invisível do bloco "IA NOCRY": liga o microfone sem entrar no app -->
         <activity

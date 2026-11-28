@@ -184,6 +184,14 @@ object SessaoIA {
     private var sessao = 0
     private var errosSeguidos = 0
     private var inicioEscuta = 0L
+    /** a última vez que o reconhecedor deu sinal de vida (pronto, nível do som...). Sem sinal por uns segundos = travou */
+    @Volatile private var ultimoSinal = 0L
+    private var travadas = 0
+    /** a pessoa já falou nesta escuta: o Google pode demorar pra devolver o texto, então o vigia espera mais */
+    @Volatile private var falou = false
+    /** alterna entre o reconhecedor do Google e o padrão do celular quando um deles não está respondendo */
+    private var preferirPadrao = false
+    private var recEnergia: android.content.BroadcastReceiver? = null
     private var ultimoStatus: String? = null
 
     /** com o app minimizado, continua ouvindo (padrão: sim) */
@@ -226,6 +234,7 @@ object SessaoIA {
         ctx = a.applicationContext
         Voz.init(a)
         ligada = true
+        vigiarEnergia(a)
         Prefs.gravaNum("ia_ouvindo", 1L)
         // o serviço com microfone é o que deixa continuar ouvindo com o app minimizado (só dá pra ligar com o app aberto)
         if (foraDoApp) IaFundoService.iniciar(a)
@@ -241,6 +250,7 @@ object SessaoIA {
         ctx = c.applicationContext
         Voz.init(c)
         ligada = true
+        vigiarEnergia(c)
         Prefs.gravaNum("ia_ouvindo", 1L)
         errosSeguidos = 0
         act?.let { if (it.naFrente) mostra(it) }
@@ -251,6 +261,7 @@ object SessaoIA {
     /** desliga o microfone (e o serviço de segundo plano) */
     fun desligar(c: Context?, fecharServico: Boolean = true) {
         ligada = false
+        soltarEnergia(c)
         Prefs.gravaNum("ia_ouvindo", 0L)
         parar()
         val cc = c ?: ctx ?: return
@@ -350,11 +361,11 @@ object SessaoIA {
 
     private fun ouvinte(id: Int, durante: Boolean = false) = object : RecognitionListener {
         fun velho() = id != sessao || !(estado == Estado.OUVINDO || (durante && estado == Estado.FALANDO))
-        override fun onReadyForSpeech(params: Bundle?) { if (!velho()) texto("Ouvindo...") }
-        override fun onBeginningOfSpeech() {}
-        override fun onRmsChanged(rmsdB: Float) { if (!velho()) borda?.nivel = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
+        override fun onReadyForSpeech(params: Bundle?) { if (!velho()) { ultimoSinal = android.os.SystemClock.elapsedRealtime(); travadas = 0; texto("Ouvindo...") } }
+        override fun onBeginningOfSpeech() { ultimoSinal = android.os.SystemClock.elapsedRealtime(); falou = true }
+        override fun onRmsChanged(rmsdB: Float) { ultimoSinal = android.os.SystemClock.elapsedRealtime(); if (!velho()) borda?.nivel = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f) }
         override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() { if (!velho()) borda?.nivel = 0f }
+        override fun onEndOfSpeech() { ultimoSinal = android.os.SystemClock.elapsedRealtime(); if (!velho()) borda?.nivel = 0f }
         override fun onError(error: Int) {
             if (velho()) return
             // escutando enquanto ela fala: erro ou silêncio só recomeça a escuta (sem aviso)
@@ -423,7 +434,7 @@ object SessaoIA {
             val p = ultimaParcial.trim(); ultimaParcial = ""
             decidir(p); return
         }
-        if (!nada) NLog.add("ia", "escuta: erro $error (${nomeErro(error)})")
+        if (!nada) NLog.add("ia", "escuta: erro $error (${nomeErro(error)})" + if (carregando()) " · carregando" else "")
         if (caiu && ligada) { errosSeguidos = 0; deNovo(200); return }
         if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
             if (act?.naFrente == true) {
@@ -446,6 +457,8 @@ object SessaoIA {
             return
         }
         errosSeguidos++
+        // um reconhecedor que dá erro várias vezes seguidas: tenta o outro (Google ↔ padrão do celular)
+        if (errosSeguidos == 3 || errosSeguidos == 6) preferirPadrao = !preferirPadrao
         sessao++   // o reconhecedor velho pode avisar mais um erro ao ser fechado: esse aviso é ignorado
         trocarReconhecedor()
         if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) texto("Sem internet pra entender a voz... tentando de novo")
@@ -455,6 +468,7 @@ object SessaoIA {
 
     /** usa o reconhecimento de voz do Google quando tem (o do Xiaomi às vezes não responde) */
     private fun criarReconhecedor(a: Context): SpeechRecognizer {
+        if (preferirPadrao) return SpeechRecognizer.createSpeechRecognizer(a)
         try {
             val l = a.packageManager.queryIntentServices(Intent(android.speech.RecognitionService.SERVICE_INTERFACE), 0)
             val g = l.firstOrNull { it.serviceInfo.packageName == "com.google.android.googlequicksearchbox" }
@@ -467,6 +481,54 @@ object SessaoIA {
     private fun trocarReconhecedor() {
         try { sr?.destroy() } catch (_: Throwable) {}
         sr = null
+    }
+
+    private fun carregando(): Boolean = try { Power.plugged((ctx ?: return false)) } catch (_: Throwable) { false }
+
+    /**
+     * se o reconhecedor não dá sinal nenhum (nem o "pronto" nem o nível do som) por uns segundos, ele travou por dentro
+     * (acontecia com o celular no carregador: outro serviço segurando o microfone) e antes ela ficava "ouvindo" pra sempre,
+     * sem erro nenhum. Agora recomeça a escuta sozinha e, se repetir, troca de reconhecedor.
+     */
+    private fun vigiar(id: Int) {
+        main.postDelayed({
+            if (id != sessao || !ligada || estado != Estado.OUVINDO) return@postDelayed
+            val parado = android.os.SystemClock.elapsedRealtime() - ultimoSinal
+            if (parado >= (if (falou) 20000L else 6000L)) {
+                travadas++
+                NLog.add("ia", "escuta: sem sinal do microfone há ${parado / 1000}s (carregando: ${if (carregando()) "sim" else "não"}, vez $travadas); recomecei")
+                if (travadas >= 2) preferirPadrao = !preferirPadrao
+                sessao++
+                trocarReconhecedor()
+                deNovo(400)
+                return@postDelayed
+            }
+            vigiar(id)
+        }, 3000)
+    }
+
+    /** ligou ou tirou o carregador: o Android muda o áudio e o microfone trava. Recomeça a escuta do zero */
+    private fun vigiarEnergia(c: Context) {
+        if (recEnergia != null) return
+        val r = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (!ligada) return
+                NLog.add("ia", "escuta: o carregador foi ${if (intent?.action == Intent.ACTION_POWER_CONNECTED) "ligado" else "tirado"}; recomecei a escuta")
+                travadas = 0; errosSeguidos = 0; preferirPadrao = false
+                if (estado == Estado.OUVINDO) { sessao++; trocarReconhecedor(); deNovo(800) }
+            }
+        }
+        try {
+            val f = android.content.IntentFilter().also { it.addAction(Intent.ACTION_POWER_CONNECTED); it.addAction(Intent.ACTION_POWER_DISCONNECTED) }
+            c.applicationContext.registerReceiver(r, f)
+            recEnergia = r
+        } catch (_: Throwable) {}
+    }
+
+    private fun soltarEnergia(c: Context?) {
+        val r = recEnergia ?: return
+        recEnergia = null
+        try { (c ?: ctx)?.applicationContext?.unregisterReceiver(r) } catch (_: Throwable) {}
     }
 
     /** volta a ouvir daqui a pouco (se nada mudou nesse meio tempo) */
@@ -505,6 +567,9 @@ object SessaoIA {
                 // só o microfone do celular; não tenta puxar áudio de outras fontes
                 .putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
             s.startListening(i)
+            falou = false
+            ultimoSinal = android.os.SystemClock.elapsedRealtime()
+            vigiar(id)
         } catch (t: Throwable) {
             NLog.add("ia", "escuta: não começou (${t.javaClass.simpleName})")
             if (ligada) { errosSeguidos++; deNovo(3000) } else parar()
@@ -856,6 +921,63 @@ class IaFundoService : android.app.Service() {
         ativo = false
         eu = null
         SessaoIA.servicoFechou()
+        super.onDestroy()
+    }
+}
+
+/** segura o app vivo só enquanto um pedido escrito está sendo feito: sem isso o Android congela o app quando você
+ *  sai da conversa e a resposta nunca chega. Some sozinho (e a notificação junto) quando o pedido termina. */
+class IaPedidoService : android.app.Service() {
+    companion object {
+        @Volatile private var ativo = false
+        private const val ID = 1078
+
+        /** chamado com o app na tela (a hora de digitar e mandar): o Android deixa começar o serviço agora */
+        fun segurar(c: Context) {
+            if (IaFundoService.ativo || ativo) return
+            try {
+                val i = Intent(c, IaPedidoService::class.java)
+                if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i)
+            } catch (t: Throwable) { NLog.add("ia", "pedido: não segurou o app (${t.javaClass.simpleName})") }
+        }
+
+        /** termina o último pedido: espera um instante (pode chegar outro logo) e fecha */
+        fun soltar(c: Context) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (!Assistente.pensando) try { c.stopService(Intent(c, IaPedidoService::class.java)) } catch (_: Throwable) {}
+            }, 1500)
+        }
+    }
+
+    override fun onBind(intent: Intent?): android.os.IBinder? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        try { Prefs.init(this); Notif.init(this) } catch (_: Throwable) {}
+        try {
+            val n = android.app.Notification.Builder(this, Notif.CH_SVC)
+                .setSmallIcon(R.drawable.ic_ia)
+                .setContentTitle("IA do NOCRY")
+                .setContentText("Fazendo o seu pedido…")
+                .setOngoing(true)
+                .build()
+            if (Build.VERSION.SDK_INT >= 29) startForeground(ID, n, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            else startForeground(ID, n)
+            ativo = true
+        } catch (t: Throwable) {
+            NLog.add("ia", "pedido: o Android não deixou segurar o app (${t.javaClass.simpleName})")
+            stopSelf()
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // se o Android reiniciar sozinho sem pedido nenhum, não faz nada e fecha
+        if (!Assistente.pensando) { stopSelf(); return START_NOT_STICKY }
+        return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        ativo = false
         super.onDestroy()
     }
 }

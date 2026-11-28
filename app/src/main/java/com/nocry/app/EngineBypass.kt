@@ -117,6 +117,24 @@ object EngineBypass {
         }
     }
 
+    /** aplica a pasta suja AGORA (pedido pela voz ou pela IA), sem esperar o gatilho.
+     *  0 = aplicou, 1 = não deu (ADB), 2 = já estava aplicado. [tipo] = completo, normal ou simples (null = o que está escolhido) */
+    fun aplicarAgora(tipo: String?): Int = esperando("aplicando") {
+        if (Prefs.bypassMark) 2
+        else {
+            if (tipo != null) Prefs.bypassTipo = tipo
+            if (Config.aplicar(Prefs.bypassFf, Prefs.bypassTipo)) {
+                Prefs.bypassMark = true
+                try { Rank.contaBypass() } catch (_: Throwable) {}
+                NLog.add("bypass", "aplicado agora (pedido por voz): ${Prefs.bypassFf} · ${Prefs.bypassTipo}")
+                Notif.evento(Sys.app, "BYPASS APLICADO", "Já está no jogo · ${ffNome()} · ${Prefs.bypassTipo.uppercase()} · pela voz", Notif.Efeito.LIGOU)
+                Presenca.evento("bypass_on", "VOZ · " + Presenca.ffNome(Prefs.bypassFf) + " · " + Prefs.bypassTipo.uppercase())
+                NocryService.sync(Sys.app)
+                0
+            } else 1
+        }
+    }
+
     fun iniciarVolume() {
         Prefs.bypassVolAtivo = true
         cu = 0; cd = 0; lu = 0L; ld = 0L

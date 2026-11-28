@@ -823,6 +823,22 @@ object Sniper {
         salvarEscolha(); mudou()
     }
 
+    /** escolha feita por voz ou pela IA: modos (1X1..4X4) e valores em centavos ("400" = R$ 4). Lista vazia = não mexe naquela parte */
+    fun escolherPeloComando(novosModos: Set<String>, novosValores: List<String>): String {
+        if (novosModos.isNotEmpty()) { modos.clear(); modos.addAll(novosModos) }
+        var faltaram: List<String> = emptyList()
+        if (novosValores.isNotEmpty()) {
+            val disp = valoresDisponiveis()
+            // sem lista de filas carregada ainda, aceita o que pediram
+            val ok = if (disp.isEmpty()) novosValores else novosValores.filter { it in disp }
+            faltaram = novosValores.filter { it !in ok }
+            if (ok.isNotEmpty()) { valores.clear(); valores.addAll(ok) }
+        }
+        salvarEscolha(); mudou()
+        val txt = (if (modos.isEmpty()) "sem modo" else "modo " + modos.sorted().joinToString(" ")) + " · " + textoValores(valores)
+        return if (faltaram.isNotEmpty()) "⚠ bot em $txt (${textoValores(faltaram)} não tem em $org nesses modos)" else "✓ bot em $txt"
+    }
+
     fun escolherGelo(g: String) { gelo = g; salvarEscolha(); mudou() }
     fun definirMaxFilas(n: Int) { maxFilas = n.coerceIn(1, 300); salvarEscolha(); mudou() }
     fun definirMsgAuto(t: String) { msgAuto = t.ifBlank { MSG_PADRAO }; salvarEscolha(); mudou() }
