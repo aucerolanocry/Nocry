@@ -41,3 +41,9 @@ cdel() {      # ns chave -> 0 so se apagou (confere)
   content delete --uri "content://settings/$1" --where "name='$2'" </dev/null >/dev/null 2>&1
   cget "$1" "$2" && [ "$CV" = null ]
 }
+tm() { echo "T|$1|$(cut -d' ' -f1 /proc/uptime 2>/dev/null)"; }      # marca de tempo: o app mostra no log quanto cada parte levou
+PD=""      # pasta pra juntar o resultado do que roda ao mesmo tempo ("" = nao deu pra criar: conta um por vez, como antes)
+pd_ini() { PD=/data/local/tmp/.nocry_p$$; rm -rf "$PD" 2>/dev/null; if mkdir -p "$PD" 2>/dev/null && : > "$PD/ok" 2>/dev/null; then :; else PD=""; fi; }
+pd_fim() { [ -n "$PD" ] && rm -rf "$PD" 2>/dev/null; PD=""; }
+_pq=0
+par() { "$@" & _pq=$((_pq+1)); [ $((_pq % 6)) -eq 0 ] && wait; }      # roda junto com os outros (no maximo 6 de cada vez); antes era um por um

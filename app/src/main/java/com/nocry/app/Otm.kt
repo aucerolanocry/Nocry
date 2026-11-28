@@ -397,15 +397,31 @@ object Otm {
     /** fecha e congela. Cada linha de log aparece na tela na hora (os apps fechando ao vivo). true = feito */
     fun ativar(log: (String) -> Unit): Boolean = synchronized(opLock) { ativarSeguro(log) }
 
+    /** quanto cada parte do script levou ("T|nome|segundos desde que o celular ligou"), pra ver no log o que demora */
+    private fun tempos(out: String): String {
+        val t = out.lines().filter { it.startsWith("T|") }.mapNotNull { l ->
+            val p = l.split('|')
+            val seg = p.getOrNull(2)?.trim()?.toDoubleOrNull() ?: return@mapNotNull null
+            p[1] to seg
+        }
+        if (t.size < 2) return ""
+        return t.zipWithNext { a, b -> b.first + " " + seg(((b.second - a.second) * 1000).toLong()) }.joinToString(" · ")
+    }
+
+    private fun seg(ms: Long): String = String.format(java.util.Locale("pt", "BR"), "%.1fs", ms / 1000.0)
+
     private fun ativarSeguro(log: (String) -> Unit): Boolean {
         val ctx: Context = Sys.app
+        val t0 = android.os.SystemClock.elapsedRealtime()
         log("LENDO O CELULAR...")
         if (!Adb.ensure(ctx)) {
             log("[x] ADB NAO CONECTADO — NADA FOI MUDADO")
             log("    Abra CONEXAO e conecte a depuracao sem fio.")
             return false
         }
+        val tLer = android.os.SystemClock.elapsedRealtime()
         var plano = lerPlano()
+        val msLer = android.os.SystemClock.elapsedRealtime() - tLer
         if (plano != null && plano.setFail) {
             log("TENTANDO DE NOVO...")
             Thread.sleep(2000)
@@ -554,6 +570,7 @@ object Otm {
         }
         log("• Apps fechados nao avisam nada ate voce abrir · PROTEGER APP e OPCOES mudam isso")
         NLog.add("otimizacao", "ativada${if (full) " (FULL)" else ""}: $nC apps fechados")
+        NLog.add("otimizacao", "tempo: leitura ${seg(msLer)} · ${tempos(out).ifEmpty { "-" }} · total ${seg(android.os.SystemClock.elapsedRealtime() - t0)}")
         return true
     }
 
@@ -574,6 +591,7 @@ object Otm {
 
     private fun desativarSeguro(log: (String) -> Unit): Boolean {
         val ctx: Context = Sys.app
+        val t0 = android.os.SystemClock.elapsedRealtime()
         if (!Adb.ensure(ctx)) {
             log("[x] ADB NAO CONECTADO — NADA FOI MUDADO")
             return false
@@ -648,6 +666,7 @@ object Otm {
             log("• Apps liberados para rodar em segundo plano de novo")
             log("• Animacoes, tela, wi-fi e standby voltaram ao que eram")
             NLog.add("otimizacao", "desativada")
+            NLog.add("otimizacao", "tempo: ${tempos(r.out).ifEmpty { "-" }} · total ${seg(android.os.SystemClock.elapsedRealtime() - t0)}")
             return true
         }
         log("[!] VOLTOU $ok DE $t")
