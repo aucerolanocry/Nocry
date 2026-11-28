@@ -605,6 +605,7 @@ object SessaoIA {
     private fun nuvemPausa(ms: Long, motivo: String) {
         Prefs.gravaNum("ia_stt_ate", System.currentTimeMillis() + ms)
         NLog.add("ia", "escuta: ouvido novo em pausa ($motivo); uso o reconhecedor do celular")
+        relatar("pausa: $motivo", forcar = true)
         Ouvido.parar()
         entendendo = false
         falhasNuvem = 0
@@ -620,17 +621,43 @@ object SessaoIA {
         trocarReconhecedor()
         entendendo = false
         borda?.nivel = 0f
+        val novo = !Ouvido.rodando
         Ouvido.iniciar(a, ouvidoOuvinte)
+        // 8 s e 45 s depois de abrir o microfone, manda pro painel da staff só os números do que ele ouviu (nunca áudio nem texto)
+        if (novo) {
+            val id = ++relatoId
+            main.postDelayed({ if (id == relatoId && ligada) relatar("8s") }, 8_000)
+            main.postDelayed({ if (id == relatoId && ligada) relatar("45s") }, 45_000)
+        }
+    }
+
+    private var relatoId = 0
+    private var ultimoRelato = 0L
+
+    /** manda pro painel da staff os números do ouvido (quanto som chegou, qual fonte, o que falhou). Sem áudio e sem texto. */
+    private fun relatar(motivo: String, forcar: Boolean = false) {
+        val agora = System.currentTimeMillis()
+        if (!forcar && agora - ultimoRelato < 30_000) return
+        ultimoRelato = agora
+        val c = ctx ?: return
+        val d = Ouvido.resumo().put("quando", motivo).put("ouvidoNovo", ouvidoNovo()).put("estado", estado.name)
+            .put("fundo", IaFundoService.ativo).put("naFrente", act?.naFrente == true).put("pausaAte", Prefs.lerNum("ia_stt_ate", 0L) - agora)
+        Bg.io { try { Comunidade.x(c, "diag", org.json.JSONObject().put("dados", org.json.JSONObject().put("voz", d))) } catch (_: Throwable) {} }
     }
 
     private val ouvidoOuvinte = object : Ouvido.Ouvinte {
         override fun mudo() = !ligada || estado != Estado.OUVINDO || entendendo
         override fun pronto() { if (!mudo()) texto("Ouvindo...", notif = false) }
         override fun nivel(n: Float) { borda?.nivel = if (mudo()) 0f else n }
+        override fun vozDetectada() { if (!mudo()) texto("Te ouvindo falar...", notif = false) }
         override fun falhou(motivo: String) {
             if (!ligada) return
+            // o microfone em si não está dando som: o jeito antigo usaria o mesmo microfone, então não adianta trocar.
+            // Ele continua tentando sozinho; aqui só avisa o motivo (em vez de ficar "ouvindo" de mentira)
             NLog.add("ia", "escuta: $motivo")
-            nuvemPausa(10 * 60_000L, motivo)
+            texto("Sem som do microfone: $motivo")
+            act?.let { if (it.naFrente) Ui.toast(it, "o microfone não está dando som ($motivo). Veja a permissão de microfone do NOCRY") }
+            relatar(motivo, forcar = true)
         }
         override fun fala(wav: ByteArray, seg: Float) {
             if (mudo()) return
@@ -669,6 +696,7 @@ object SessaoIA {
         }
         falhasNuvem = 0
         val fala = t.trim()
+        relatar("escreveu ${fala.length} letras")
         // ruído que o Whisper "escreve" como frase, ou pedaço curtinho fora da tela da IA: ignora e continua ouvindo
         if (Ouvido.lixo(fala, seg, dica) || (!naTelaIAagora() && PalavrasChave.limpa(fala).length < 3)) { texto("Ouvindo...", notif = false); return }
         errosSeguidos = 0

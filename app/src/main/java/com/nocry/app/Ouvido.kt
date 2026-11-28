@@ -19,7 +19,8 @@ import kotlin.math.sqrt
  * pro servidor do NOCRY escrever o que foi dito (Whisper).
  *
  *  - O microfone fica aberto o tempo todo enquanto ela está ligada: não tem "reiniciar a escuta" a cada frase.
- *  - Enquanto ela pensa ou fala ([mudo]), o som é jogado fora (ela não escuta a própria voz).
+ *  - Se uma fonte de som só manda silêncio (acontece em alguns celulares), troca sozinho pra outra fonte.
+ *  - Enquanto ela pensa ou fala, o som é jogado fora (ela não escuta a própria voz).
  *  - O áudio só sai do celular quando você realmente falou, e não é guardado em lugar nenhum.
  */
 object Ouvido {
@@ -28,9 +29,11 @@ object Ouvido {
         fun pronto()
         /** volume de agora, de 0 a 1 (pra luz da tela) */
         fun nivel(n: Float)
+        /** detectou que você começou a falar */
+        fun vozDetectada()
         /** você terminou de falar: áudio em WAV (16 kHz, mono) e a duração em segundos */
         fun fala(wav: ByteArray, seg: Float)
-        /** o microfone não abriu ou ficou mudo (o Android não deixou) */
+        /** o microfone não abriu ou só manda silêncio, mesmo trocando de fonte (ele continua tentando sozinho) */
         fun falhou(motivo: String)
         /** true enquanto ela pensa, fala ou está escrevendo o que você disse: o som é jogado fora */
         fun mudo(): Boolean
@@ -45,7 +48,15 @@ object Ouvido {
     private const val FIM_SILENCIO = 45       // 900 ms quieto = terminou a frase
     private const val MAX_QUADROS = 700       // frase mais longa: 14 s
     private const val MIN_VOZ = 12            // menos de 240 ms de voz = estalo, não é fala
-    private const val MUDO_QUADROS = 250      // 5 s de silêncio absoluto = o Android silenciou o microfone
+    private const val MUDO_QUADROS = 200      // 4 s só de silêncio absoluto numa fonte = troca de fonte
+    private const val CALIBRA = 40            // 0,8 s medindo o barulho de fundo ao abrir o microfone
+
+    private val FONTES = intArrayOf(MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+    private val NOMES = arrayOf("comum", "de voz", "de chamada")
+
+    private const val SOM = 1
+    private const val MUDO = 2
+    private const val ERRO = 3
 
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var geracao = 0
@@ -53,10 +64,31 @@ object Ouvido {
 
     val rodando: Boolean get() = fio?.isAlive == true
 
+    // ---- números pra saber o que aconteceu (vão pro painel da staff só como contagem, nunca o áudio nem o texto)
+    @Volatile private var fonteAtual = ""
+    @Volatile private var aberturas = 0
+    @Volatile private var quadrosLidos = 0L
+    @Volatile private var quadrosComSom = 0L
+    @Volatile private var maxDb = -90f
+    @Volatile private var pisoDb = -90f
+    @Volatile private var segmentos = 0
+    @Volatile private var ruidos = 0
+    @Volatile private var trocasFonte = 0
+    @Volatile private var ultimoMotivo = ""
+    @Volatile private var desde = 0L
+
+    fun resumo(): JSONObject = JSONObject()
+        .put("fonte", fonteAtual).put("aberturas", aberturas).put("quadros", quadrosLidos).put("comSom", quadrosComSom)
+        .put("maxDb", Math.round(maxDb)).put("pisoDb", Math.round(pisoDb)).put("falas", segmentos).put("ruidos", ruidos)
+        .put("trocas", trocasFonte).put("motivo", ultimoMotivo).put("segAberto", if (desde > 0) (System.currentTimeMillis() - desde) / 1000 else 0)
+        .put("rodando", rodando)
+
     /** abre o microfone e começa a separar as falas. Pode chamar de novo: se já está rodando, não faz nada */
     fun iniciar(c: Context, l: Ouvinte): Boolean {
         if (rodando) return true
         val minha = ++geracao
+        aberturas = 0; quadrosLidos = 0; quadrosComSom = 0; maxDb = -90f; segmentos = 0; ruidos = 0; trocasFonte = 0; ultimoMotivo = ""
+        desde = System.currentTimeMillis()
         val t = Thread({ laco(minha, l) }, "nocry-ouvido")
         t.isDaemon = true
         fio = t
@@ -72,69 +104,109 @@ object Ouvido {
     // ------------------------------------------------------------------ microfone
 
     @SuppressLint("MissingPermission")
-    private fun abrir(): AudioRecord? {
+    private fun abrir(idx: Int): AudioRecord? {
         val min = AudioRecord.getMinBufferSize(HZ, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        if (min <= 0) return null
+        if (min <= 0) { ultimoMotivo = "buffer do microfone inválido ($min)"; return null }
         val buf = maxOf(min * 2, QUADRO * 2 * 16)
-        // VOICE_RECOGNITION costuma vir já limpo pra voz; se o celular não aceitar, o microfone comum
-        for (fonte in intArrayOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC)) {
-            try {
-                val r = AudioRecord(fonte, HZ, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, buf)
-                if (r.state == AudioRecord.STATE_INITIALIZED) {
-                    r.startRecording()
-                    if (r.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                        NLog.add("ia", "escuta: microfone próprio aberto (fonte " + (if (fonte == MediaRecorder.AudioSource.MIC) "comum" else "de voz") + ")")
-                        return r
-                    }
-                }
+        try {
+            val r = AudioRecord(FONTES[idx], HZ, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, buf)
+            if (r.state != AudioRecord.STATE_INITIALIZED) {
                 r.release()
-            } catch (_: Throwable) {}
+                ultimoMotivo = "fonte ${NOMES[idx]} não iniciou"
+                return null
+            }
+            r.startRecording()
+            if (r.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                r.release()
+                ultimoMotivo = "fonte ${NOMES[idx]} não gravou"
+                return null
+            }
+            aberturas++
+            fonteAtual = NOMES[idx]
+            NLog.add("ia", "escuta: microfone próprio aberto (fonte ${NOMES[idx]})")
+            return r
+        } catch (t: Throwable) {
+            ultimoMotivo = "microfone: ${t.javaClass.simpleName}"
+            return null
         }
-        return null
     }
 
     private fun laco(minha: Int, l: Ouvinte) {
-        var aberturasSeguidas = 0
-        var primeiroSom = true
+        var idx = Prefs.lerNum("ia_fonte", 0L).toInt().coerceIn(0, FONTES.size - 1)
+        var falhasAbrir = 0
+        var mudosSeguidos = 0
+        var errosSeguidos = 0
+        var avisou = false
         while (minha == geracao) {
-            val ar = abrir()
+            val ar = abrir(idx)
             if (ar == null) {
-                aberturasSeguidas++
-                if (aberturasSeguidas >= 3) { main.post { if (minha == geracao) l.falhou("o microfone não abriu") }; break }
-                dorme(700)
+                falhasAbrir++
+                idx = (idx + 1) % FONTES.size
+                if (falhasAbrir >= FONTES.size && !avisou) {
+                    avisou = true
+                    val m = ultimoMotivo
+                    main.post { if (minha == geracao) l.falhou(m.ifBlank { "o microfone não abriu" }) }
+                }
+                dorme(if (falhasAbrir >= FONTES.size) 2000L else 300L)
                 continue
             }
-            aberturasSeguidas = 0
+            falhasAbrir = 0
+            var r = ERRO
             try {
-                lerAte(ar, minha, l) { primeiroSom }.also { if (it) primeiroSom = false }
+                r = ler(ar, idx, minha, l)
+            } catch (t: Throwable) {
+                ultimoMotivo = "leitura: ${t.javaClass.simpleName}"
             } finally {
                 try { ar.stop() } catch (_: Throwable) {}
                 try { ar.release() } catch (_: Throwable) {}
             }
-            // saiu do laço de leitura por erro (outro app pegou o microfone, fone ligou/desligou...): espera um pouco e abre de novo
-            if (minha == geracao) dorme(500)
+            if (minha != geracao) break
+            when (r) {
+                SOM -> { mudosSeguidos = 0; errosSeguidos = 0; avisou = false; dorme(300L) }
+                MUDO -> {
+                    // essa fonte só manda silêncio: tenta a próxima
+                    mudosSeguidos++
+                    trocasFonte++
+                    NLog.add("ia", "escuta: fonte ${NOMES[idx]} só mandou silêncio; troquei")
+                    idx = (idx + 1) % FONTES.size
+                    if (mudosSeguidos >= FONTES.size && !avisou) {
+                        avisou = true
+                        main.post { if (minha == geracao) l.falhou("o microfone só manda silêncio") }
+                    }
+                    dorme(200L)
+                }
+                else -> {
+                    errosSeguidos++
+                    if (errosSeguidos >= 3) { idx = (idx + 1) % FONTES.size; errosSeguidos = 0 }
+                    dorme(500L)
+                }
+            }
         }
     }
 
     private fun dorme(ms: Long) { try { Thread.sleep(ms) } catch (_: InterruptedException) {} }
 
-    /** lê o microfone e separa as falas. Devolve true se chegou som de verdade alguma vez */
-    private fun lerAte(ar: AudioRecord, minha: Int, l: Ouvinte, esperandoPrimeiro: () -> Boolean): Boolean {
+    /** lê o microfone e separa as falas. Devolve SOM (parou depois de ouvir som), MUDO (só silêncio) ou ERRO (a leitura falhou) */
+    private fun ler(ar: AudioRecord, idx: Int, minha: Int, l: Ouvinte): Int {
         val pcm = ShortArray(QUADRO)
         val pre = ArrayDeque<ShortArray>()
         val saida = ByteArrayOutputStream(64 * 1024)
-        var piso = -55f                // barulho de fundo (dB): sobe devagar e desce depressa
+        var piso = -60f                // barulho de fundo (dB): medido ao abrir, depois sobe devagar e desce depressa
+        val medidas = FloatArray(CALIBRA)
+        var nMed = 0
         var emFala = false
         var recentes = 0               // últimos 6 quadros: 1 = tinha voz
         var vozTotal = 0
         var quadrosFala = 0
         var silencio = 0
+        var somaDb = 0.0
+        var somaDb2 = 0.0
+        var nDb = 0
         var zeros = 0
-        var avisouMudo = false
         var chegouSom = false
         var n = 0
 
-        fun zera() { emFala = false; recentes = 0; vozTotal = 0; quadrosFala = 0; silencio = 0; saida.reset(); pre.clear() }
+        fun zera() { emFala = false; recentes = 0; vozTotal = 0; quadrosFala = 0; silencio = 0; somaDb = 0.0; somaDb2 = 0.0; nDb = 0; saida.reset(); pre.clear() }
 
         fun fecha() {
             val cortar = maxOf(0, silencio - 15) * QUADRO * 2       // tira o silêncio do final (deixa 300 ms)
@@ -142,9 +214,10 @@ object Ouvido {
             val tam = maxOf(0, bytes.size - cortar)
             val voz = vozTotal
             zera()
-            if (voz < MIN_VOZ || tam < QUADRO * 2 * MIN_VOZ) return
+            if (voz < MIN_VOZ || tam < QUADRO * 2 * MIN_VOZ) { ruidos++; return }
             val wav = montaWav(bytes, tam)
             val seg = tam / 2f / HZ
+            segmentos++
             if (minha == geracao) main.post { if (minha == geracao) l.fala(wav, seg) }
         }
 
@@ -154,8 +227,9 @@ object Ouvido {
                 val k = ar.read(pcm, off, QUADRO - off)
                 if (k <= 0) {
                     // erro de leitura (-6 = o Android tirou o microfone de nós): sai pra abrir de novo
+                    ultimoMotivo = "leitura do microfone falhou ($k)"
                     NLog.add("ia", "escuta: leitura do microfone falhou ($k)")
-                    return chegouSom
+                    return if (chegouSom) SOM else ERRO
                 }
                 off += k
             }
@@ -171,22 +245,25 @@ object Ouvido {
             }
             val rms = sqrt(soma / QUADRO)
             val db = if (rms < 1.0) -90f else (20.0 * log10(rms / 32768.0)).toFloat()
+            quadrosLidos++
+            if (db > maxDb) maxDb = db
 
-            // silêncio absoluto por vários segundos = o Android silenciou o microfone (segundo plano sem permissão, chave de privacidade)
-            if (maxAbs == 0) {
+            // silêncio absoluto logo ao abrir = essa fonte de som está muda: sai pra trocar de fonte
+            if (maxAbs <= 1) {
                 zeros++
-                if (zeros >= MUDO_QUADROS && !avisouMudo) {
-                    avisouMudo = true
-                    main.post { if (minha == geracao) l.falhou("o Android deixou o microfone mudo") }
-                }
+                if (!chegouSom && zeros >= MUDO_QUADROS) return MUDO
             } else {
                 zeros = 0
-                avisouMudo = false
-                if (!chegouSom) { chegouSom = true; if (esperandoPrimeiro()) main.post { if (minha == geracao) l.pronto() } }
+                quadrosComSom++
+                if (!chegouSom) {
+                    chegouSom = true
+                    Prefs.gravaNum("ia_fonte", idx.toLong())
+                    main.post { if (minha == geracao) l.pronto() }
+                }
             }
 
-            n++
             val quieto = l.mudo()
+            n++
             if (n % 3 == 0) {
                 val nv = if (quieto) 0f else ((db + 60f) / 40f).coerceIn(0f, 1f)
                 main.post { if (minha == geracao) l.nivel(nv) }
@@ -195,12 +272,35 @@ object Ouvido {
             // ela pensando/falando/escrevendo: joga o som fora e recomeça do zero
             if (quieto) { if (emFala || pre.isNotEmpty()) zera(); continue }
 
+            // primeiros 0,8 s: só mede o barulho de fundo (a menor média de 5 quadros) e guarda o som pra não cortar o começo
+            if (nMed < CALIBRA) {
+                medidas[nMed++] = db
+                pre.addLast(pcm.copyOf())
+                if (pre.size > PRE_ROLL) pre.removeFirst()
+                if (nMed == CALIBRA) {
+                    var menor = 0f
+                    var achou = false
+                    var i = 0
+                    while (i + 5 <= CALIBRA) {
+                        var s = 0f
+                        for (j in i until i + 5) s += medidas[j]
+                        val m = s / 5f
+                        if (!achou || m < menor) { menor = m; achou = true }
+                        i += 5
+                    }
+                    piso = menor.coerceIn(-75f, -38f)
+                    pisoDb = piso
+                }
+                continue
+            }
+
             if (!emFala) {
                 // o barulho de fundo desce depressa e sobe devagar (uma fala não vira "barulho")
-                piso += (db - piso) * (if (db < piso) 0.25f else 0.003f)
+                piso += (db - piso) * (if (db < piso) 0.25f else 0.004f)
                 piso = piso.coerceIn(-75f, -38f)
+                pisoDb = piso
             }
-            val limiar = maxOf(piso + 11f, -48f)
+            val limiar = maxOf(piso + 10f, -58f)
             val voz = db > (if (emFala) limiar - 4f else limiar)
             recentes = ((recentes shl 1) or (if (voz) 1 else 0)) and 0x3F
 
@@ -214,15 +314,30 @@ object Ouvido {
                     quadrosFala = pre.size
                     for (q in pre) escreve(saida, q)
                     pre.clear()
+                    somaDb = db.toDouble(); somaDb2 = db.toDouble() * db; nDb = 1
+                    main.post { if (minha == geracao) l.vozDetectada() }
                 }
             } else {
                 escreve(saida, pcm)
                 quadrosFala++
+                somaDb += db; somaDb2 += db.toDouble() * db; nDb++
                 if (voz) { vozTotal++; silencio = 0 } else silencio++
+                // 3 s seguidos de "voz" com volume quase constante = é barulho (ventilador, chiado), não fala: descarta
+                if (quadrosFala == 150) {
+                    val media = somaDb / nDb
+                    val desvio = sqrt(maxOf(0.0, somaDb2 / nDb - media * media))
+                    if (desvio < 2.5 && silencio == 0) {
+                        piso = (media.toFloat() - 4f).coerceIn(-75f, -30f)
+                        pisoDb = piso
+                        ruidos++
+                        zera()
+                        continue
+                    }
+                }
                 if (silencio >= FIM_SILENCIO || quadrosFala >= MAX_QUADROS) fecha()
             }
         }
-        return chegouSom
+        return if (chegouSom) SOM else ERRO
     }
 
     private fun escreve(o: ByteArrayOutputStream, q: ShortArray) {
@@ -257,9 +372,15 @@ object Ouvido {
         val b64 = android.util.Base64.encodeToString(wav, android.util.Base64.NO_WRAP)
         val t0 = System.currentTimeMillis()
         val corpo = JSONObject().put("audio", b64).put("seg", seg.toDouble()).put("dica", dica.take(200))
-        val j = IA.post(c, "ouvir", corpo, 25000) ?: return Texto(null, "rede")
+        val j = IA.post(c, "ouvir", corpo, 25000)
+        if (j == null) {
+            ultimoMotivo = "servidor não respondeu"
+            NLog.add("ia", "escuta: o servidor não respondeu")
+            return Texto(null, "rede")
+        }
         if (!j.optBoolean("ok")) {
             val r = j.optString("reason")
+            ultimoMotivo = "servidor: $r"
             NLog.add("ia", "escuta: servidor não escreveu a fala ($r)")
             return Texto(null, if (r == "stt_limite") "limite" else "indisponivel")
         }
