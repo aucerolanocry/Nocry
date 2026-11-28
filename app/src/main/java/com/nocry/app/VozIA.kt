@@ -483,7 +483,10 @@ object SessaoIA {
         sr = null
     }
 
-    private fun carregando(): Boolean = try { Power.plugged((ctx ?: return false)) } catch (_: Throwable) { false }
+    private fun carregando(): Boolean {
+        val c = ctx ?: return false
+        return try { Power.plugged(c) } catch (_: Throwable) { false }
+    }
 
     /**
      * se o reconhecedor não dá sinal nenhum (nem o "pronto" nem o nível do som) por uns segundos, ele travou por dentro
