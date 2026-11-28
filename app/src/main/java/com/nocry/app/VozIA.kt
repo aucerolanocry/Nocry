@@ -430,11 +430,11 @@ object SessaoIA {
                 (act ?: ctx)?.let { Ui.toast(it, "libere o microfone pro NOCRY nas configurações do celular") }
                 desligar(ctx); return
             }
-            // fora da tela: o Android tirou o microfone (normal quando ele fecha e reabre o app sozinho)
-            NLog.add("ia", "o Android tirou o microfone com o app fora da tela")
-            ligada = false
-            parar()
-            ctx?.let { IaFundoService.avisarVoltar(it) }
+            // fora da tela: o Android tirou o microfone por um instante. Continua ligada e tenta de novo sozinha
+            NLog.add("ia", "microfone negado em segundo plano; tentando de novo")
+            trocarReconhecedor()
+            errosSeguidos++
+            if (ligada) deNovo(if (errosSeguidos <= 3) 1500 else 5000)
             return
         }
         if (!ligada) { parar(); return }
@@ -778,23 +778,6 @@ class IaFundoService : android.app.Service() {
             } catch (t: Throwable) { NLog.add("ia", "segundo plano não ligou (${t.javaClass.simpleName})") }
         }
 
-        /** o celular fechou o NOCRY (ex.: Game Turbo ao abrir o jogo) e o Android não devolve o microfone sozinho:
-         *  avisa com uma notificação; tocar nela liga de novo sem abrir o app */
-        fun avisarVoltar(c: Context) {
-            try {
-                val pi = android.app.PendingIntent.getActivity(c, 81,
-                    Intent(c, IaLigarActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
-                    android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
-                val n = android.app.Notification.Builder(c, Notif.CH_SVC)
-                    .setSmallIcon(R.drawable.ic_ia)
-                    .setContentTitle("A IA parou de ouvir")
-                    .setContentText("O celular fechou o NOCRY. Toque aqui pra ela voltar a te ouvir.")
-                    .setContentIntent(pi)
-                    .setAutoCancel(true)
-                    .build()
-                c.getSystemService(android.app.NotificationManager::class.java)?.notify(ID + 1, n)
-            } catch (_: Throwable) {}
-        }
 
         fun fechar(c: Context) {
             try { c.stopService(Intent(c, IaFundoService::class.java)) } catch (_: Throwable) {}
@@ -805,15 +788,15 @@ class IaFundoService : android.app.Service() {
 
     private fun montar(s: String?): android.app.Notification {
         val abrir = android.app.PendingIntent.getActivity(this, 77, Intent(this, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE)
-        val alternar = if (SessaoIA.ligada) android.app.PendingIntent.getService(this, 79, Intent(this, IaFundoService::class.java).setAction("alternar"), android.app.PendingIntent.FLAG_IMMUTABLE)
-            else android.app.PendingIntent.getActivity(this, 82, Intent(this, IaLigarActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION), android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
+        val alternar = android.app.PendingIntent.getService(this, 79, Intent(this, IaFundoService::class.java).setAction("alternar"), android.app.PendingIntent.FLAG_IMMUTABLE)
         val fechar = android.app.PendingIntent.getService(this, 78, Intent(this, IaFundoService::class.java).setAction("fechar"), android.app.PendingIntent.FLAG_IMMUTABLE)
         val ic = { r: Int -> android.graphics.drawable.Icon.createWithResource(this, r) }
         val ouvindo = SessaoIA.ligada
         return android.app.Notification.Builder(this, Notif.CH_SVC)
             .setSmallIcon(R.drawable.ic_ia)
             .setContentTitle(if (ouvindo) "IA do NOCRY ouvindo" else "IA do NOCRY pausada")
-            .setContentText(s ?: if (ouvindo) "Fale um comando. Pra conversar, me chame: \"${SessaoIA.nomeChamada}\"" else "Toque em Ouvir pra ela voltar a te ouvir")
+            // o Android obriga essa notificação enquanto ela ouve em segundo plano; você não precisa tocar nela
+            .setContentText(s ?: if (ouvindo) "Pode falar, estou te ouvindo. Pra conversar, me chame: \"${SessaoIA.nomeChamada}\"" else "Pausada")
             .setContentIntent(abrir)
             .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_mic), if (ouvindo) "Pausar" else "Ouvir", alternar).build())
             .addAction(android.app.Notification.Action.Builder(ic(R.drawable.ic_xcircle), "Desligar", fechar).build())
@@ -834,13 +817,14 @@ class IaFundoService : android.app.Service() {
             else startForeground(ID, montar(null))
         } catch (t: Throwable) {
             // o Android reabriu o serviço com o app fora da tela e não deixou pegar o microfone
-            NLog.add("ia", "segundo plano não ligou (${t.javaClass.simpleName})")
-            if (Prefs.lerNum("ia_ouvindo", 0L) == 1L) avisarVoltar(this)
+            NLog.add("ia", "segundo plano não ligou (${t.javaClass.simpleName}); o Android tenta de novo sozinho")
             stopSelf(); return
         }
         eu = this
         ativo = true
         Voz.init(this)
+        // voltou sozinho depois de ter sido fechado? já volta a ouvir, sem você tocar em nada
+        if (Prefs.lerNum("ia_ouvindo", 0L) == 1L && !SessaoIA.ligada) Handler(Looper.getMainLooper()).postDelayed({ SessaoIA.ligarFundo(this) }, 400)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
