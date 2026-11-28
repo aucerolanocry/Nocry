@@ -98,6 +98,7 @@ object Instalador {
         synchronized(trava) { salva(emptyList()) }
         cancelar = true
         mudou()
+        Acoes.cancelarRetomar()
         NLog.add("instalar", "cancelado pelo usuario")
     }
 
@@ -155,10 +156,12 @@ object Instalador {
             resultadoOk = true
             NLog.add("instalar", "${job.rotulo}: instalada em ${job.destino}/android")
             Downloader.esquecerPastas()
+            try { Acoes.retomarAposInstalar(app) } catch (_: Throwable) {}   // se um pedido de bypass estava esperando essa pasta, liga agora
             Presenca.evento("recurso", job.rotulo)
             InstalaService.avisaFim(app, true, job.rotulo + " INSTALADA", if (job.suja) "PRONTA PRO BYPASS." else "PRONTA PRA RESTAURAR O JOGO.")
             true
         } catch (e: Cancelado) {
+            Acoes.cancelarRetomar()
             esvazia()
             parcial.delete()
             resultado = "INSTALAÇÃO CANCELADA"
@@ -166,6 +169,7 @@ object Instalador {
             NLog.add("instalar", "${job.rotulo}: cancelada")
             false
         } catch (e: Falha) {
+            Acoes.cancelarRetomar()
             esvazia()
             resultado = "NÃO DEU PRA INSTALAR A ${job.nomeCurto}: ${e.message}"
             resultadoOk = false
@@ -173,6 +177,7 @@ object Instalador {
             InstalaService.avisaFim(app, false, "NÃO DEU PRA INSTALAR A ${job.nomeCurto}", e.message ?: "")
             false
         } catch (e: Throwable) {
+            Acoes.cancelarRetomar()
             esvazia()
             resultado = "ERRO NA ${job.nomeCurto}: ${e.message ?: e.javaClass.simpleName}"
             resultadoOk = false

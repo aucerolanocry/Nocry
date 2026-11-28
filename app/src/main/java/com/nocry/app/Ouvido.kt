@@ -45,7 +45,10 @@ object Ouvido {
     private const val HZ = 16000
     private const val QUADRO = 320            // 20 ms de som
     private const val PRE_ROLL = 20           // guarda 400 ms antes de você começar (pra não cortar a primeira palavra)
-    private const val FIM_SILENCIO = 45       // 900 ms quieto = terminou a frase
+    private const val FIM_SILENCIO = 40       // 800 ms quieto = terminou a frase
+    private const val MANTEM_FIM = 25         // deixa 500 ms de silêncio no final (não corta a última sílaba fraca)
+    private const val LIMIAR_MIN = -50f       // abaixo disso nunca é voz (o Xiaomi chia até uns -57 dB com a fonte "de voz"; sua fala fica em -17 a -35)
+    private const val FIM_RELATIVO = 24f      // também é "quieto" o que está 24 dB abaixo do nível da sua própria voz
     private const val MAX_QUADROS = 700       // frase mais longa: 14 s
     private const val MIN_VOZ = 12            // menos de 240 ms de voz = estalo, não é fala
     private const val MUDO_QUADROS = 200      // 4 s só de silêncio absoluto numa fonte = troca de fonte
@@ -74,6 +77,10 @@ object Ouvido {
     @Volatile private var pisoDb = -90f
     @Volatile private var segmentos = 0
     @Volatile private var ruidos = 0
+    @Volatile private var porSilencio = 0
+    @Volatile private var porLimite = 0
+    @Volatile private var ultP10 = 0
+    @Volatile private var ultP90 = 0
     @Volatile private var trocasFonte = 0
     @Volatile private var ultimoMotivo = ""
     @Volatile private var desde = 0L
@@ -81,6 +88,7 @@ object Ouvido {
     fun resumo(): JSONObject = JSONObject()
         .put("fonte", fonteAtual).put("aberturas", aberturas).put("quadros", quadrosLidos).put("comSom", quadrosComSom)
         .put("maxDb", Math.round(maxDb)).put("pisoDb", Math.round(pisoDb)).put("falas", segmentos).put("ruidos", ruidos)
+        .put("fimSilencio", porSilencio).put("fimLimite", porLimite).put("p10", ultP10).put("p90", ultP90)
         .put("trocas", trocasFonte).put("motivo", ultimoMotivo).put("segAberto", if (desde > 0) (System.currentTimeMillis() - desde) / 1000 else 0)
         .put("rodando", rodando)
 
@@ -88,7 +96,7 @@ object Ouvido {
     fun iniciar(c: Context, l: Ouvinte): Boolean {
         if (rodando) return true
         val minha = ++geracao
-        aberturas = 0; quadrosLidos = 0; quadrosComSom = 0; maxDb = -90f; segmentos = 0; ruidos = 0; trocasFonte = 0; ultimoMotivo = ""
+        aberturas = 0; quadrosLidos = 0; quadrosComSom = 0; maxDb = -90f; segmentos = 0; ruidos = 0; porSilencio = 0; porLimite = 0; ultP10 = 0; ultP90 = 0; trocasFonte = 0; ultimoMotivo = ""
         desde = System.currentTimeMillis()
         val t = Thread({ laco(minha, l) }, "nocry-ouvido")
         t.isDaemon = true
@@ -206,11 +214,14 @@ object Ouvido {
         var zeros = 0
         var chegouSom = false
         var n = 0
+        val dbs = FloatArray(MAX_QUADROS + 8)   // volume de cada quadro da fala em andamento (pra conferir se era fala ou só barulho)
+        var nDbs = 0
+        var ref = -90f                 // nível da sua voz nesta fala: sobe depressa com as sílabas fortes, desce bem devagar
 
-        fun zera() { emFala = false; recentes = 0; vozTotal = 0; quadrosFala = 0; silencio = 0; somaDb = 0.0; somaDb2 = 0.0; nDb = 0; saida.reset(); pre.clear() }
+        fun zera() { emFala = false; recentes = 0; vozTotal = 0; quadrosFala = 0; silencio = 0; somaDb = 0.0; somaDb2 = 0.0; nDb = 0; nDbs = 0; ref = -90f; saida.reset(); pre.clear() }
 
         fun fecha() {
-            val cortar = maxOf(0, silencio - 15) * QUADRO * 2       // tira o silêncio do final (deixa 300 ms)
+            val cortar = maxOf(0, silencio - MANTEM_FIM) * QUADRO * 2       // tira o silêncio do final (deixa 500 ms)
             val bytes = saida.toByteArray()
             val tam = maxOf(0, bytes.size - cortar)
             val voz = vozTotal
@@ -301,7 +312,7 @@ object Ouvido {
                 piso = piso.coerceIn(-75f, -38f)
                 pisoDb = piso
             }
-            val limiar = maxOf(piso + 10f, -58f)
+            val limiar = maxOf(piso + 12f, LIMIAR_MIN)
             val voz = db > (if (emFala) limiar - 4f else limiar)
             recentes = ((recentes shl 1) or (if (voz) 1 else 0)) and 0x3F
 
@@ -316,13 +327,20 @@ object Ouvido {
                     for (q in pre) escreve(saida, q)
                     pre.clear()
                     somaDb = db.toDouble(); somaDb2 = db.toDouble() * db; nDb = 1
+                    nDbs = 0; ref = db
                     main.post { if (minha == geracao) l.vozDetectada() }
                 }
             } else {
                 escreve(saida, pcm)
                 quadrosFala++
                 somaDb += db; somaDb2 += db.toDouble() * db; nDb++
-                if (voz) { vozTotal++; silencio = 0 } else silencio++
+                if (nDbs < dbs.size) dbs[nDbs++] = db
+                // nível da sua voz: sobe com as sílabas fortes e desce devagar (0,5 dB por segundo)
+                if (db > ref) ref += minOf(db - ref, 3f) * 0.3f else ref -= 0.01f
+                // quieto = abaixo do limiar OU bem abaixo da sua própria voz (o chiado do microfone aparece quando você para de falar
+                // e antes ele ficava "acima do limiar" pra sempre: a fala nunca terminava e ia até 14 s)
+                val quietoAgora = !voz || db < ref - FIM_RELATIVO
+                if (!quietoAgora) { vozTotal++; silencio = 0 } else silencio++
                 // 3 s seguidos de "voz" com volume quase constante = é barulho (ventilador, chiado), não fala: descarta
                 if (quadrosFala == 150) {
                     val media = somaDb / nDb
@@ -335,7 +353,36 @@ object Ouvido {
                         continue
                     }
                 }
-                if (silencio >= FIM_SILENCIO || quadrosFala >= MAX_QUADROS) fecha()
+                // começou "fala" mas a voz nunca passou bem do limiar em mais de 1 s: era chiado. Descarta e sobe o piso pro chiado não disparar de novo
+                if (quadrosFala == 80 && ref < limiar + 8f) {
+                    piso = maxOf(piso, (somaDb / nDb).toFloat() - 2f).coerceIn(-75f, -38f)
+                    pisoDb = piso
+                    ruidos++
+                    zera()
+                    continue
+                }
+                if (silencio >= FIM_SILENCIO) {
+                    porSilencio++
+                    fecha()
+                } else if (quadrosFala >= MAX_QUADROS) {
+                    // chegou no limite sem achar o fim da frase: confere se era fala de verdade ou só barulho contínuo
+                    porLimite++
+                    val ord = dbs.copyOf(nDbs)
+                    ord.sort()
+                    val p10 = ord[nDbs / 10]
+                    val p90 = ord[(nDbs * 9) / 10]
+                    ultP10 = Math.round(p10); ultP90 = Math.round(p90)
+                    if (p90 - p10 < 15f) {
+                        piso = p90.coerceIn(-75f, -30f)
+                        pisoDb = piso
+                        ruidos++
+                        zera()
+                        continue
+                    }
+                    // tinha fala, mas os trechos quietos ficaram acima do limiar: sobe o piso pra próxima frase terminar sozinha
+                    if (p10 > limiar - 4f) { piso = (p10 - 6f).coerceIn(-75f, -38f); pisoDb = piso }
+                    fecha()
+                }
             }
         }
         return if (chegouSom) SOM else ERRO

@@ -722,6 +722,8 @@ object SessaoIA {
             else responder(fala, semNome, Comandos.entender(semNome).any { it.acao != "pesquisar" && it.acao != "youtube" })
             return
         }
+        // 2b) ela acabou de perguntar "normal ou max?": a resposta curta vai pra ela, mesmo sem chamar o nome
+        if (Acoes.aguardandoFf()) { responder(fala, fala, false); return }
         // 3) na tela da IA, logo depois de chamar ela, ou com "só quando me chamar" desligado: tudo vai pra IA
         if (naTelaIA || !soComNome || System.currentTimeMillis() < conversaAte) { responder(fala, fala, false); return }
         // 4) fora da tela: comandos que ela entende sozinha (liga o bypass, abre o jogo...)

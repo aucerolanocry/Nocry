@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
 // =====================================================================================
 
 /** um passo: a ação, daqui a quanto tempo (0 = agora) ou a hora certa, e um detalhe (ex.: qual tela) */
-class Passo(val acao: String, val atrasoMs: Long = 0L, val arg: String = "", val quando: Long = 0L)
+class Passo(val acao: String, val atrasoMs: Long = 0L, val arg: String = "", val quando: Long = 0L, val semPerguntar: Boolean = false)
 
 object Acoes {
     /** tudo que a IA sabe fazer (os mesmos nomes vão pro servidor da IA) */
@@ -42,6 +42,7 @@ object Acoes {
         "bypass_ligar" to "ligar o bypass e ficar esperando o gatilho (arg opcional: o gatilho dnd = não perturbe, bt = bluetooth, carga = carregador ou volume, e/ou o tipo completo, normal ou simples; ex.: \"dnd completo\")",
         "bypass_aplicar" to "aplicar o bypass AGORA no jogo, na hora, sem esperar gatilho (arg opcional: o tipo completo, normal ou simples)",
         "bypass_desligar" to "desligar o bypass (restaura o jogo)",
+        "bypass_ff" to "escolher pra qual Free Fire vai o bypass (arg: normal ou max). Use antes de bypass_ligar ou bypass_aplicar quando a pessoa disser qual Free Fire",
         "bot_ligar" to "ligar o bot de fila e começar a buscar (arg opcional: modo e valores em reais, ex.: \"2x2 4 3\" = modo 2x2 e valores R$ 4 e R$ 3)",
         "bot_configurar" to "só escolher o modo e os valores do bot de fila, sem ligar (arg: ex.: \"2x2 4 3\")",
         "bot_desligar" to "desligar o bot de fila",
@@ -54,7 +55,9 @@ object Acoes {
         "lanterna_ligar" to "ligar a lanterna",
         "lanterna_desligar" to "desligar a lanterna",
         "otm_ligar" to "ligar a otimização",
-        "otm_desligar" to "desligar a otimização",
+        "otm_desligar" to "desligar a otimização agora (o modo automático continua ligado; pra ele parar também, use otm_auto_desligar)",
+        "otm_auto_ligar" to "ligar o modo automático da otimização (ela liga sozinha quando o Free Fire abre e desliga quando você sai)",
+        "otm_auto_desligar" to "desligar o modo automático da otimização (ela para de ligar sozinha quando o Free Fire abre)",
         "comp_ligar" to "ligar o modo competitivo (toque rápido)",
         "comp_desligar" to "desligar o modo competitivo",
         "adb_ligar" to "ligar o ADB (conexão)",
@@ -71,7 +74,7 @@ object Acoes {
     /** o contrário de cada ação (pra "liga o bot por 30 minutos") */
     val contrario = mapOf(
         "bypass_ligar" to "bypass_desligar", "bypass_aplicar" to "bypass_desligar", "bot_ligar" to "bot_desligar",
-        "otm_ligar" to "otm_desligar", "comp_ligar" to "comp_desligar"
+        "otm_ligar" to "otm_desligar", "otm_auto_ligar" to "otm_auto_desligar", "comp_ligar" to "comp_desligar"
     )
 
     fun descricao(p: Passo): String = when (p.acao) {
@@ -130,7 +133,9 @@ object Acoes {
                 // o gatilho e o tipo que você pediu viram a escolha do app (só dá pra trocar com o bypass desligado)
                 val gatFinal = if (Prefs.bypassMark) Prefs.bypassGatilho else (gat ?: Prefs.bypassGatilho)
                 val volume = gatFinal == "volume"
-                val erro = antesDoBypass(app, volume, true)
+                // sem dizer qual Free Fire: pergunta antes. Depois, se faltar pasta, instala sozinha e liga quando terminar
+                val pergunta = if (Prefs.bypassMark) null else perguntarFf(app, p)
+                val erro = pergunta ?: antesDoBypass(app, volume, true, p)
                 if (erro != null) erro
                 else {
                     if (!Prefs.bypassMark) { Prefs.bypassGatilho = gatFinal; tipo?.let { Prefs.bypassTipo = it } }
@@ -141,14 +146,15 @@ object Acoes {
         }
         "bypass_aplicar" -> {
             val tipo = bypassArgs(p.arg).second
-            val ff = if (Prefs.bypassFf == "max") "Free Fire MAX" else "Free Fire"
+            val parado = !(Prefs.bypassAtivo || Prefs.bypassVolAtivo)
             if (Prefs.bypassMark && tipo != null && tipo != Prefs.bypassTipo) "✗ o bypass já está aplicado (${Prefs.bypassTipo}). Peça \"desliga o bypass\" antes de mudar o tipo"
-            else (if (Prefs.bypassMark) null else antesDoBypass(app, false, !(Prefs.bypassAtivo || Prefs.bypassVolAtivo))) ?: when (EngineBypass.aplicarAgora(tipo)) {
-                0 -> "✓ bypass ${Prefs.bypassTipo} aplicado agora no $ff"
+            else (if (Prefs.bypassMark) null else ((if (parado) perguntarFf(app, p) else null) ?: antesDoBypass(app, false, parado, p))) ?: when (EngineBypass.aplicarAgora(tipo)) {
+                0 -> "✓ bypass ${Prefs.bypassTipo} aplicado agora no ${nomeFfBypass()}"
                 2 -> "✓ o bypass já estava aplicado"
                 else -> "✗ não consegui aplicar o bypass (ADB). Peça \"liga o ADB\" e tente de novo"
             }
         }
+        "bypass_ff" -> escolherFf(p.arg)
         "bypass_desligar" -> when (EngineBypass.parar()) {
             0 -> "✓ bypass desligado e o jogo restaurado"
             1 -> "⚠ bypass desligado, mas não deu pra restaurar o jogo (ADB). Peça \"liga o ADB\" e de novo \"desliga o bypass\""
@@ -207,7 +213,14 @@ object Acoes {
         }
         "otm_ligar" -> if (Otm.status().first) "✓ a otimização já estava ligada"
             else if (Otm.ativar {}) "✓ otimização ligada" else "✗ otimização: o ADB não está conectado"
-        "otm_desligar" -> if (Otm.desativar {}) "✓ otimização desligada (tudo voltou ao normal)" else "✗ otimização: o ADB não está conectado"
+        "otm_desligar" -> if (Otm.desativar {}) "✓ otimização desligada (tudo voltou ao normal)" +
+                (if (Prefs.otmAuto) ". O modo automático continua ligado: ela liga de novo quando o Free Fire abrir. Peça \"desliga o modo automático\" pra parar isso" else "")
+            else "✗ otimização: o ADB não está conectado"
+        "otm_auto_ligar" -> if (Prefs.otmAuto) "✓ o modo automático já estava ligado"
+            else if (!Adb.connected && !Adb.ensure(app)) "✗ modo automático: o ADB não está conectado. Peça \"liga o ADB\""
+            else { OtmAuto.ligar(); "✓ modo automático ligado: a otimização liga sozinha quando o Free Fire abrir" }
+        "otm_auto_desligar" -> if (!Prefs.otmAuto) "✓ o modo automático já estava desligado"
+            else { OtmAuto.desligar(); "✓ modo automático desligado: não liga mais sozinho ao abrir o Free Fire" }
         "comp_ligar" -> if (Comp.ligado()) "✓ o competitivo já estava ligado"
             else if (!Toque.podeMexer()) "✗ competitivo: faça a Conexão primeiro"
             else if (Comp.ativar()) "✓ modo competitivo ligado" else "✗ o aparelho não aceitou o competitivo"
@@ -339,11 +352,112 @@ object Acoes {
 
     private fun nomeGatilho(g: String) = when (g) { "dnd" -> "não perturbe"; "bt" -> "bluetooth"; "carga" -> "carregador"; "volume" -> "volume"; else -> g }
 
+    // ---- bypass: qual Free Fire e pastas que faltam
+    /** quando você escolheu o Free Fire (pra não perguntar de novo logo depois) */
+    @Volatile private var ffEscolhidoEm = 0L
+    /** o pedido de bypass que ficou esperando você dizer qual Free Fire */
+    @Volatile private var pendenteFf: Passo? = null
+    @Volatile private var pendenteFfAte = 0L
+    /** o pedido de bypass que espera as pastas terminarem de instalar */
+    @Volatile private var retomarDepois: Passo? = null
+    @Volatile private var retomarAte = 0L
+
+    private fun nomeFfBypass() = if (Prefs.bypassFf == "max") "Free Fire MAX" else "Free Fire"
+
+    /** pergunta pra qual Free Fire é o bypass (só se o celular tem os dois e você não disse). null = pode seguir */
+    private fun perguntarFf(app: Context, p: Passo): String? {
+        val agora = System.currentTimeMillis()
+        if (p.semPerguntar || agora - ffEscolhidoEm < 10 * 60_000L) return null
+        val pm = app.packageManager
+        val temNormal = pm.getLaunchIntentForPackage(Const.FF_NORMAL) != null
+        val temMax = pm.getLaunchIntentForPackage(Const.FF_MAX) != null
+        if (!temNormal && !temMax) return "✗ o Free Fire não está instalado no celular"
+        if (temNormal != temMax) {                      // só um instalado: usa ele, não precisa perguntar
+            Prefs.bypassFf = if (temMax) "max" else "normal"
+            ffEscolhidoEm = agora
+            return null
+        }
+        pendenteFf = p
+        pendenteFfAte = agora + 3 * 60_000L
+        return "Pra qual Free Fire é o bypass: o normal ou o MAX? Me responde só \"normal\" ou \"max\"."
+    }
+
+    /** guarda a escolha do Free Fire do bypass (só dá pra trocar com o bypass desligado) */
+    private fun escolherFf(arg: String): String {
+        val a = Comandos.limpa(arg)
+        val novo = when {
+            Regex("\\bmax\\b").containsMatchIn(a) -> "max"
+            Regex("\\b(normal|comum|original)\\b").containsMatchIn(a) -> "normal"
+            else -> return "✗ diga qual Free Fire: normal ou max"
+        }
+        val nome = if (novo == "max") "Free Fire MAX" else "Free Fire"
+        if (novo != Prefs.bypassFf && (Prefs.bypassMark || Prefs.bypassAtivo || Prefs.bypassVolAtivo))
+            return "✗ o bypass já está ligado no ${nomeFfBypass()}. Peça \"desliga o bypass\" antes de trocar pro $nome"
+        Prefs.bypassFf = novo
+        ffEscolhidoEm = System.currentTimeMillis()
+        return "✓ o bypass vai usar o $nome"
+    }
+
+    /** ela está esperando você dizer qual Free Fire (a resposta curta "max" / "normal" tem que chegar nela mesmo sem chamar o nome) */
+    fun aguardandoFf(): Boolean = pendenteFf != null && System.currentTimeMillis() <= pendenteFfAte
+
+    /** você respondeu a pergunta do Free Fire ("max", "o normal"): escolhe e faz o que estava esperando. null = não era a resposta */
+    fun respostaPendente(c: Context, act: MainActivity?, texto: String): String? {
+        val p = pendenteFf ?: return null
+        if (System.currentTimeMillis() > pendenteFfAte) { pendenteFf = null; return null }
+        val t = Comandos.limpa(texto).trim()
+        if (t.length > 40) return null
+        val max = Regex("\\bmax\\b").containsMatchIn(t)
+        val normal = !max && Regex("\\b(normal|comum|original)\\b").containsMatchIn(t)
+        if (!max && !normal) {
+            if (Regex("\\b(nao|cancela\\w*|deixa|esquece|esquec\\w+)\\b").containsMatchIn(t)) { pendenteFf = null; return "Tudo bem, não liguei o bypass." }
+            return null
+        }
+        pendenteFf = null
+        val escolha = fazer(c, act, Passo("bypass_ff", 0L, if (max) "max" else "normal"))
+        if (!escolha.startsWith("✓")) return escolha
+        return escolha + "\n" + fazer(c, act, p)
+    }
+
+    /** falta a pasta suja: põe pra instalar e guarda o pedido pra ligar o bypass quando terminar */
+    private fun instalarPraBypass(app: Context, ff: String, retomar: Passo?): String {
+        val nome = if (ff == "max") "Free Fire MAX" else "Free Fire"
+        instalarPastas(app)
+        if (retomar != null) {
+            retomarDepois = Passo(retomar.acao, 0L, retomar.arg, 0L, true)
+            retomarAte = System.currentTimeMillis() + 30 * 60_000L
+            ffEscolhidoEm = System.currentTimeMillis()
+        }
+        return "✓ faltavam as pastas do $nome pro bypass. Já estou instalando (acompanha na notificação)" +
+            (if (retomar != null) ". Quando terminar eu ligo o bypass sozinha." else ".")
+    }
+
+    /** chamado quando uma pasta termina de instalar: se era o que o bypass esperava, liga agora */
+    fun retomarAposInstalar(app: Context) {
+        val p = retomarDepois ?: return
+        if (System.currentTimeMillis() > retomarAte) { retomarDepois = null; return }
+        if (!Downloader.pastasInstaladas(Prefs.bypassFf).first) return      // a pasta suja ainda não ficou pronta (o bypass só precisa dela; a limpa pode terminar depois)
+        retomarDepois = null
+        ffEscolhidoEm = System.currentTimeMillis()
+        Bg.io {
+            val r = fazer(app, null, p)
+            try {
+                Notif.evento(app, "IA DO NOCRY", r.removePrefix("✓ ").removePrefix("✗ ").removePrefix("⚠ "),
+                    if (r.startsWith("✓")) Notif.Efeito.LIGOU else Notif.Efeito.FALHOU)
+            } catch (_: Throwable) {}
+            Assistente.anotar(false, "As pastas terminaram de instalar. $r")
+        }
+    }
+
+    /** a instalação falhou ou foi cancelada: não liga o bypass depois */
+    fun cancelarRetomar() { retomarDepois = null }
+
     /** o que precisa estar certo antes de ligar ou aplicar o bypass. null = tudo certo */
-    private fun antesDoBypass(app: Context, volume: Boolean, contaLimite: Boolean): String? {
+    private fun antesDoBypass(app: Context, volume: Boolean, contaLimite: Boolean, retomar: Passo? = null): String? {
         if (!Adb.ensure(app)) return "✗ bypass: o ADB não está conectado. Peça \"liga o ADB\" ou abra a Conexão"
         Downloader.esquecerPastas()
-        if (!Downloader.pastasInstaladas(Prefs.bypassFf).first) return "✗ bypass: falta a pasta suja. Peça \"instala as pastas\""
+        // falta a pasta suja: instala sozinha (em segundo plano), avisa, e liga o bypass quando terminar
+        if (!Downloader.pastasInstaladas(Prefs.bypassFf).first) return instalarPraBypass(app, Prefs.bypassFf, retomar)
         if (volume && !(Sys.acessibilidadeLigada() || Sys.ligarAcessibilidade())) return "✗ bypass: a escuta do volume está desligada (precisa do ADB)"
         // o limite do dia só gasta quando o bypass é ligado (se já estava ligado, já foi contado)
         if (contaLimite && !Config.verificarLimite()) return "✗ bypass: chegou no limite de hoje"
@@ -579,7 +693,14 @@ object Comandos {
                     if (tem(p, "\\bmeet\\b")) achados += if (liga == false) "menu_tirar_meet" else "menu_meet"
                     if (tem(p, "toque rapido") && (menu || tem(p, "\\bmeet\\b"))) achados += if (liga == false) "menu_tirar_toque" else "menu_toque"
                     else if (tem(p, "\\b(competitivo|comp|toque rapido)\\b")) achados += if (liga == false) "comp_desligar" else "comp_ligar"
-                    if (tem(p, "\\b(bypass|bypas|baipas|bai pass)\\b")) achados += if (liga == false) "bypass_desligar" else bypassLigar(p)
+                    if (tem(p, "\\b(bypass|bypas|baipas|bai pass)\\b")) {
+                        if (liga != false) {
+                            // "liga o bypass no free fire max": escolhe o Free Fire antes (o "normal" sozinho é o tipo do bypass, não o jogo)
+                            if (tem(p, "\\bmax\\b")) achados += "bypass_ff:max"
+                            else if (tem(p, "\\b(free ?fire|ff)\\s+(normal|comum)\\b|\\b(normal|comum)\\s+(free ?fire|ff)\\b")) achados += "bypass_ff:normal"
+                        }
+                        achados += if (liga == false) "bypass_desligar" else bypassLigar(p)
+                    }
                     if (tem(p, "\\b(bot|bots|fila|sniper|robo)\\b")) achados += when {
                         liga == false -> if (PAUSA.containsMatchIn(p)) "bot_pausar" else "bot_desligar"
                         // só falou o modo e os valores, sem "liga": só escolhe
@@ -587,9 +708,12 @@ object Comandos {
                         cfgBot != null -> "bot_ligar:$cfgBot"
                         else -> "bot_ligar"
                     }
-                    if (tem(p, "\\b(jogo|free ?fire|ff|freefire|partida)\\b") && liga != false)
+                    if (tem(p, "\\b(jogo|free ?fire|ff|freefire|partida)\\b") && liga != false && !tem(p, "\\b(bypass|bypas|baipas|bai pass)\\b"))
                         achados += "jogo_abrir" + (if (tem(p, "\\bmax\\b")) ":max" else if (tem(p, "\\bnormal\\b")) ":normal" else "")
-                    if (tem(p, "otimiz")) achados += if (liga == false) "otm_desligar" else "otm_ligar"
+                    // "modo auto" / "automático" sozinho (sem bot, bypass...) é o modo automático da otimização
+                    val outroAssunto = tem(p, "\\b(bot|bots|fila|sniper|robo|bypass|bypas|baipas|competitivo|comp|toque|meet|adb)\\b")
+                    if (tem(p, "\\b(auto|automatico|automatica|automaticamente)\\b") && !outroAssunto) achados += if (liga == false) "otm_auto_desligar" else "otm_auto_ligar"
+                    else if (tem(p, "otimiz")) achados += if (liga == false) "otm_desligar" else "otm_ligar"
                     if (tem(p, "\\b(adb|depuracao|conexao)\\b") && liga != false) achados += "adb_ligar"
                 }
             }
@@ -706,6 +830,7 @@ object IA {
             .put("permissoes", if (Sys.hasWriteSecure()) "ok" else "faltando")
             .put("pastas", "suja ${if (a) "instalada" else "falta"}, limpa ${if (b) "instalada" else "falta"} ($ff)")
             .put("otimizacao", if (Otm.status().first) "ligada" else "desligada")
+            .put("otimizacao_modo_auto", if (Prefs.otmAuto) "ligado" else "desligado")
             .put("competitivo", if (Comp.ligado()) "ligado" else "desligado")
             .put("menu_topo", "meet ${if (MenuRapido.noMenu(true)) "sim" else "não"}, toque rápido ${if (MenuRapido.noMenu(false)) "sim" else "não"}")
             .put("agendados", Agenda.lista().joinToString("; ") { Acoes.hora(it.quando) + " " + it.acao })
@@ -790,7 +915,7 @@ object Agenda {
             v
         }
         for (v in vencidos) Bg.io {
-            val r = Acoes.fazer(app, null, Passo(v.acao, 0L, v.arg))
+            val r = Acoes.fazer(app, null, Passo(v.acao, 0L, v.arg, 0L, true))
             try {
                 Notif.evento(app, "IA DO NOCRY", r.removePrefix("✓ ").removePrefix("✗ ").removePrefix("⚠ "),
                     if (r.startsWith("✓")) (if (v.acao.endsWith("desligar") || v.acao.startsWith("menu_tirar")) Notif.Efeito.DESLIGOU else Notif.Efeito.LIGOU) else Notif.Efeito.FALHOU)
@@ -893,6 +1018,8 @@ object Assistente {
 
     /** responde e faz tudo (bloqueia: chame fora da tela). imagem = foto em base64 (jpeg) */
     fun responder(c: Context, act: MainActivity?, texto: String, imagem: String? = null, localPrimeiro: Boolean = false): String {
+        // ela tinha perguntado "normal ou max?": a resposta curta vai direto pro bypass que estava esperando
+        if (imagem == null) Acoes.respostaPendente(c, act, texto)?.let { return it }
         // palavra-chave ou comando falado fora da tela: o que ela entende sozinha faz na hora, sem esperar a IA
         if (localPrimeiro && imagem == null) {
             val ps = Comandos.entender(texto, ultimoLiga)
