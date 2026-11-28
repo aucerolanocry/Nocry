@@ -589,19 +589,26 @@ async function extrasRoute(req, env, ip) {
     // O app espera até 30 s: a fila toda tem 26 s.
     const prazo = Date.now() + 26000;
     let txt = "", fonte = "";
+    // os que foram pulados e por quê: vai junto do nome de quem respondeu, pra aparecer no log do app
+    const pulos = [];
     const tentar = async (nome, max, fn) => {
-      if (txt || descansando(nome)) return;
+      if (txt) return;
+      if (descansando(nome)) { pulos.push(nome + " descansando (" + (motivoFrio[nome] || "?") + ")"); return; }
       const ms = Math.min(max, prazo - Date.now());
       if (ms < 2500) return;
       const t0 = Date.now();
+      delete motivoFrio[nome];
       try {
         const r = await fn(ms);
         if (typeof r === "string" && r.trim()) { txt = r; fonte = nome; }
+        else pulos.push(nome + " " + (motivoFrio[nome] || "veio vazio") + " em " + (Date.now() - t0) + "ms");
         console.log("ia " + nome + ": " + (txt ? "respondeu" : "sem resposta") + " em " + (Date.now() - t0) + " ms");
       } catch (e) {
         const demorou = e && (e.name === "AbortError" || e.message === "demorou");
         descansa(nome, demorou ? 20000 : 30000);
-        console.log("ia " + nome + ": " + (demorou ? "demorou demais" : "erro " + ((e && e.message) || String(e)).slice(0, 160)));
+        motivoFrio[nome] = demorou ? "demorou demais" : "erro " + ((e && e.message) || String(e)).slice(0, 60);
+        pulos.push(nome + " " + motivoFrio[nome]);
+        console.log("ia " + nome + ": " + motivoFrio[nome]);
       }
     };
     if (env.ANTHROPIC_API_KEY) await tentar("claude", 20000, (ms) => pensarClaude(env, sistema, msgs, img, ms));
@@ -615,6 +622,7 @@ async function extrasRoute(req, env, ip) {
     }
     if (env.AI) await tentar("cloudflare", 26000, (ms) => pensarCloudflare(env, sistema, msgs, img, ms));
     if (!txt) return json({ ok: false, reason: "ia_erro" });
+    if (pulos.length) fonte += " · pulou: " + pulos.join("; ").slice(0, 300);
     let o = null;
     try {
       const i = txt.indexOf("{"), j = txt.lastIndexOf("}");
@@ -1330,6 +1338,8 @@ async function adicionarDaBiblioteca(env, voz) {
 // ---- IA e escuta grátis em fila (Gemini, Groq, Cloudflare). As chaves ficam SÓ nos segredos GEMINI_API_KEY e GROQ_API_KEY.
 // Um serviço que cansou (cota do dia, fora do ar) fica de lado um tempo e o próximo da fila responde.
 const frio = {};
+/** o último motivo de cada serviço ter falhado (só o código e o começo do aviso, nunca chave) */
+const motivoFrio = {};
 function descansando(nome) { return (frio[nome] || 0) > Date.now(); }
 function descansa(nome, ms) { frio[nome] = Math.max(frio[nome] || 0, Date.now() + ms); }
 
@@ -1342,13 +1352,16 @@ async function comPrazo(ms, fn) {
 /** o serviço respondeu com erro: anota (sem chave nenhuma) e deixa ele descansar se for cota, chave errada ou queda */
 async function respostaRuim(nome, r) {
   let det = "";
-  try { det = (await r.text()).replace(/\s+/g, " ").slice(0, 180); } catch (e) {}
+  try { det = (await r.text()).replace(/\s+/g, " ").slice(0, 400); } catch (e) {}
   const ra = Number(r.headers.get("retry-after")) || 0;
   const pausa = r.status === 429 ? Math.min(3600, Math.max(20, ra || 60)) * 1000
     : (r.status === 401 || r.status === 403) ? 600000
     : r.status >= 500 ? 20000 : 0;
   if (pausa) descansa(nome, pausa);
   console.log("ia " + nome + " -> " + r.status + " " + det);
+  let msg = det;
+  try { const j = JSON.parse(det); const e = j && j.error; if (e) msg = typeof e === "string" ? e : (e.message || e.code || det); } catch (e) {}
+  motivoFrio[nome] = r.status + " " + String(msg).replace(/(AIza|gsk_|sk-)[A-Za-z0-9_\-]+/g, "***").replace(/[{}"\[\]]/g, "").replace(/\s+/g, " ").trim().slice(0, 110);
   return null;
 }
 
