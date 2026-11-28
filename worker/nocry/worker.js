@@ -613,7 +613,7 @@ async function extrasRoute(req, env, ip) {
     };
     if (env.ANTHROPIC_API_KEY) await tentar("claude", 20000, (ms) => pensarClaude(env, sistema, msgs, img, ms));
     if (env.GEMINI_API_KEY) {
-      await tentar("gemini", 13000, (ms) => pensarGemini(env, "gemini", env.IA_MODELO_GEMINI || "gemini-flash-latest", sistema, msgs, img, ms));
+      await tentar("gemini", 9000, (ms) => pensarGemini(env, "gemini", env.IA_MODELO_GEMINI || "gemini-flash-latest", sistema, msgs, img, ms));
       await tentar("gemini-lite", 10000, (ms) => pensarGemini(env, "gemini-lite", env.IA_MODELO_GEMINI_LITE || "gemini-flash-lite-latest", sistema, msgs, img, ms));
     }
     if (env.GROQ_API_KEY && !img) {
@@ -1390,8 +1390,10 @@ async function ouvirGroq(env, audioB64, dica, ms) {
   return d && typeof d.text === "string" ? d.text : null;
 }
 
-/** os modelos do Gemini que não aceitam o ajuste de "pensar pouco" (pra não tentar de novo) */
-const geminiSemAjuste = {};
+/** quanto cada modelo do Gemini pensa antes de responder: o menor que ele aceita (o 3.8 Flash não aceita "minimal", só "low").
+ *  Guarda o que funcionou pra não errar de novo. Sem ajuste nenhum ele pensa no "medium" e fica lento. */
+const NIVEIS_GEMINI = ["minimal", "low"];
+const geminiNivel = {};
 
 async function pensarGemini(env, nome, modelo, sistema, msgs, img, ms) {
   const contents = msgs.map((m, i) => {
@@ -1400,11 +1402,11 @@ async function pensarGemini(env, nome, modelo, sistema, msgs, img, ms) {
     return { role: m.role === "assistant" ? "model" : "user", parts };
   });
   const fim = Date.now() + ms;
-  for (let vez = 0; vez < 2; vez++) {
-    const ajuste = !geminiSemAjuste[modelo];
+  for (let vez = 0; vez <= NIVEIS_GEMINI.length; vez++) {
+    const n = geminiNivel[modelo] || 0;
+    const nivel = NIVEIS_GEMINI[n];
     const generationConfig = { maxOutputTokens: 1024, temperature: 0.6, responseMimeType: "application/json" };
-    // responde rápido (conversa e comandos não precisam de raciocínio longo)
-    if (ajuste) generationConfig.thinkingConfig = { thinkingLevel: "minimal" };
+    if (nivel) generationConfig.thinkingConfig = { thinkingLevel: nivel };
     const resta = fim - Date.now();
     if (resta < 1500) return null;
     const r = await comPrazo(resta, (signal) => fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelo) + ":generateContent", {
@@ -1413,7 +1415,11 @@ async function pensarGemini(env, nome, modelo, sistema, msgs, img, ms) {
       body: JSON.stringify({ systemInstruction: { parts: [{ text: sistema }] }, contents, generationConfig }),
       signal,
     }));
-    if (r.status === 400 && ajuste) { geminiSemAjuste[modelo] = true; console.log("ia " + nome + ": sem o ajuste de pensar pouco, tentando de novo"); continue; }
+    if (r.status === 400 && nivel) {
+      geminiNivel[modelo] = n + 1;
+      console.log("ia " + nome + ": não aceitou pensar \"" + nivel + "\", tentando o próximo");
+      continue;
+    }
     if (!r.ok) return respostaRuim(nome, r);
     const d = await r.json();
     const parts = (d && d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
