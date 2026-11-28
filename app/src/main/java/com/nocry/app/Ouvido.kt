@@ -51,8 +51,9 @@ object Ouvido {
     private const val MUDO_QUADROS = 200      // 4 s só de silêncio absoluto numa fonte = troca de fonte
     private const val CALIBRA = 40            // 0,8 s medindo o barulho de fundo ao abrir o microfone
 
-    private val FONTES = intArrayOf(MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.VOICE_COMMUNICATION)
-    private val NOMES = arrayOf("comum", "de voz", "de chamada")
+    // a fonte "de voz" é a que já deu som no Xiaomi (o log mostrou); se alguma só mandar silêncio, troca sozinho pra próxima
+    private val FONTES = intArrayOf(MediaRecorder.AudioSource.VOICE_RECOGNITION, MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+    private val NOMES = arrayOf("de voz", "comum", "de chamada")
 
     private const val SOM = 1
     private const val MUDO = 2
@@ -132,7 +133,7 @@ object Ouvido {
     }
 
     private fun laco(minha: Int, l: Ouvinte) {
-        var idx = Prefs.lerNum("ia_fonte", 0L).toInt().coerceIn(0, FONTES.size - 1)
+        var idx = Prefs.lerNum("ia_fonte2", 0L).toInt().coerceIn(0, FONTES.size - 1)
         var falhasAbrir = 0
         var mudosSeguidos = 0
         var errosSeguidos = 0
@@ -257,7 +258,7 @@ object Ouvido {
                 quadrosComSom++
                 if (!chegouSom) {
                     chegouSom = true
-                    Prefs.gravaNum("ia_fonte", idx.toLong())
+                    Prefs.gravaNum("ia_fonte2", idx.toLong())
                     main.post { if (minha == geracao) l.pronto() }
                 }
             }

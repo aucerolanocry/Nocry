@@ -234,6 +234,8 @@ object SessaoIA {
         ctx = a.applicationContext
         Voz.init(a)
         ligada = true
+        // você ligou o microfone: tenta o ouvido novo de novo (uma pausa antiga não vale mais)
+        Prefs.gravaNum("ia_stt_ate", 0L)
         vigiarEnergia(a)
         Prefs.gravaNum("ia_ouvindo", 1L)
         // o serviço com microfone é o que deixa continuar ouvindo com o app minimizado (só dá pra ligar com o app aberto)
@@ -250,6 +252,7 @@ object SessaoIA {
         ctx = c.applicationContext
         Voz.init(c)
         ligada = true
+        Prefs.gravaNum("ia_stt_ate", 0L)
         vigiarEnergia(c)
         Prefs.gravaNum("ia_ouvindo", 1L)
         errosSeguidos = 0
@@ -685,10 +688,10 @@ object SessaoIA {
         if (t == null) {
             when (r.motivo) {
                 "limite" -> { texto("Acabou o limite de voz de hoje: uso a escuta do celular"); nuvemPausa(6 * 3_600_000L, "limite do dia") }
-                "indisponivel" -> nuvemPausa(30 * 60_000L, "servidor sem o ouvido novo")
+                "indisponivel" -> nuvemPausa(2 * 60_000L, "servidor sem o ouvido novo")
                 else -> {
                     falhasNuvem++
-                    if (falhasNuvem >= 3) nuvemPausa(10 * 60_000L, "sem resposta do servidor")
+                    if (falhasNuvem >= 3) nuvemPausa(90_000L, "sem resposta do servidor")
                     else texto("Sem internet pra entender a voz... fala de novo")
                 }
             }
