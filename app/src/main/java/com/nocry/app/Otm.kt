@@ -419,13 +419,19 @@ object Otm {
             log("    Abra CONEXAO e conecte a depuracao sem fio.")
             return false
         }
-        val tLer = android.os.SystemClock.elapsedRealtime()
+        // cada parte medida (no log "tempo:"), pra achar onde demora sem chutar
+        val agora = { android.os.SystemClock.elapsedRealtime() }
+        val partes = ArrayList<String>()
+        partes.add("conexão " + seg(agora() - t0))
+        val tLer = agora()
         var plano = lerPlano()
-        val msLer = android.os.SystemClock.elapsedRealtime() - tLer
+        partes.add("leitura " + seg(agora() - tLer))
         if (plano != null && plano.setFail) {
             log("TENTANDO DE NOVO...")
+            val tDeNovo = agora()
             Thread.sleep(2000)
             plano = lerPlano()
+            partes.add("leitura de novo " + seg(agora() - tDeNovo))
         }
         if (plano == null) {
             log("[x] NAO CONSEGUI LER O CELULAR — NADA FOI MUDADO")
@@ -443,7 +449,11 @@ object Otm {
         }
         val full = Prefs.otmNivel == "full"
         // voltou pro NORMAL: a vigia (só do FULL) para
-        if (!full && (Prefs.otmVigia || Prefs.otmComp)) desfazFull(log)
+        if (!full && (Prefs.otmVigia || Prefs.otmComp)) {
+            val tDesfaz = agora()
+            desfazFull(log)
+            partes.add("vigia " + seg(agora() - tDesfaz))
+        }
         val cand = plano.c.map { it.pk }
         val kbDe = plano.c.associate { it.pk to it.kb }
         val nC = cand.size
@@ -470,6 +480,7 @@ object Otm {
         if (frio.isNotEmpty()) log("• CONGELANDO ${frio.size} APPS INSTALADOS QUE ESTÃO PARADOS (não ligam sozinhos)")
 
         var kn = 0
+        val tScript = agora()
         val res = Adb.execScriptLines(script, 240000) { l ->
             // cada mudança fica registrada na hora: se o NOCRY morrer no meio (limpeza da Xiaomi, travou),
             // o DESATIVAR ainda sabe o que desfazer. Antes só gravava quando o script inteiro acabava
@@ -484,6 +495,9 @@ object Otm {
                 }
             }
         }
+        val msScript = agora() - tScript
+        partes.add("envio " + seg(Adb.ultimoEnvioMs))
+        partes.add("script " + seg(msScript - Adb.ultimoEnvioMs))
         val out = res.out
         guarda(out)
         if (!out.lines().any { it.trim() == "FIM" }) {
@@ -570,7 +584,7 @@ object Otm {
         }
         log("• Apps fechados nao avisam nada ate voce abrir · PROTEGER APP e OPCOES mudam isso")
         NLog.add("otimizacao", "ativada${if (full) " (FULL)" else ""}: $nC apps fechados")
-        NLog.add("otimizacao", "tempo: leitura ${seg(msLer)} · ${tempos(out).ifEmpty { "-" }} · total ${seg(android.os.SystemClock.elapsedRealtime() - t0)}")
+        NLog.add("otimizacao", "tempo: " + partes.joinToString(" · ") + " (${tempos(out).ifEmpty { "-" }}) · total ${seg(agora() - t0)}")
         return true
     }
 

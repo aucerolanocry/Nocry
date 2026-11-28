@@ -600,7 +600,50 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         } else Ui.destaque(c, it.ico, it.nome, it.desc, i.estado, i.ligado, "abrir", false, i.abrir, i.abrir)
     }
 
-    /** Início no visual HUD (só na prévia do CI): painel do sistema com o anel, a IA, o jogo e os modos, tudo alinhado */
+    /** avisos do Início: tela alterada pelo modo carregador, erros, atualização adiada e aviso do dono */
+    private fun avisos(c: android.content.Context) {
+        // a tela ficou alterada pelo modo carregador (que saiu do app)
+        if (Prefs.densOrig != null) {
+            val aviso = Ui.dica(c, if (voltandoTela) "Voltando a tela ao normal..." else
+                "A tela ficou alterada pelo modo carregador, que saiu do app. Toque aqui pra voltar ao normal (precisa do ADB).", Ui.Dica.AVISO)
+            Ui.clique(aviso) {
+                if (voltandoTela) return@clique
+                voltandoTela = true
+                redesenha()
+                Bg.run({ Engine.desligarModosAntigos() }) { ok ->
+                    voltandoTela = false
+                    Ui.toast(act, if (ok) "A TELA VOLTOU AO NORMAL" else "CONECTE O ADB E TOQUE DE NOVO")
+                    redesenha()
+                }
+            }
+            add(aviso, 12)
+        }
+        // o app teve erro desde a última vez
+        val novos = Erros.novos()
+        if (novos > 0) {
+            add(Ui.faixaAviso(c, if (novos == 1) "1 erro registrado" else "$novos erros registrados", "ver em logs") { act.irAba(3) }, 12)
+        }
+        // atualização deixada pra depois: lembra o prazo
+        if (Update.adiada(c)) {
+            add(Ui.faixaAviso(c, "Atualização pendente · obrigatória em ${Update.faltaTexto()}", "instalar") {
+                Update.pendenteReal(act)?.let { act.mostraUpdateGate(it) }
+            }, 12)
+        }
+        // aviso do dono
+        Comunidade.avisoParaMostrar()?.let { av ->
+            val k = Ui.card(c, ligado = true)
+            val topo = Ui.hbox(c)
+            topo.gravity = Gravity.CENTER_VERTICAL
+            topo.addView(Ui.icone(c, R.drawable.ic_info, Ui.WARN, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 8) })
+            topo.addView(Ui.text(c, "AVISO DO NOCRY", 10.5f, Ui.WARN, true, mono = true))
+            k.addView(topo)
+            k.addView(Ui.text(c, av.second, 14f, Ui.TEXT), Ui.lp(top = 6, c = c))
+            k.addView(Ui.button(c, "ok, entendi", Ui.Kind.GHOST) { Comunidade.dispensaAviso(); redesenha() }, Ui.lp(top = 10, c = c))
+            add(k, 12)
+        }
+    }
+
+    /** Início no visual HUD (temas futuristas): painel do sistema com o anel, a IA, o jogo e os modos, tudo alinhado */
     private fun renderHud(c: android.content.Context) {
         // topo: foto, NOCRY, hora e cargo
         val cab = Ui.hbox(c)
@@ -699,12 +742,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             }
         }
 
-        // avisos
-        val novos = Erros.novos()
-        if (novos > 0) add(Ui.faixaAviso(c, if (novos == 1) "1 erro registrado" else "$novos erros registrados", "ver em logs") { act.irAba(3) }, 12)
-        if (Update.adiada(c)) add(Ui.faixaAviso(c, "Atualização pendente · obrigatória em ${Update.faltaTexto()}", "instalar") {
-            Update.pendenteReal(act)?.let { act.mostraUpdateGate(it) }
-        }, 12)
+        // avisos (iguais aos do Início de sempre)
+        avisos(c)
 
         // bot, menu do topo e modos
         add(Ui.secao(c, "ferramentas"), 22)
@@ -722,7 +761,8 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         Ui.clique(editar) { act.abre(OrganizarScreen(act)) }
         add(Ui.secao(c, "modos", editar), 22)
         val lista = Atalhos.visiveis()
-        if (lista.isNotEmpty()) add(destaque(c, lista[0]), 8)
+        if (lista.isEmpty()) add(Ui.dica(c, "Todos os modos estão escondidos. Toque em Editar pra mostrar de novo.", Ui.Dica.AVISO), 8)
+        else add(destaque(c, lista[0]), 8)
         var i = 1
         while (i < lista.size) {
             val linha = Ui.hbox(c)
@@ -868,48 +908,7 @@ class HomeScreen(a: MainActivity) : Screen(a) {
             }
         }
 
-        // ---------------- a tela ficou alterada pelo modo carregador (que saiu do app) ----------------
-        if (Prefs.densOrig != null) {
-            val aviso = Ui.dica(c, if (voltandoTela) "Voltando a tela ao normal..." else
-                "A tela ficou alterada pelo modo carregador, que saiu do app. Toque aqui pra voltar ao normal (precisa do ADB).", Ui.Dica.AVISO)
-            Ui.clique(aviso) {
-                if (voltandoTela) return@clique
-                voltandoTela = true
-                redesenha()
-                Bg.run({ Engine.desligarModosAntigos() }) { ok ->
-                    voltandoTela = false
-                    Ui.toast(act, if (ok) "A TELA VOLTOU AO NORMAL" else "CONECTE O ADB E TOQUE DE NOVO")
-                    redesenha()
-                }
-            }
-            add(aviso, 12)
-        }
-
-        // ---------------- o app teve erro desde a última vez ----------------
-        val novos = Erros.novos()
-        if (novos > 0) {
-            add(Ui.faixaAviso(c, if (novos == 1) "1 erro registrado" else "$novos erros registrados", "ver em logs") { act.irAba(3) }, 12)
-        }
-
-        // ---------------- atualização deixada pra depois: lembra o prazo ----------------
-        if (Update.adiada(c)) {
-            add(Ui.faixaAviso(c, "Atualização pendente · obrigatória em ${Update.faltaTexto()}", "instalar") {
-                Update.pendenteReal(act)?.let { act.mostraUpdateGate(it) }
-            }, 12)
-        }
-
-        // ---------------- aviso do dono ----------------
-        Comunidade.avisoParaMostrar()?.let { av ->
-            val k = Ui.card(c, ligado = true)
-            val topo = Ui.hbox(c)
-            topo.gravity = Gravity.CENTER_VERTICAL
-            topo.addView(Ui.icone(c, R.drawable.ic_info, Ui.WARN, 18), LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)).also { it.rightMargin = Ui.dp(c, 8) })
-            topo.addView(Ui.text(c, "AVISO DO NOCRY", 10.5f, Ui.WARN, true, mono = true))
-            k.addView(topo)
-            k.addView(Ui.text(c, av.second, 14f, Ui.TEXT), Ui.lp(top = 6, c = c))
-            k.addView(Ui.button(c, "ok, entendi", Ui.Kind.GHOST) { Comunidade.dispensaAviso(); redesenha() }, Ui.lp(top = 10, c = c))
-            add(k, 12)
-        }
+        avisos(c)
 
         // ---------------- SNIPER (todo mundo com key vê) ----------------
         botSub = null
@@ -1369,10 +1368,11 @@ class SetupScreen(a: MainActivity) : Screen(a) {
         topo.addView(info, ip)
         resumo.addView(topo)
         resumo.addView(Ui.chips(c,
-            Ui.chip(c, "ADB", if (conectado) "OK" else "OFF", conectado),
+            Ui.chip(c, "ADB", if (conectado) "OK" else "FALTA", conectado),
             Ui.chip(c, "PERMISSÃO", if (perm) "OK" else "FALTA", perm),
-            Ui.chip(c, "VOLUME", if (acc) "OK" else "OFF", if (acc) true else if (volPreciso) false else null),
-            Ui.chip(c, "AVISOS", if (notif) "OK" else "OFF", notif)
+            // a escuta do volume só faz falta pro bypass pelo volume: sem ele é opcional (antes aparecia "OFF" em amarelo e parecia erro)
+            Ui.chip(c, "VOLUME", if (acc) "OK" else if (volPreciso) "FALTA" else "OPCIONAL", if (acc) true else if (volPreciso) false else null),
+            Ui.chip(c, "AVISOS", if (notif) "OK" else "FALTA", notif)
         ), Ui.lp(top = 14, c = c))
         add(resumo, 12)
 

@@ -445,8 +445,8 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
 
     // ---------------- temas prontos (grade de 2 colunas) ----------------
     private fun abaTemas(c: Context) {
-        if (BuildConfig.PREVIEW) {
-            // prévia: os temas separados por tipo (antes era uma lista só com 30 temas misturados)
+        run {
+            // os temas separados por tipo (antes era uma lista só com 30 temas misturados)
             val rank = setOf("bronze", "diamante", "mestre", "graomestre")
             listOf(
                 "futuristas" to Temas.lista.filter { it.id.startsWith("x_") },
@@ -457,7 +457,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
                 add(Ui.secao(c, nome), if (gi == 0) 14 else 24)
                 gradeTemas(c, l)
             }
-        } else gradeTemas(c, Temas.lista)
+        }
         if (Prefs.tema == "custom") add(Ui.dica(c, "Você está com um visual personalizado. Tocar num tema troca tudo de uma vez.", Ui.Dica.INFO), 16)
         add(meusTemas(c), 22)
         add(Ui.grupo(c, "outros", listOf(
@@ -596,8 +596,9 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     // ---------------- cartoes e botoes ----------------
     private fun abaCartoes(c: Context) {
         val v = secao(c, "estilo dos cartões", forte = true, icone = R.drawable.ic_image)
-        val estilos = listOf("vidro", "contorno", "solido", "hud")
-        v.addView(Ui.segmento(c, listOf("Vidro", "Contorno", "Sólido", "HUD"), estilos.indexOf(Prefs.cartao).coerceAtLeast(0)) { i ->
+        // o antigo "HUD" daqui não fazia nada (virava Contorno): agora é o Painel, o visual futurista de verdade
+        val estilos = listOf("vidro", "contorno", "solido", "hudx")
+        v.addView(Ui.segmento(c, listOf("Vidro", "Contorno", "Sólido", "Painel"), estilos.indexOf(Prefs.cartao).coerceAtLeast(0)) { i ->
             Prefs.cartao = estilos[i]
             muda()
         }, Ui.lp(top = 12, c = c))
@@ -605,7 +606,7 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
             "vidro" -> "Translúcido, com brilho no topo."
             "contorno" -> "Só a borda neon, bem leve."
             "solido" -> "Cor cheia, visual de luxo."
-            else -> "Cantos cortados, estilo painel de jogo."
+            else -> "Painel de IA com colchetes nos cantos. Muda também o jeito do Início e da IA."
         }, 10.5f, Ui.MUTED), Ui.lp(top = 8, c = c))
         add(v, 14)
         val a = secao(c, "ajustes finos", icone = R.drawable.ic_sliders)

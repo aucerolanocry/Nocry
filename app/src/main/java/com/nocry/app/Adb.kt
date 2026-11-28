@@ -306,7 +306,15 @@ object Adb {
      * em alguns celulares ("não consegui ler o celular"). Agora vai em pedaços base64 (só letras e números)
      * pra um arquivo em /data/local/tmp e roda de lá. Se não der pra gravar, tenta do jeito antigo.
      */
+    /** quanto levou o último envio de script pro celular (ms): aparece no "tempo:" da otimização */
+    @Volatile var ultimoEnvioMs = 0L
+
     private fun gravarScript(script: String): String? {
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        try { return gravarScript0(script) } finally { ultimoEnvioMs = android.os.SystemClock.elapsedRealtime() - t0 }
+    }
+
+    private fun gravarScript0(script: String): String? {
         val nome = "/data/local/tmp/.nocry_" + System.nanoTime() + ".sh"
         val b64 = android.util.Base64.encodeToString(soAscii(script).toByteArray(Charsets.US_ASCII), android.util.Base64.NO_WRAP)
         if (!execAgora("rm -f $nome.b64; : > $nome.b64 && echo GRAVOU", 8000).out.contains("GRAVOU")) return null

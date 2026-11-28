@@ -1669,7 +1669,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         return linha
     }
 
-    /** topo e conversa da IA no visual HUD (só na prévia): ela no meio do anel, o que está fazendo, atalhos e a conversa */
+    /** topo e conversa da IA no visual HUD: ela no meio do anel, o que está fazendo, atalhos e a conversa */
     private fun hudCorpo(c: Context, st: String, cor: Int, vazio: Boolean) {
         val topo = Ui.hbox(c)
         topo.gravity = Gravity.CENTER_VERTICAL

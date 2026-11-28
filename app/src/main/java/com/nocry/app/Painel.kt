@@ -47,7 +47,7 @@ class Painel(
 ) : Drawable() {
     private val d = c.resources.displayMetrics.density
     private val hud = estilo == "hud"
-    /** visual HUD novo (só na prévia) */
+    /** visual HUD (temas futuristas) */
     private val hudx = estilo == "hudx"
     private var shHudx: Shader? = null
     private var shHudxLuz: Shader? = null

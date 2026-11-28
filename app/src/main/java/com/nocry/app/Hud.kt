@@ -20,12 +20,11 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Visual HUD (painel futurista de IA). Por enquanto só existe na PRÉVIA do CI: liga quando o tema tem o cartão "hudx".
- * Nada daqui aparece no app de verdade antes do dono escolher.
+ * Visual HUD (painel futurista de IA): liga quando o cartão é "hudx" (temas futuristas Holograma, Reator, Comando e Plasma).
  */
 object Hud {
-    /** o visual HUD está ligado (só na build de prévia) */
-    val on: Boolean get() = BuildConfig.PREVIEW && Prefs.cartao == "hudx"
+    /** o visual HUD está ligado */
+    val on: Boolean get() = Prefs.cartao == "hudx"
 
     /** "abrir conexão" -> "Abrir conexão" (só a primeira letra) */
     fun frase(s: String): String = if (s.isNotEmpty() && s[0].isLowerCase()) s.replaceFirstChar { it.uppercase() } else s
@@ -328,10 +327,13 @@ class HudReator(c: Context) : View(c) {
     private val t0 = SystemClock.uptimeMillis()
     private var giro = 0f
     private var ultimo = 0L
+    private val vis = android.graphics.Rect()
 
     override fun onDraw(cv: Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
+        // rolou pra fora da tela: para de girar e só confere de vez em quando (economiza bateria)
+        if (!getGlobalVisibleRect(vis)) { ultimo = 0L; if (isShown) postInvalidateDelayed(300); return }
         val cx = w / 2f; val cy = h / 2f
         val r = min(w, h) / 2f - 2f * d
         val agora = SystemClock.uptimeMillis()

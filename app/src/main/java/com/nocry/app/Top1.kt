@@ -91,8 +91,12 @@ class EfeitoCartao(c: Context, private val tipo: String) : View(c) {
         val r = min(Prefs.raio * d, min(w, h) / 2f)
         path.addRoundRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), r, r, Path.Direction.CW)
     }
+    private val vis = android.graphics.Rect()
     override fun onDraw(cv: Canvas) {
         if (width <= 0) return
+        // fora da tela (o Estúdio tem 9 desses): não desenha e só confere de vez em quando.
+        // Antes todos ficavam animando 30x por segundo mesmo escondidos lá embaixo
+        if (!getGlobalVisibleRect(vis)) { if (isAttachedToWindow) postInvalidateDelayed(300); return }
         val mais = Efeitos.noCartao(cv, path, 0f, 0f, width.toFloat(), height.toFloat(), d, 7, tipo, 1.7f)
         if (mais && isAttachedToWindow) postInvalidateDelayed(33)
     }

@@ -185,6 +185,7 @@ TEMA=""
 # investigação: abre o Estúdio em vários temas, rola devagar e anota memória, quadros e o log do app até o emulador cair
 diag_estudio() {
   echo "=== diag $(date +%T) ===" > "$OUT/diag.txt"
+  sleep 30      # deixa o emulador terminar o que faz depois de ligar
   ( while true; do echo "$(date +%T) host_mem=$(free -m | awk '/Mem/{print $3"/"$2}') $(top -bn1 | awk 'NR>7&&NR<11{printf "%s%% %s | ", $9, $12}')" >> "$OUT/diag_host.txt"; sleep 2; done ) &
   local hp=$!
   for tm in ${DIAG_TEMAS:-vidro t_inferno x_reator x_holo}; do
