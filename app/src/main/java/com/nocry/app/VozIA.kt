@@ -658,10 +658,17 @@ object SessaoIA {
             if (!ligada) return
             // o microfone em si não está dando som: o jeito antigo usaria o mesmo microfone, então não adianta trocar.
             // Ele continua tentando sozinho; aqui só avisa o motivo (em vez de ficar "ouvindo" de mentira)
-            NLog.add("ia", "escuta: $motivo")
-            texto("Sem som do microfone: $motivo")
-            act?.let { if (it.naFrente) Ui.toast(it, "o microfone não está dando som ($motivo). Veja a permissão de microfone do NOCRY") }
-            relatar(motivo, forcar = true)
+            // outro app (gravação de tela, transmissão) pode estar com o microfone: o Android deixa só um mandar som
+            val ocupado = if (motivo.contains("silêncio")) Ouvido.microfoneOcupado() else null
+            NLog.add("ia", "escuta: ${ocupado ?: motivo}")
+            if (ocupado != null) {
+                texto("Outro app está com o microfone (gravação ou transmissão). Continuo tentando.")
+                act?.let { if (it.naFrente) Ui.toast(it, "$ocupado. Se puder, deixe o NOCRY aberto na frente ou use o chat por escrito") }
+            } else {
+                texto("Sem som do microfone: $motivo")
+                act?.let { if (it.naFrente) Ui.toast(it, "o microfone não está dando som ($motivo). Veja a permissão de microfone do NOCRY") }
+            }
+            relatar(ocupado ?: motivo, forcar = true)
         }
         override fun fala(wav: ByteArray, seg: Float) {
             if (mudo()) return
@@ -713,6 +720,8 @@ object SessaoIA {
     /** o que fazer com o que ela ouviu */
     private fun decidir(fala: String) {
         val naTelaIA = naTelaIAagora()
+        // 0) criar, apagar ou listar palavra-chave falando ("quando eu falar bora jogar, abre o free fire"): vai direto, sem disparar a que já existe
+        if (Acoes.gerePalavra(fala)) { responder(fala, fala, true); return }
         // 1) uma palavra-chave sua: faz na hora
         val pc = PalavrasChave.achar(fala)
         if (pc != null) { responder(fala, pc, true); return }
@@ -723,7 +732,7 @@ object SessaoIA {
             else responder(fala, semNome, Comandos.entender(semNome).any { it.acao != "pesquisar" && it.acao != "youtube" })
             return
         }
-        // 2b) ela acabou de perguntar "normal ou max?": a resposta curta vai pra ela, mesmo sem chamar o nome
+        // 2b) ela acabou de perguntar ("qual bypass?", "normal ou max?"): a resposta curta vai pra ela, mesmo sem chamar o nome
         if (Acoes.aguardandoFf()) { responder(fala, fala, false); return }
         // 3) na tela da IA, logo depois de chamar ela, ou com "só quando me chamar" desligado: tudo vai pra IA
         if (naTelaIA || !soComNome || System.currentTimeMillis() < conversaAte) { responder(fala, fala, false); return }
@@ -746,18 +755,18 @@ object SessaoIA {
         texto("Pensando...")
         Assistente.anotar(true, fala)
         val minha = sessao
+        var avisou = false
         main.postDelayed({
             if (estado == Estado.PENSANDO && sessao == minha) {
-                NLog.add("ia", "resposta demorou mais de 25s")
-                falar("Demorou pra responder. Fala de novo?")
+                avisou = true
+                NLog.add("ia", "resposta ainda não veio depois de 20s")
+                falar("Tô demorando mais que o normal, mas continuo nisso.")
             }
-        }, 25_000)
-        Bg.io {
-            val r = try { Assistente.responder(c, a, pedido, localPrimeiro = localPrimeiro) } catch (t: Throwable) { "Deu um erro aqui (${t.javaClass.simpleName}). Tenta de novo." }
-            Bg.ui {
-                Assistente.anotar(false, r)
-                if (estado == Estado.PENSANDO && sessao == minha) falar(r)
-            }
+        }, 20_000)
+        // mesma fila da conversa escrita: o que você falou e o que você digitou são respondidos na ordem
+        Assistente.pedir(c, a, pedido, null, localPrimeiro) { r ->
+            // veio depois do aviso de demora: fala quando ela está só ouvindo (se você já pediu outra coisa, fica só no chat)
+            if (ligada && ((estado == Estado.PENSANDO && sessao == minha) || (avisou && estado == Estado.OUVINDO))) falar(r)
         }
     }
 

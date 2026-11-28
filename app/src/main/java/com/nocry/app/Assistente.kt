@@ -39,8 +39,8 @@ class Passo(val acao: String, val atrasoMs: Long = 0L, val arg: String = "", val
 object Acoes {
     /** tudo que a IA sabe fazer (os mesmos nomes vão pro servidor da IA) */
     val nomes: Map<String, String> = linkedMapOf(
-        "bypass_ligar" to "ligar o bypass e ficar esperando o gatilho (arg opcional: o gatilho dnd = não perturbe, bt = bluetooth, carga = carregador ou volume, e/ou o tipo completo, normal ou simples; ex.: \"dnd completo\")",
-        "bypass_aplicar" to "aplicar o bypass AGORA no jogo, na hora, sem esperar gatilho (arg opcional: o tipo completo, normal ou simples)",
+        "bypass_ligar" to "ligar o bypass e ficar esperando o gatilho (arg: o gatilho dnd = não perturbe, bt = bluetooth, carga = carregador ou volume, e o tipo completo, normal ou simples; ex.: \"dnd completo\"). NÃO INVENTE: só ponha no arg o que a pessoa DISSE; se ela não disse o tipo ou o gatilho, deixe o arg vazio (ou só com o que ela disse) que o app mesmo pergunta o que faltou",
+        "bypass_aplicar" to "aplicar o bypass AGORA no jogo, na hora, sem esperar gatilho (arg: o tipo completo, normal ou simples, SÓ se a pessoa disse; se não disse, deixe o arg vazio que o app pergunta)",
         "bypass_desligar" to "desligar o bypass (restaura o jogo)",
         "bypass_ff" to "escolher pra qual Free Fire vai o bypass (arg: normal ou max). Use antes de bypass_ligar ou bypass_aplicar quando a pessoa disser qual Free Fire",
         "bot_ligar" to "ligar o bot de fila e começar a buscar (arg opcional: modo e valores em reais, ex.: \"2x2 4 3\" = modo 2x2 e valores R$ 4 e R$ 3)",
@@ -68,7 +68,10 @@ object Acoes {
         "instalar_pastas" to "instalar as pastas que faltam",
         "verificar" to "verificar os problemas do app e arrumar o que der sozinho",
         "tela" to "abrir uma tela do app (arg: inicio, conexao, bypass, recursos, bot, otimizacao, competitivo, ajustes, estudio, logs, ajuda, caderno, rank, eventos, partidas)",
-        "cancelar_agendados" to "cancelar tudo que estava agendado"
+        "cancelar_agendados" to "cancelar tudo que estava agendado",
+        "palavra_criar" to "criar uma palavra-chave: quando a pessoa FALAR essa palavra, o app faz o que ela pediu (arg: a palavra, uma barra | e o que fazer; ex.: \"bora jogar|abre o free fire e liga o bypass completo\")",
+        "palavra_remover" to "apagar uma palavra-chave que a pessoa criou (arg: a palavra)",
+        "palavra_listar" to "mostrar as palavras-chave que a pessoa já criou"
     )
 
     /** o contrário de cada ação (pra "liga o bot por 30 minutos") */
@@ -129,6 +132,8 @@ object Acoes {
             val mudaTipo = tipo != null && tipo != Prefs.bypassTipo
             if ((ativo || Prefs.bypassMark) && (mudaGat || mudaTipo)) religarBypass(app, act, p)
             else if (ativo) "✓ o bypass já estava ligado"
+            // não disse o tipo ou o gatilho: pergunta antes de ligar (pedidos agendados e retomados não perguntam)
+            else if (!Prefs.bypassMark && !p.semPerguntar && (gat == null || tipo == null)) perguntarBypass(false, gat, tipo)
             else {
                 // o gatilho e o tipo que você pediu viram a escolha do app (só dá pra trocar com o bypass desligado)
                 val gatFinal = if (Prefs.bypassMark) Prefs.bypassGatilho else (gat ?: Prefs.bypassGatilho)
@@ -148,6 +153,7 @@ object Acoes {
             val tipo = bypassArgs(p.arg).second
             val parado = !(Prefs.bypassAtivo || Prefs.bypassVolAtivo)
             if (Prefs.bypassMark && tipo != null && tipo != Prefs.bypassTipo) religarBypass(app, act, p)
+            else if (parado && !Prefs.bypassMark && !p.semPerguntar && tipo == null) perguntarBypass(true, null, null)
             else (if (Prefs.bypassMark) null else ((if (parado) perguntarFf(app, p) else null) ?: antesDoBypass(app, false, parado, p))) ?: when (EngineBypass.aplicarAgora(tipo)) {
                 0 -> "✓ bypass ${Prefs.bypassTipo} aplicado agora no ${nomeFfBypass()}"
                 2 -> "✓ o bypass já estava aplicado"
@@ -173,6 +179,9 @@ object Acoes {
             1 -> "⚠ bypass desligado, mas não deu pra restaurar o jogo (ADB). Peça \"liga o ADB\" e de novo \"desliga o bypass\""
             else -> "✓ bypass desligado"
         }
+        "palavra_criar" -> criarPalavra(p.arg)
+        "palavra_remover" -> removerPalavra(p.arg)
+        "palavra_listar" -> listarPalavras()
         "bot_ligar" -> ligarBot(p.arg)
         "bot_configurar" -> configurarBot(p.arg) ?: "✗ diga o modo e os valores, ex.: \"bot no modo 2x2 valores 4 e 3\""
         "bot_desligar" -> {
@@ -345,7 +354,7 @@ object Acoes {
     }
 
     /** o gatilho e o tipo do bypass que vieram no pedido (null = não falou) */
-    private fun bypassArgs(arg: String): Pair<String?, String?> {
+    fun bypassArgs(arg: String): Pair<String?, String?> {
         val a = Comandos.limpa(arg)
         val g = when {
             Regex("\\b(dnd|nao perturb\\w*|nao pertub\\w*)\\b").containsMatchIn(a) -> "dnd"
@@ -363,6 +372,19 @@ object Acoes {
         return g to t
     }
 
+    /** o que a pessoa DISSE no pedido inteiro (o "normal" só vale como tipo quando vem junto de "bypass"; senão é o Free Fire normal) */
+    fun bypassDito(texto: String): Pair<String?, String?> {
+        val a = Comandos.limpa(texto)
+        val (g, _) = bypassArgs(a)
+        val t = when {
+            a.contains("completo") -> "completo"
+            a.contains("simples") -> "simples"
+            Regex("\\b(bypass|bypas|baipas)\\s+(do\\s+tipo\\s+|tipo\\s+|modo\\s+)?normal\\b|\\b(tipo|modo)\\s+normal\\b").containsMatchIn(a) -> "normal"
+            else -> null
+        }
+        return g to t
+    }
+
     private fun nomeGatilho(g: String) = when (g) { "dnd" -> "não perturbe"; "bt" -> "bluetooth"; "carga" -> "carregador"; "volume" -> "volume"; else -> g }
 
     // ---- bypass: qual Free Fire e pastas que faltam
@@ -371,6 +393,54 @@ object Acoes {
     /** o pedido de bypass que ficou esperando você dizer qual Free Fire */
     @Volatile private var pendenteFf: Passo? = null
     @Volatile private var pendenteFfAte = 0L
+
+    /** o pedido de bypass que ficou esperando você dizer o tipo (completo, normal ou simples) e/ou o gatilho */
+    private class PendenteBypass(val aplicar: Boolean, val gat: String?, val tipo: String?, val ate: Long)
+    @Volatile private var pendBy: PendenteBypass? = null
+
+    private const val P_TIPO = "Qual bypass você quer: completo, normal ou simples?"
+    private const val P_GAT = "Qual gatilho: não perturbe, volume, bluetooth ou carregador?"
+
+    /** ligar/aplicar sem dizer o tipo (e o gatilho): pergunta o que faltou e guarda o pedido */
+    private fun perguntarBypass(aplicar: Boolean, gat: String?, tipo: String?): String {
+        pendBy = PendenteBypass(aplicar, gat, tipo, System.currentTimeMillis() + 2 * 60_000L)
+        return when {
+            tipo == null && gat == null && !aplicar -> "$P_TIPO E qual gatilho: não perturbe, volume, bluetooth ou carregador? Pode responder os dois juntos, ex.: \"completo no volume\"."
+            tipo == null -> P_TIPO
+            else -> P_GAT
+        }
+    }
+
+    /** a resposta curta ("completo", "no volume", "normal no dnd") completa o pedido do bypass que estava esperando */
+    private fun respostaBypass(c: Context, act: MainActivity?, b: PendenteBypass, texto: String): String? {
+        if (System.currentTimeMillis() > b.ate) { pendBy = null; return null }
+        val t = Comandos.limpa(texto).trim()
+        if (t.length > 40 || t.split(" ").size > 6) return null
+        val (g, ty) = bypassArgs(t)
+        if (g == null && ty == null) {
+            if (Regex("\\b(nao|cancela\\w*|deixa|esquece|esquec\\w+)\\b").containsMatchIn(t)) { pendBy = null; return "Tudo bem, não liguei o bypass." }
+            return null
+        }
+        val gat = g ?: b.gat
+        val tipo = ty ?: b.tipo
+        if (tipo == null || (!b.aplicar && gat == null)) return perguntarBypass(b.aplicar, gat, tipo)
+        pendBy = null
+        val arg = listOfNotNull(if (b.aplicar) null else gat, tipo).joinToString(" ")
+        return fazer(c, act, Passo(if (b.aplicar) "bypass_aplicar" else "bypass_ligar", 0L, arg))
+    }
+
+    /** o que a pessoa DISSE manda: o que a IA pôs a mais no tipo/gatilho do bypass é tirado (ela não escolhe por você) */
+    fun limparBypassIA(passos: List<Passo>, falado: String): List<Passo> {
+        val (g, t) = bypassDito(falado)
+        return passos.map { p ->
+            when (p.acao) {
+                "bypass_ligar" -> Passo(p.acao, p.atrasoMs, listOfNotNull(g, t).joinToString(" "), p.quando, p.semPerguntar)
+                "bypass_aplicar" -> Passo(p.acao, p.atrasoMs, t ?: "", p.quando, p.semPerguntar)
+                else -> p
+            }
+        }
+    }
+
     /** o pedido de bypass que espera as pastas terminarem de instalar */
     @Volatile private var retomarDepois: Passo? = null
     @Volatile private var retomarAte = 0L
@@ -425,11 +495,72 @@ object Acoes {
         return "✓ o bypass vai usar o $nome"
     }
 
+    // ---- palavras-chave pelo próprio chat ("quando eu falar bora jogar, abre o Free Fire e liga o bypass")
+    private val RE_PALAVRA_VIRGULA = Regex("""\b(?:quando|se|toda vez que|sempre que)\s+eu\s+(?:falar|disser|dizer|digitar|escrever|mandar)\s+(?:a\s+)?(?:palavra\s+|frase\s+)?["“']?([^,"”'\n]{2,40}?)["”']?\s*[,:]\s*(?:então\s+|entao\s+|pode\s+|você\s+|voce\s+|vc\s+)*(?:(?:vai\s+|pode\s+)?(?:fazer|faz|faça|faca|executar|executa|execute)\s+)?(.{3,200})""", RegexOption.IGNORE_CASE)
+    private val RE_PALAVRA_FAZ = Regex("""\b(?:quando|se|toda vez que|sempre que)\s+eu\s+(?:falar|disser|dizer|digitar|escrever|mandar)\s+(?:a\s+)?(?:palavra\s+|frase\s+)?["“']?(.{2,40}?)["”']?\s+(?:então\s+|entao\s+)?(?:você\s+|voce\s+|vc\s+)?(?:vai\s+)?(?:fazer|faz|faça|faca|executa|executar|execute)\s+(.{3,200})""", RegexOption.IGNORE_CASE)
+    private val RE_PALAVRA_CRIAR = Regex("""\b(?:cria|criar|crie|adiciona|adicionar|adicione|coloca|colocar|coloque|configura|configurar|configure|salva|salvar|salve|faz|faça)\s+(?:uma\s+|a\s+)?(?:nova\s+)?palavra[\s-]?chave\s+["“']?([^"”':,\n]{2,40}?)["”']?\s*(?::|,|=|\s+-\s+|\s+que\s+(?:faz|fazer|executa|executar|vai\s+fazer)\s+|\s+que\s+(?=\w)|\s+para\s+(?:fazer\s+)?|\s+pra\s+(?:fazer\s+)?|\s+faz\s+|\s+faça\s+)\s*(.{3,200})""", RegexOption.IGNORE_CASE)
+    private val RE_PALAVRA_REMOVER = Regex("""\b(?:apaga|apagar|apague|remove|remover|remova|tira|tirar|tire|deleta|deletar|delete|exclui|excluir|exclua)\s+(?:a\s+)?palavra[\s-]?chave\s+["“']?(.{2,40}?)["”']?\s*[.!?]*\s*\z""", RegexOption.IGNORE_CASE)
+    private val RE_PALAVRA_LISTAR = Regex("""\b(?:quais|qual|lista|listar|liste|mostra|mostrar|mostre|ver|veja)\b.{0,30}palavras?[\s-]?chaves?""", RegexOption.IGNORE_CASE)
+
+    /** (palavra, o que fazer) se a fala é pra criar uma palavra-chave. "quando eu falar X, faz Y" sem dizer "palavra-chave"
+     *  só vale se o Y é algo que o app entende (liga o bypass, abre o jogo...): senão é só uma frase normal (a IA decide) */
+    private fun acharCriar(t: String): Pair<String, String>? {
+        RE_PALAVRA_CRIAR.find(t)?.let { return it.groupValues[1].trim() to it.groupValues[2].trim() }
+        if (t.contains('?')) return null
+        val m = RE_PALAVRA_VIRGULA.find(t) ?: RE_PALAVRA_FAZ.find(t) ?: return null
+        val faz = m.groupValues[2].trim()
+        if (Comandos.entender(faz).none { it.acao != "pesquisar" && it.acao != "youtube" }) return null
+        return m.groupValues[1].trim() to faz
+    }
+
+    /** a fala é pra criar, apagar ou listar palavra-chave (aí a palavra-chave que já existe não dispara no meio) */
+    fun gerePalavra(texto: String): Boolean {
+        val t = texto.trim()
+        return t.length >= 8 && (RE_PALAVRA_REMOVER.containsMatchIn(t) || RE_PALAVRA_LISTAR.containsMatchIn(t) || acharCriar(t) != null)
+    }
+
+    /** entende sozinha (sem esperar a IA) o pedido de criar, apagar ou listar palavra-chave. null = não era isso */
+    fun palavraLocal(c: Context, act: MainActivity?, texto: String): String? {
+        val t = texto.trim()
+        if (t.length < 8) return null
+        RE_PALAVRA_REMOVER.find(t)?.let { return fazer(c, act, Passo("palavra_remover", 0L, it.groupValues[1])) }
+        acharCriar(t)?.let { return fazer(c, act, Passo("palavra_criar", 0L, it.first + "|" + it.second)) }
+        if (RE_PALAVRA_LISTAR.containsMatchIn(t)) return fazer(c, act, Passo("palavra_listar", 0L, ""))
+        return null
+    }
+
+    private fun criarPalavra(arg: String): String {
+        val i = arg.indexOf('|')
+        val palavra = (if (i >= 0) arg.substring(0, i) else arg).trim().trim('"', '“', '”', '\'').trim().take(40)
+        val faz = (if (i >= 0) arg.substring(i + 1) else "").trim().trim('"', '“', '”').trim().take(300)
+        if (PalavrasChave.limpa(palavra).length < 3) return "✗ a palavra-chave precisa ter pelo menos 3 letras"
+        if (faz.length < 3) return "✗ me diga o que fazer quando você falar \"$palavra\""
+        val jaTinha = PalavrasChave.lista().any { PalavrasChave.limpa(it.palavra) == PalavrasChave.limpa(palavra) }
+        PalavrasChave.adicionar(palavra, faz)
+        return "✓ " + (if (jaTinha) "troquei a palavra-chave" else "criei a palavra-chave") + " \"$palavra\": quando você falar ela, eu vou: $faz"
+    }
+
+    private fun removerPalavra(arg: String): String {
+        val k = PalavrasChave.limpa(arg)
+        val achou = PalavrasChave.lista().firstOrNull { PalavrasChave.limpa(it.palavra) == k }
+            ?: PalavrasChave.lista().firstOrNull { k.isNotEmpty() && PalavrasChave.limpa(it.palavra).contains(k) }
+            ?: return "✗ não achei a palavra-chave \"${arg.trim()}\""
+        PalavrasChave.remover(achou.palavra)
+        return "✓ apaguei a palavra-chave \"${achou.palavra}\""
+    }
+
+    private fun listarPalavras(): String {
+        val l = PalavrasChave.lista()
+        if (l.isEmpty()) return "Você ainda não tem palavras-chave. Diga, por exemplo: \"quando eu falar bora jogar, abre o Free Fire e liga o bypass\"."
+        return "Suas palavras-chave:\n" + l.joinToString("\n") { "• \"${it.palavra}\" → ${it.faz}" }
+    }
+
     /** ela está esperando você dizer qual Free Fire (a resposta curta "max" / "normal" tem que chegar nela mesmo sem chamar o nome) */
-    fun aguardandoFf(): Boolean = pendenteFf != null && System.currentTimeMillis() <= pendenteFfAte
+    fun aguardandoFf(): Boolean = (pendenteFf != null && System.currentTimeMillis() <= pendenteFfAte) || (pendBy?.let { System.currentTimeMillis() <= it.ate } == true)
 
     /** você respondeu a pergunta do Free Fire ("max", "o normal"): escolhe e faz o que estava esperando. null = não era a resposta */
     fun respostaPendente(c: Context, act: MainActivity?, texto: String): String? {
+        pendBy?.let { b -> respostaBypass(c, act, b, texto)?.let { return it } }
         val p = pendenteFf ?: return null
         if (System.currentTimeMillis() > pendenteFfAte) { pendenteFf = null; return null }
         val t = Comandos.limpa(texto).trim()
@@ -781,6 +912,27 @@ object Comandos {
     }
 }
 
+/** roda uma etapa com tempo máximo: se passar, para de esperar (a etapa termina sozinha em segundo plano) e anota quanto demorou no log */
+object Limite {
+    fun <T> rodar(nome: String, ms: Long, padrao: T, bloco: () -> T): T {
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        val caixa = java.util.concurrent.atomic.AtomicReference<T?>(null)
+        val erro = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
+        val feito = CountDownLatch(1)
+        Bg.io {
+            try { caixa.set(bloco()) } catch (t: Throwable) { erro.set(t) } finally { feito.countDown() }
+        }
+        val ok = try { feito.await(ms, TimeUnit.MILLISECONDS) } catch (_: InterruptedException) { false }
+        val dt = android.os.SystemClock.elapsedRealtime() - t0
+        if (!ok) { NLog.add("ia", "$nome: passou de ${ms / 1000}s, parei de esperar"); return padrao }
+        val e = erro.get()
+        if (e != null) { NLog.add("ia", "$nome: erro ${e.javaClass.simpleName} (${dt}ms)"); return padrao }
+        if (dt >= 2000) NLog.add("ia", "$nome: ${dt}ms")
+        @Suppress("UNCHECKED_CAST")
+        return caixa.get() as T
+    }
+}
+
 // ---------------------------------------------------------------- IA de verdade (pelo servidor do NOCRY)
 object IA {
     class Resposta(val texto: String, val passos: List<Passo>)
@@ -791,7 +943,7 @@ object IA {
         private set
 
     /** pedido pro servidor com tempo maior que o normal (a IA pode levar uns segundos pensando) */
-    private fun postIa(c: Context, corpo: JSONObject): JSONObject? = post(c, "ia", corpo, if (corpo.has("imagem")) 50000 else 30000)
+    private fun postIa(c: Context, corpo: JSONObject): JSONObject? = post(c, "ia", corpo, if (corpo.has("imagem")) 50000 else 30000, 8000)
 
     fun post(c: Context, op: String, corpo: JSONObject, leitura: Int = 50000, conexao: Int = 15000): JSONObject? {
         val base = BuildConfig.API_URL.trim().trimEnd('/')
@@ -818,7 +970,9 @@ object IA {
         hist.takeLast(8).forEach { h.put(JSONObject().put("role", it.first).put("content", it.second.take(600))) }
         val acoes = JSONObject()
         Acoes.nomes.forEach { (k, v) -> acoes.put(k, v) }
-        val corpo = JSONObject().put("texto", texto.take(800)).put("estado", estado(c)).put("hist", h).put("acoes", acoes)
+        // o "estado" junta várias coisas do celular: se alguma travar, segue sem ele em vez de prender o pedido
+        val est = Limite.rodar("ia/estado", 5_000L, JSONObject().put("aviso", "estado indisponível agora")) { estado(c) }
+        val corpo = JSONObject().put("texto", texto.take(800)).put("estado", est).put("hist", h).put("acoes", acoes)
         if (imagem != null) corpo.put("imagem", imagem)
         val j = postIa(c, corpo) ?: return null
         if (!j.optBoolean("ok")) {
@@ -836,7 +990,7 @@ object IA {
             val acao = o.optString("acao")
             if (acao !in Acoes.nomes) continue
             val min = o.optDouble("min", 0.0).let { if (it.isNaN()) 0.0 else it.coerceIn(0.0, 1440.0) }
-            passos += Passo(acao, (min * 60_000L).toLong(), o.optString("arg").take(80))
+            passos += Passo(acao, (min * 60_000L).toLong(), o.optString("arg").take(if (acao == "palavra_criar") 220 else 80))
         }
         return Resposta(j.optString("resposta").take(1200), passos)
     }
@@ -987,49 +1141,82 @@ object Assistente {
     /** tem pedido sendo feito agora (continua mesmo se você sair da tela) */
     val pensando: Boolean get() = pendentes.get() > 0
     private val fila = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "nocry-ia").apply { isDaemon = true } }
-    private val CUTUCA = Regex("^\\W*(cad[eê]|e a[ií]|al[oô]|responde\\w*|ei|t[aá] a[ií]|demor\\w+|oi)\\W*$", RegexOption.IGNORE_CASE)
+    private val CUTUCA = Regex("^\\W*(cad[eê]|e a[ií]|e ent[aã]o|al[oô]|responde\\w*|ei|t[aá] a[ií]|demor\\w+|oi|continua\\w*|termina\\w*|u[eê]|uai|vai)\\W*$", RegexOption.IGNORE_CASE)
+    /** só "?", "??", "?!", "..." */
+    private val SO_PONTUACAO = Regex("^[\\s?!.,…¿¡]+$")
+
+    /** pedidos seus que ficaram sem resposta de verdade (tempo esgotado, erro, servidor fora): um "?" depois refaz eles */
+    private class SemResp(val texto: String, val em: Long)
+    private val semResposta = ArrayList<SemResp>()
+    private fun marcarSemResposta(t: String) = synchronized(semResposta) {
+        semResposta.removeAll { it.texto == t }
+        semResposta.add(SemResp(t, System.currentTimeMillis()))
+        while (semResposta.size > 3) semResposta.removeAt(0)
+    }
+    private fun marcarRespondido(t: String) = synchronized(semResposta) { semResposta.removeAll { it.texto == t } }
+    /** os pedidos sem resposta dos últimos 10 min (null = não tem nenhum) */
+    private fun retomar(): String? = synchronized(semResposta) {
+        val agora = System.currentTimeMillis()
+        semResposta.removeAll { agora - it.em > 10 * 60_000L }
+        if (semResposta.isEmpty()) null else semResposta.joinToString(". ") { it.texto }.also { semResposta.clear() }
+    }
 
     /**
      * faz o pedido escrito FORA da tela: você pode sair da conversa, minimizar o app ou digitar outro pedido
      * que ela continua, faz o que você mandou e deixa a resposta no chat (e avisa na tela se você estiver em outra).
      * Vários pedidos seguidos entram numa fila e são respondidos na ordem.
      */
-    fun pedir(c: Context, act: MainActivity?, texto: String, imagem: String? = null, aoFim: ((String) -> Unit)? = null) {
+    fun pedir(c: Context, act: MainActivity?, texto: String, imagem: String? = null, localPrimeiro: Boolean = false, aoFim: ((String) -> Unit)? = null) {
         val app = c.applicationContext
-        // "cadê?", "e aí?" enquanto ela ainda está fazendo o pedido anterior: responde na hora, sem entrar na fila
-        if (imagem == null && pensando && CUTUCA.matches(texto.trim())) {
+        val limpo = texto.trim()
+        val cutuca = imagem == null && (SO_PONTUACAO.matches(limpo) || CUTUCA.matches(limpo))
+        // "?", "cadê?", "e aí?" enquanto ela ainda está fazendo o pedido anterior: responde na hora, sem entrar na fila
+        if (cutuca && pensando) {
             val r = "Já estou cuidando do seu pedido, só mais um segundinho."
             anotar(false, r)
             if (aoFim != null) Bg.ui { aoFim(r) }
             return
         }
+        // "?" depois de um pedido que ficou sem resposta: ela refaz o pedido de antes (e não lê só o "?")
+        val retomado = if (cutuca) retomar() else null
+        val pedido = retomado ?: texto
+        if (retomado != null) anotar(false, "↻ Refazendo o que você pediu: \"${retomado.take(80)}\"")
         pendentes.incrementAndGet()
         mudou++
         IaPedidoService.segurar(app)
         fila.execute {
+            val t0 = android.os.SystemClock.elapsedRealtime()
             val trava = try {
                 (app.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager)
-                    ?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "nocry:ia")?.also { it.setReferenceCounted(false); it.acquire(90_000L) }
+                    ?.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "nocry:ia")?.also { it.setReferenceCounted(false); it.acquire(120_000L) }
             } catch (_: Throwable) { null }
             // trava de segurança: se algo travar de vez, não deixa a fila presa pra sempre
-            val caixa = arrayOfNulls<String>(1)
+            val caixa = arrayOfNulls<Res>(1)
             val feito = CountDownLatch(1)
             Bg.io {
-                caixa[0] = try { responder(app, act, texto, imagem) } catch (t: Throwable) {
+                caixa[0] = try { resolver(app, act, pedido, imagem, localPrimeiro) } catch (t: Throwable) {
                     NLog.add("erro", "ia: ${t.javaClass.simpleName}")
-                    "Deu um erro aqui, mas já estou de volta. Pode pedir de novo."
+                    Res("Deu um erro aqui, mas já estou de volta. Manda um \"?\" que eu tento de novo.", true)
                 }
                 feito.countDown()
             }
-            val ok = try { feito.await(75, TimeUnit.SECONDS) } catch (_: InterruptedException) { false }
-            val r = caixa[0] ?: if (ok) "Pronto." else "Demorei demais pra pensar nisso. Pode pedir de novo?"
-            if (!ok) NLog.add("ia", "pedido demorou mais de 75s")
+            val ok = try { feito.await(100, TimeUnit.SECONDS) } catch (_: InterruptedException) { false }
+            val res = caixa[0] ?: if (ok) Res("Pronto.") else Res("Demorei demais pra responder. Manda um \"?\" que eu tento de novo o seu pedido.", true)
+            val dt = android.os.SystemClock.elapsedRealtime() - t0
+            if (!ok) NLog.add("ia", "pedido: passou de 100s, parei de esperar")
+            else if (dt >= 5000) NLog.add("ia", "pedido levou ${dt / 1000}s")
+            if (res.falhou) marcarSemResposta(pedido) else marcarRespondido(pedido)
             try { if (trava?.isHeld == true) trava.release() } catch (_: Throwable) {}
-            anotar(false, r)
+            anotar(false, res.texto)
             if (pendentes.decrementAndGet() <= 0) IaPedidoService.soltar(app)
-            if (aoFim != null) Bg.ui { aoFim(r) }
+            if (aoFim != null) Bg.ui { aoFim(res.texto) }
         }
     }
+
+    private class Res(val texto: String, val falhou: Boolean = false)
+
+    /** "vou te mandar uma foto", "te mando um print": ela responde e diz onde mandar (sem gastar a IA) */
+    private val MANDAR_FOTO = Regex("\\b(vou|vo|ja|ja ja|logo|depois)\\b.{0,25}\\b(mandar|enviar|mostrar|passar)\\b.{0,25}\\b(foto|fotos|imagem|imagens|print|prints|captura|screenshot)\\b|\\b(te\\s+)?(mando|envio|passo|mostro)\\s+(uma\\s+|um\\s+|a\\s+|o\\s+|umas\\s+|uns\\s+|as\\s+|os\\s+)?(foto|fotos|imagem|imagens|print|prints|captura|screenshot)\\b")
 
     /** guarda se o último pedido foi ligar ou desligar, pra entender "e a otimização?" depois */
     private fun lembrar(passos: List<Passo>) {
@@ -1044,25 +1231,45 @@ object Assistente {
     val AJUDA = "Não entendi. Exemplos do que eu faço:\n• liga o bypass completo agora (aplica na hora)\n• liga o bypass no não perturbe (ou bluetooth, carregador, volume)\n• liga o bot no modo 2x2 valores 4 e 3\n• liga o bot e desliga o bot em 5 minutos\n• liga o bot por 30 minutos\n• abre o jogo\n• coloca o Meet e o toque rápido no menu do topo\n• às 22h desliga o bot\n• verifica os erros e arruma\n• cancela os agendados"
 
     /** responde e faz tudo (bloqueia: chame fora da tela). imagem = foto em base64 (jpeg) */
-    fun responder(c: Context, act: MainActivity?, texto: String, imagem: String? = null, localPrimeiro: Boolean = false): String {
-        // ela tinha perguntado "normal ou max?": a resposta curta vai direto pro bypass que estava esperando
-        if (imagem == null) Acoes.respostaPendente(c, act, texto)?.let { return it }
+    fun responder(c: Context, act: MainActivity?, texto: String, imagem: String? = null, localPrimeiro: Boolean = false): String =
+        resolver(c, act, texto, imagem, localPrimeiro).texto
+
+    private fun resolver(c: Context, act: MainActivity?, texto: String, imagem: String? = null, localPrimeiro: Boolean = false): Res {
+        // ela tinha perguntado "qual bypass?" ou "normal ou max?": a resposta curta vai direto pro pedido que estava esperando
+        if (imagem == null) Acoes.respostaPendente(c, act, texto)?.let { return Res(it) }
+        // palavras-chave pelo chat: "quando eu falar bora jogar, abre o free fire", "apaga a palavra-chave bora jogar", "quais são minhas palavras-chave"
+        if (imagem == null) Acoes.palavraLocal(c, act, texto)?.let { return Res(it) }
+        // "vou te mandar uma foto": responde e diz onde mandar
+        if (imagem == null && texto.length < 140 && MANDAR_FOTO.containsMatchIn(Comandos.limpa(texto)))
+            return Res("Beleza! Manda a foto pelo botão de imagem aqui no chat e me diz o que você quer que eu veja nela.")
         // palavra-chave ou comando falado fora da tela: o que ela entende sozinha faz na hora, sem esperar a IA
         if (localPrimeiro && imagem == null) {
             val ps = Comandos.entender(texto, ultimoLiga)
-            if (ps.isNotEmpty()) { lembrar(ps); return ps.joinToString("\n") { Acoes.fazerOuAgendar(c, act, it) }.ifBlank { "Pronto." } }
+            if (ps.isNotEmpty()) { lembrar(ps); return Res(rodarPassos(c, act, ps).ifBlank { "Pronto." }) }
         }
         val hist = synchronized(conversa) { conversa.dropLast(1).takeLast(8).map { (if (it.eu) "user" else "assistant") to it.texto } }
-        val ia = try { IA.perguntar(c, texto, hist, imagem) } catch (_: Throwable) { null }
-        if (ia == null && imagem != null) return "Não consegui olhar a imagem agora: a IA do servidor não respondeu. Tenta de novo daqui a pouco."
-        if (ia == null && Regex("(?i)(quem (te|lhe|voce|vc)? ?(criou|fez|desenvolveu|programou)|seu criador|criador|quem (e|é) o dono|historia (do|desse) app|como (o app|o nocry|voce) (foi|nasceu))").containsMatchIn(texto)) return CRIADOR
-        val passos = ia?.passos ?: Comandos.entender(texto, ultimoLiga)
+        val ia = Limite.rodar<IA.Resposta?>("ia/servidor", 38_000L, null) { IA.perguntar(c, texto, hist, imagem) }
+        if (ia == null && imagem != null) return Res("Não consegui olhar a imagem agora: a IA do servidor não respondeu. Tenta de novo daqui a pouco.", true)
+        if (ia == null && Regex("(?i)(quem (te|lhe|voce|vc)? ?(criou|fez|desenvolveu|programou)|seu criador|criador|quem (e|é) o dono|historia (do|desse) app|como (o app|o nocry|voce) (foi|nasceu))").containsMatchIn(texto)) return Res(CRIADOR)
+        // o que você DISSE manda: a IA não escolhe o tipo nem o gatilho do bypass por conta própria
+        val passos = ia?.passos?.let { Acoes.limparBypassIA(it, texto) } ?: Comandos.entender(texto, ultimoLiga)
         lembrar(passos)
         val linhas = ArrayList<String>()
         if (ia != null && ia.texto.isNotBlank()) linhas += ia.texto
-        if (passos.isEmpty() && ia == null) return "A IA do servidor não respondeu agora (internet fraca ou ela demorou), e esse pedido eu não sei fazer sem ela. Tenta de novo em alguns segundos.\n\n" + AJUDA.removePrefix("Não entendi. ")
-        for (p in passos) linhas += Acoes.fazerOuAgendar(c, act, p)
-        return linhas.joinToString("\n").ifBlank { "Pronto." }
+        if (passos.isEmpty() && ia == null) return Res("A IA do servidor não respondeu agora (internet fraca ou ela demorou), e esse pedido eu não sei fazer sem ela. Manda um \"?\" que eu tento de novo.\n\n" + AJUDA.removePrefix("Não entendi. "), true)
+        if (passos.isEmpty() && linhas.isEmpty()) return Res("Entendi! Se quiser que eu faça alguma coisa, é só me pedir.")
+        val feito = rodarPassos(c, act, passos)
+        if (feito.isNotBlank()) linhas += feito
+        return Res(linhas.joinToString("\n").ifBlank { "Pronto." })
+    }
+
+    /** faz cada passo com tempo máximo (um passo que trava no ADB não prende a conversa) */
+    private fun rodarPassos(c: Context, act: MainActivity?, passos: List<Passo>): String {
+        val out = ArrayList<String>()
+        for (p in passos) {
+            out += Limite.rodar("ação ${p.acao}", 45_000L, "⚠ ${Acoes.descricao(p)}: ainda está em andamento (passou de 45 s). Se não terminar, me manda um \"?\".") { Acoes.fazerOuAgendar(c, act, p) }
+        }
+        return out.joinToString("\n")
     }
 }
 

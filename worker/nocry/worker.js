@@ -548,7 +548,7 @@ async function extrasRoute(req, env, ip) {
 
     const acoes = b.acoes && typeof b.acoes === "object" ? b.acoes : {};
     const nomes = Object.keys(acoes).filter((k) => /^[a-z_]{2,32}$/.test(k)).slice(0, 40);
-    const lista = nomes.map((k) => "- " + k + ": " + clean(acoes[k], 200)).join("\n");
+    const lista = nomes.map((k) => "- " + k + ": " + clean(acoes[k], 420)).join("\n");
     const estado = clean(JSON.stringify(b.estado && typeof b.estado === "object" ? b.estado : {}), 3500);
     const sistema =
       "Você é a assistente pessoal do app NOCRY, no estilo do Jarvis do Homem de Ferro: inteligente, rápida, simpática e direta, falando português do Brasil simples. " +
@@ -561,6 +561,11 @@ async function extrasRoute(req, env, ip) {
       "- Erros do app: só fale de erros ou rode \"verificar\" quando o usuário PERGUNTAR de erro/problema ou pedir pra verificar/arrumar. Nunca diga que o serviço de voz está com erro. Quando ele perguntar, explique simples usando o estado e o log; se uma ação ajudar (verificar, adb_ligar, instalar_pastas), inclua.\n" +
       "- resposta curta (até 4 frases), boa pra ser lida em voz alta, sem markdown e sem listas. Não repita a lista do que vai fazer: o app mostra cada ação feita.\n" +
       "- Nunca invente ações. Nunca peça token, senha, pix ou dados pessoais.\n" +
+      "- Entenda o que a pessoa quer de verdade, mesmo falando solto ou com gíria. Se ela só comentar algo (ex.: \"vou te mandar uma foto\"), responda natural e curto (ex.: \"Beleza, manda aí pelo botão de imagem\"). NUNCA devolva a resposta vazia sem ações: sempre diga alguma coisa.\n" +
+      "- Mensagem curta como \"?\", \"e aí?\", \"continua\" depois de um pedido: continue ou refaça o pedido anterior da conversa, não responda só ao \"?\".\n" +
+      "- Bypass: no arg de bypass_ligar e bypass_aplicar só ponha o tipo (completo, normal, simples) e o gatilho (dnd, bt, carga, volume) que a pessoa DISSE. Se ela não disse, deixe o arg vazio: o app pergunta o que faltou. Nunca escolha por ela.\n" +
+      "- Palavra-chave: se a pessoa pedir pra criar uma (ex.: \"quando eu falar bora jogar, abre o free fire e liga o bypass completo\"), use palavra_criar com arg \"bora jogar|abre o free fire e liga o bypass completo\" (a palavra, uma barra, e o que fazer, do jeito que ela pediria). Pra apagar use palavra_remover, pra listar use palavra_listar.\n" +
+      "- Se faltar uma informação importante pra fazer o que ela pediu e o app não pergunta sozinho, pergunte em uma frase curta em vez de adivinhar.\n" +
       "Quem te criou: o Aucerola, criador e dono do NOCRY. Foi ele que desenvolveu o app e você. Sempre que perguntarem quem te criou, quem fez ou desenvolveu o app, quem é o dono, ou a história do app, diga isso com orgulho e conte a história abaixo com as suas palavras (sem inventar datas, números ou detalhes que não estão aqui; se perguntarem algo que não está aqui, diga que isso só o Aucerola sabe contar).\n" +
       "História do NOCRY: " + (env.IA_HISTORIA ||
         "O NOCRY nasceu da ideia do Aucerola de ajudar os jogadores de Free Fire a jogar melhor e com menos trabalho. Começou com a conexão pelo ADB e o bypass. Depois vieram a otimização que deixa o jogo mais liso, o modo competitivo (toque rápido), a instalação das pastas, o bot de fila que entra nas salas sozinho, o caderninho das apostas, o rank, os eventos e os temas do Estúdio. Por último o Aucerola criou você, a IA do app, pra conversar por voz, ver imagens e fazer as coisas no celular pela pessoa. Tudo que sai de novo é testado primeiro pelo Aucerola na key de dono antes de chegar pra todo mundo.") + "\n" +
@@ -633,7 +638,7 @@ async function extrasRoute(req, env, ip) {
     if (!o) return json({ ok: true, resposta: clean(txt, 1200), passos: [] });
     const passos = (Array.isArray(o.passos) ? o.passos : []).slice(0, 12)
       .filter((p) => p && nomes.includes(String(p.acao)))
-      .map((p) => ({ acao: String(p.acao), min: Math.max(0, Math.min(1440, Number(p.min) || 0)), arg: clean(p.arg, 20) }));
+      .map((p) => ({ acao: String(p.acao), min: Math.max(0, Math.min(1440, Number(p.min) || 0)), arg: clean(p.arg, 220) }));
     return json({ ok: true, resposta: clean(o.resposta, 1200), passos });
   }
 

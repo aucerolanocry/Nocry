@@ -70,6 +70,23 @@ object Ouvido {
 
     val rodando: Boolean get() = fio?.isAlive == true
 
+    @Volatile private var appCtx: Context? = null
+
+    /** outro app (gravador de tela, transmissão, chamada) está gravando o microfone? Diz o que achou, ou null.
+     *  Só avisa: o Android decide quem recebe o som, o NOCRY não tem como tomar o microfone à força */
+    fun microfoneOcupado(): String? {
+        val c = appCtx ?: return null
+        return try {
+            val am = c.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            val l = am.activeRecordingConfigurations
+            when {
+                android.os.Build.VERSION.SDK_INT >= 29 && l.any { it.isClientSilenced } -> "O Android calou o microfone do NOCRY porque outro app está gravando (gravação de tela ou transmissão)"
+                l.size > 1 -> "Outro app está gravando o microfone junto (gravação de tela ou transmissão)"
+                else -> null
+            }
+        } catch (_: Throwable) { null }
+    }
+
     // ---- números pra saber o que aconteceu (vão pro painel da staff só como contagem, nunca o áudio nem o texto)
     @Volatile private var fonteAtual = ""
     @Volatile private var aberturas = 0
@@ -96,6 +113,7 @@ object Ouvido {
 
     /** abre o microfone e começa a separar as falas. Pode chamar de novo: se já está rodando, não faz nada */
     fun iniciar(c: Context, l: Ouvinte): Boolean {
+        appCtx = c.applicationContext
         if (rodando) return true
         val minha = ++geracao
         aberturas = 0; quadrosLidos = 0; quadrosComSom = 0; maxDb = -90f; segmentos = 0; ruidos = 0; porSilencio = 0; porLimite = 0; ultP10 = 0; ultP90 = 0; trocasFonte = 0; ultimoMotivo = ""
