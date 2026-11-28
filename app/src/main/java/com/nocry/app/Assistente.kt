@@ -847,6 +847,15 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
     private companion object {
         const val REQ_VOZ = 7701
         const val REQ_IMG = 7702
+        /** a foto da IA (imagem padrão do app), carregada uma vez só */
+        @Volatile private var foto: android.graphics.Bitmap? = null
+        fun fotoIA(c: Context): android.graphics.Bitmap? {
+            foto?.let { return it }
+            return try {
+                val o = android.graphics.BitmapFactory.Options().also { it.inSampleSize = 2 }
+                android.graphics.BitmapFactory.decodeResource(c.resources, R.drawable.perfil_padrao, o).also { foto = it }
+            } catch (_: Throwable) { null }
+        }
     }
 
     /** sempre falar as respostas (sem isso, fala só quando você pediu por voz) */
@@ -861,7 +870,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|${SessaoIA.ligada}|${SessaoIA.foraDoApp}|${SessaoIA.soComNome}|${PalavrasChave.lista().size}|${SessaoIA.nomeChamada}"
+    override fun key(): String = "${Assistente.mudou}|$pensando|${Agenda.lista().size}|${IA.ligada}|${imagem?.length ?: 0}|$falarSempre|${SessaoIA.ligada}|${SessaoIA.foraDoApp}|${SessaoIA.soComNome}|${PalavrasChave.lista().size}|${SessaoIA.nomeChamada}|${SessaoIA.estado}"
 
     fun enviar(texto: String? = null, porVoz: Boolean = false) {
         var t = (texto ?: campo.text.toString()).trim()
@@ -1037,33 +1046,39 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         } catch (_: Throwable) { null }
     }
 
+    /** a foto da IA: a mesma imagem padrão do app, redondinha */
+    private fun avatar(tam: Int, anel: Boolean = false): View {
+        val c = act
+        val f = FrameLayout(c)
+        val iv = android.widget.ImageView(c)
+        iv.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+        fotoIA(c)?.let { b -> iv.setImageDrawable(androidx.core.graphics.drawable.RoundedBitmapDrawableFactory.create(c.resources, b).also { it.isCircular = true }) }
+        val borda = if (anel) 3 else 0
+        if (anel) f.background = Ui.shape(c, 0, 999, Theme.accent, 2)
+        f.addView(iv, FrameLayout.LayoutParams(Ui.dp(c, tam - borda * 2), Ui.dp(c, tam - borda * 2), Gravity.CENTER))
+        return f
+    }
+
+    /** balão do chat: as respostas dela vêm com a fotinho do lado */
     private fun balao(eu: Boolean, texto: String): View {
         val c = act
         val linha = Ui.hbox(c)
-        linha.gravity = if (eu) Gravity.END else Gravity.START
+        linha.gravity = if (eu) Gravity.END else (Gravity.START or Gravity.BOTTOM)
         val t = Ui.text(c, texto, 12.5f, Ui.TEXT, eu)
         t.setLineSpacing(0f, 1.15f)
         t.setPadding(Ui.dp(c, 13), Ui.dp(c, 10), Ui.dp(c, 13), Ui.dp(c, 10))
-        t.background = if (eu) Ui.shape(c, Theme.alpha(android.graphics.Color.WHITE, 0x24), 16, Theme.alpha(android.graphics.Color.WHITE, 0x50), 1) else Ui.glass(c)
-        if (!eu) Ui.clique(t) { Voz.falar(texto) }   // tocar na resposta: ela fala de novo
-        linha.addView(if (eu) View(c) else t, LinearLayout.LayoutParams(if (eu) 0 else ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, if (eu) 0.18f else 0f))
-        if (eu) linha.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        else linha.addView(View(c), LinearLayout.LayoutParams(0, 1, 0.18f))
+        if (eu) {
+            t.background = Ui.shape(c, Theme.alpha(Theme.accent, 0x40), 18, Theme.alpha(Theme.accent, 0x90), 1)
+            linha.addView(View(c), LinearLayout.LayoutParams(0, 1, 0.18f))
+            linha.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        } else {
+            t.background = Ui.glass(c)
+            Ui.clique(t) { Voz.falar(texto) }   // tocar na resposta: ela fala de novo
+            linha.addView(avatar(30), LinearLayout.LayoutParams(Ui.dp(c, 30), Ui.dp(c, 30)).also { it.rightMargin = Ui.dp(c, 8) })
+            linha.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            linha.addView(View(c), LinearLayout.LayoutParams(Ui.dp(c, 24), 1))
+        }
         return linha
-    }
-
-    /** botãozinho de opção (imagem, sempre falar, conversa por voz) */
-    private fun opcao(ico: Int, rotulo: String, ligado: Boolean, acao: () -> Unit): View {
-        val c = act
-        val b = Ui.hbox(c)
-        b.gravity = Gravity.CENTER
-        b.background = Ui.ripple(c, Ui.fundoPeq(c, Ui.raioPeq(14), ico, ligado))
-        b.setPadding(Ui.dp(c, 6), Ui.dp(c, 9), Ui.dp(c, 6), Ui.dp(c, 9))
-        b.addView(Ui.icone(c, ico, Ui.corIconePeq(ico, ligado), 15), LinearLayout.LayoutParams(Ui.dp(c, 15), Ui.dp(c, 15)).also { it.rightMargin = Ui.dp(c, 5) })
-        b.addView(Ui.textoPeq(Ui.text(c, rotulo, 9f, if (ligado) Ui.OK else Ui.TEXT, true)).also { Ui.umaLinha(it, 7) })
-        b.contentDescription = rotulo
-        Ui.clique(b) { acao() }
-        return b
     }
 
     private fun botaoRedondo(ico: Int, desc: String, principal: Boolean, tam: Int, acao: () -> Unit): View {
@@ -1077,46 +1092,88 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         return f
     }
 
+    /** ajustes da IA (tudo num lugar só, fora da tela principal) */
+    private fun ajustes() {
+        val ops = listOf(
+            "Palavras-chave (${PalavrasChave.lista().size})",
+            "Nome pra me chamar: \"${SessaoIA.nomeChamada}\"",
+            "Falar as respostas escritas: " + (if (falarSempre) "sim" else "não"),
+            "Ouvir com o app minimizado: " + (if (SessaoIA.foraDoApp) "sim" else "não"),
+            "Colocar a IA no menu do topo"
+        )
+        Ui.dialogEscolha(act, "AJUSTES DA IA", ops) { i ->
+            when (i) {
+                0 -> palavras()
+                1 -> trocarNome()
+                2 -> { falarSempre = !falarSempre; if (falarSempre) Voz.falar("Oi! Eu sou a IA do NOCRY.") else Voz.parar(); redesenha() }
+                3 -> {
+                    SessaoIA.foraDoApp = !SessaoIA.foraDoApp
+                    if (SessaoIA.ligada) { if (SessaoIA.foraDoApp) IaFundoService.iniciar(act) else IaFundoService.fechar(act) }
+                    redesenha()
+                }
+                4 -> colocarNoMenu()
+            }
+        }
+    }
+
+    /** o microfone já começa ligado quando você abre a tela da IA (uma vez por abertura) */
+    private var micAuto = false
+
     override fun render() {
         limpa()
         val c = act
         Voz.init(c)
+        if (!micAuto) {
+            micAuto = true
+            if (!SessaoIA.ligada && !BuildConfig.PREVIEW) SessaoIA.ligar(act) { }
+        }
+
+        // topo: foto + nome + o que ela está fazendo + imagem e ajustes
+        val topo = Ui.hbox(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        topo.background = Ui.glass(c)
+        topo.setPadding(Ui.dp(c, 12), Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 10))
+        topo.addView(avatar(46, anel = true), LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)).also { it.rightMargin = Ui.dp(c, 12) })
+        val nomes = Ui.vbox(c)
+        nomes.addView(Ui.text(c, SessaoIA.nomeChamada, 15f, Ui.TEXT, true).also { Ui.umaLinha(it, 10) })
+        val (st, cor) = when {
+            pensando || SessaoIA.estado == SessaoIA.Estado.PENSANDO -> "pensando..." to Ui.MUTED
+            SessaoIA.estado == SessaoIA.Estado.FALANDO -> "falando · toque no microfone pra interromper" to Ui.OK
+            SessaoIA.ligada -> "ouvindo" + (if (SessaoIA.foraDoApp) " · também com o app minimizado" else "") to Ui.OK
+            else -> "microfone desligado" to Ui.MUTED
+        }
+        nomes.addView(Ui.text(c, st, 10f, cor, true, mono = true).also { Ui.umaLinha(it, 9) }, Ui.lp(top = 2, c = c))
+        topo.addView(nomes, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        topo.addView(botaoRedondo(R.drawable.ic_image, "mandar imagem", imagem != null, 40) { escolherImagem() }, LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40)).also { it.leftMargin = Ui.dp(c, 6) })
+        topo.addView(botaoRedondo(R.drawable.ic_sliders, "ajustes da IA", false, 40) { ajustes() }, LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40)).also { it.leftMargin = Ui.dp(c, 6) })
+        add(topo, 0)
+
         val vazio = synchronized(Assistente.conversa) { Assistente.conversa.isEmpty() }
         if (vazio) {
-            add(Ui.dica(c, "Sou a assistente do NOCRY. Fala comigo por voz ou escreve: converso sobre qualquer coisa, olho imagens, abro apps, pesquiso, crio alarme e mexo no NOCRY (bypass, bot, jogo, otimização, horários). Ex.: \"liga o bypass, liga o bot e desliga o bot em 5 minutos\".",
-                Ui.Dica.INFO), 0)
-            // microfone grande
             val col = Ui.vbox(c)
             col.gravity = Gravity.CENTER_HORIZONTAL
-            val orbe = OrbeMic(c, 96)
-            orbe.contentDescription = "falar com a IA"
-            orbe.isClickable = true
-            orbe.ativo = SessaoIA.ligada
-            orbe.setOnClickListener { ouvir() }
-            col.addView(orbe)
-            col.addView(Ui.text(c, if (SessaoIA.ligada) "ouvindo · toque pra parar" else "toque e fale", 10.5f, if (SessaoIA.ligada) Ui.OK else Ui.MUTED, true, mono = true), Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 8, c = c))
-            add(col, 22)
-            add(Ui.secao(c, "experimente"), 20)
-            val sug = listOf("Liga o bypass e o bot", "Liga o bot por 30 minutos", "Abre o Free Fire MAX", "Verifica os erros e arruma",
-                "Abre a Play Store", "Me dá uma dica pra subir de rank")
+            col.addView(avatar(104, anel = true), LinearLayout.LayoutParams(Ui.dp(c, 104), Ui.dp(c, 104)))
+            col.addView(Ui.text(c, "Oi! Pode falar comigo.", 17f, Ui.TEXT, true).also { it.gravity = Gravity.CENTER }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 14, c = c))
+            col.addView(Ui.text(c, "Eu converso, olho imagens, abro apps, crio alarmes e mexo no NOCRY. É só falar ou escrever.", 11f, Ui.MUTED, false).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 6, c = c))
+            add(col, 26)
+            val sug = listOf("Liga o bot de fila", "Abre o Free Fire MAX", "Abre a Play Store", "Me dá uma dica pra subir de rank")
             sug.chunked(2).forEach { par ->
                 val l = Ui.hbox(c)
                 par.forEachIndexed { i, s ->
                     val b = Ui.text(c, s, 10.5f, Ui.TEXT, true)
                     b.gravity = Gravity.CENTER
-                    b.setPadding(Ui.dp(c, 8), Ui.dp(c, 10), Ui.dp(c, 8), Ui.dp(c, 10))
-                    b.background = Ui.ripple(c, Ui.fundoPeq(c, Ui.raioPeq(14)))
+                    b.setPadding(Ui.dp(c, 8), Ui.dp(c, 11), Ui.dp(c, 8), Ui.dp(c, 11))
+                    b.background = Ui.ripple(c, Ui.glass(c))
                     Ui.clique(b) { enviar(s) }
                     l.addView(b, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).also { if (i > 0) it.leftMargin = Ui.dp(c, 8) })
                 }
-                if (par.size == 1) l.addView(View(c), LinearLayout.LayoutParams(0, 1, 1f).also { it.leftMargin = Ui.dp(c, 8) })
                 add(l, 8)
             }
         } else {
             val msgs = synchronized(Assistente.conversa) { Assistente.conversa.toList() }
-            msgs.forEachIndexed { i, m -> add(balao(m.eu, m.texto), if (i == 0) 4 else 10) }
+            msgs.forEachIndexed { i, m -> add(balao(m.eu, m.texto), if (i == 0) 14 else 10) }
         }
-        if (pensando) add(Ui.text(c, "pensando...", 10.5f, Ui.MUTED, true, mono = true), 10)
+        if (pensando) add(balao(false, "..."), 10)
 
         // o que está agendado, com botão pra cancelar
         val ag = Agenda.lista()
@@ -1156,28 +1213,6 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             add(r, 14)
         }
 
-        // opções: mandar imagem, sempre falar, conversa por voz
-        val op = Ui.hbox(c)
-        op.addView(opcao(R.drawable.ic_image, "imagem", imagem != null) { escolherImagem() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        op.addView(opcao(R.drawable.ic_volume, if (falarSempre) "voz: on" else "voz: off", falarSempre) {
-            falarSempre = !falarSempre
-            if (falarSempre) Voz.falar("Oi! Eu sou a IA do NOCRY.") else Voz.parar()
-            redesenha()
-        },
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
-        val np = PalavrasChave.lista().size
-        op.addView(opcao(R.drawable.ic_bolt, if (np > 0) "palavras: $np" else "palavras", np > 0) { palavras() },
-            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 6) })
-        add(op, 16)
-        // segundo plano: com o microfone ligado, continua ouvindo com o NOCRY minimizado (só voz)
-        val fora = SessaoIA.foraDoApp
-        add(opcao(R.drawable.ic_ia, if (fora) "Ouvir com o app minimizado: sim" else "Ouvir com o app minimizado: não", fora) {
-            SessaoIA.foraDoApp = !SessaoIA.foraDoApp
-            if (SessaoIA.ligada) { if (SessaoIA.foraDoApp) IaFundoService.iniciar(act) else IaFundoService.fechar(act) }
-            redesenha()
-        }, 8)
-        add(opcao(R.drawable.ic_bolt, "Colocar a IA no menu do topo", false) { colocarNoMenu() }, 8)
-
         // campo + microfone + enviar
         val linha = Ui.hbox(c)
         linha.gravity = Gravity.CENTER_VERTICAL
@@ -1190,6 +1225,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         mic.setOnClickListener { ouvir() }
         linha.addView(mic, LinearLayout.LayoutParams(Ui.dp(c, 50), Ui.dp(c, 50)).also { it.leftMargin = Ui.dp(c, 6) })
         linha.addView(botaoRedondo(R.drawable.ic_play, "enviar", true, 46) { enviar() }, LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)).also { it.leftMargin = Ui.dp(c, 6) })
-        add(linha, 10)
+        add(linha, 18)
     }
+
 }
