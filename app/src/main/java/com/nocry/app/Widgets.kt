@@ -320,6 +320,13 @@ class Miniatura private constructor(c: Context, private val tema: Tema?, private
     }
 
     private fun pinta(cv: Canvas, tipo: String, w: Float, h: Float, ac: Int, ac2: Int, base: Int) {
+        if (Hud.ehFundo(tipo)) {
+            p.shader = Hud.ceu(tipo, w, h, base, ac)
+            cv.drawRect(0f, 0f, w, h, p)
+            p.shader = null
+            Hud.desenha(cv, tipo, w, h, 3.2f, d, ac, ac2)
+            return
+        }
         when (tipo) {
             "brasas" -> {
                 p.shader = RadialGradient(w / 2f, h * 1.1f, max(w, h) * 0.8f, Theme.alpha(ac, 0xCC), Theme.alpha(ac, 0), Shader.TileMode.CLAMP)

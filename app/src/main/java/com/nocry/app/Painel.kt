@@ -47,6 +47,10 @@ class Painel(
 ) : Drawable() {
     private val d = c.resources.displayMetrics.density
     private val hud = estilo == "hud"
+    /** visual HUD novo (só na prévia) */
+    private val hudx = estilo == "hudx"
+    private var shHudx: Shader? = null
+    private var shHudxLuz: Shader? = null
     private val raio = raioDp * d
     private val corte = 14f * d
     private val path = Path()
@@ -121,6 +125,39 @@ class Painel(
         shBordaOn = LinearGradient(x0, y0, x1, y1,
             intArrayOf(c1, Theme.alpha(c1, 0x66), c2), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
         shLuz = LinearGradient(x0, y0, x1, y1, intArrayOf(c1, c2), null, Shader.TileMode.CLAMP)
+        if (hudx) {
+            // sempre cheio o bastante pra ler (mesmo com a opacidade dos cartões em 0), mais escuro embaixo
+            val op = (maxOf(0.74f, Prefs.vidro / 95f) * 255).toInt()
+            shHudx = LinearGradient(0f, bt, 0f, bb, Theme.alpha(Theme.mix(base, c1, if (ligado || forte) 0.13f else 0.07f), op),
+                Theme.alpha(Theme.mix(base, Color.BLACK, 0.35f), op), Shader.TileMode.CLAMP)
+            shHudxLuz = LinearGradient(0f, bt, 0f, bt + minOf(h, 48f * d), Theme.alpha(c1, if (ligado) 0x30 else 0x1A), Theme.alpha(c1, 0), Shader.TileMode.CLAMP)
+        }
+    }
+
+    /** cartão HUD: fundo escuro, linha fina na cor do tema, brilho em cima e os colchetes nos cantos */
+    private fun desenhaHudx(cv: Canvas) {
+        val b = bounds
+        val on = ligado || forte
+        pFill.shader = shHudx
+        cv.drawPath(path, pFill)
+        pFill.shader = shHudxLuz
+        cv.drawPath(path, pFill)
+        pFill.shader = null
+        pLine.shader = null
+        pLine.color = Theme.alpha(Theme.accent, if (on) 0x66 else 0x30)
+        pLine.strokeWidth = maxOf(1f, 0.8f * d)
+        cv.drawPath(path, pLine)
+        val ins = 1.2f * d
+        pLine.color = Theme.alpha(Theme.accent, if (on) 0xF2 else 0xB4)
+        pLine.strokeWidth = 2f * d
+        Hud.cantos(cv, b.left + ins, b.top + ins, b.right - ins, b.bottom - ins, (if (on) 16f else 11f) * d, pLine)
+        // risquinho na cor 2 no alto (marca do painel)
+        if (b.width() > 120f * d) {
+            pLine.color = Theme.alpha(Theme.accent2, if (on) 0xD0 else 0x80)
+            pLine.strokeWidth = 2f * d
+            val x = b.left + 22f * d
+            cv.drawLine(x, b.top + ins, x + 26f * d, b.top + ins, pLine)
+        }
     }
 
     override fun draw(cv: Canvas) {
@@ -132,6 +169,7 @@ class Painel(
             cv.drawPath(path, pFill)
             return
         }
+        if (hudx) { desenhaHudx(cv); return }
         val on = ligado || forte
         // 1) preenchimento
         pFill.shader = null
@@ -264,7 +302,7 @@ class Botao(
     private val eb = Ui.estiloBt
     /** ideias novas (só na prévia do CI): "t" tonal (cor do tema clarinha, sem borda), "b" bloco (escuro com faixa da cor embaixo), "c" contorno (vazado) */
     private val pele = when (eb.take(1)) { "E" -> "t"; "F" -> "b"; "G" -> "c"; "H" -> "h"; "J" -> "j"; "K" -> "k"; else -> "" }
-    private val hud = Prefs.cartao == "hud" || eb == "3" || pele == "j"
+    private val hud = Prefs.cartao == "hud" || Prefs.cartao == "hudx" || eb == "3" || pele == "j"
     /** formato novo em prévia (3D, neon, hexágono, inclinado, mira): quem desenha é o FormatoBotao */
     private val fmt: FormatoBotao? = if (!mascara && Ui.formato > 0 && (tipo == "grad" || tipo == "ghost" || tipo == "ico" || tipo == "icoOn")) FormatoBotao(c, Ui.formato, tipo == "grad") else null
     private val raio = minOf(raioDp, if (pele == "b") 8 else 18) * d * (if (tipo == "ico" || tipo == "icoOn") 0.8f else 1f)

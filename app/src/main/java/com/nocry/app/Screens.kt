@@ -600,9 +600,146 @@ class HomeScreen(a: MainActivity) : Screen(a) {
         } else Ui.destaque(c, it.ico, it.nome, it.desc, i.estado, i.ligado, "abrir", false, i.abrir, i.abrir)
     }
 
+    /** Início no visual HUD (só na prévia do CI): painel do sistema com o anel, a IA, o jogo e os modos, tudo alinhado */
+    private fun renderHud(c: android.content.Context) {
+        // topo: foto, NOCRY, hora e cargo
+        val cab = Ui.hbox(c)
+        cab.gravity = Gravity.CENTER_VERTICAL
+        val foto = FotoPerfil(c)
+        Ui.clique(foto) { Perfil.menu(act) { redesenha() } }
+        cab.addView(foto, LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40)).also { it.rightMargin = Ui.dp(c, 10) })
+        val col = Ui.vbox(c)
+        col.addView(Ui.gradTexto(c, "NOCRY", 16f).also { it.letterSpacing = 0.3f })
+        col.addView(Ui.text(c, "por Aucerola", 9f, Ui.MUTED, true, mono = true).also { it.letterSpacing = 0.16f })
+        cab.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val agora = java.text.SimpleDateFormat("HH:mm", java.util.Locale("pt", "BR")).format(java.util.Date())
+        cab.addView(Ui.text(c, agora, 13f, Ui.TEXT, true, mono = true), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { it.rightMargin = Ui.dp(c, 10) })
+        val papel = License.roleNome()
+        if (papel.isNotEmpty()) cab.addView(Ui.selo(c, papel, if (License.isAdmin()) Ui.RED else Ui.TEXT, License.isAdmin()))
+        add(cab, 2)
+
+        // saudação
+        val nome = Prefs.apelido.ifEmpty { License.label() }
+        val hora = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val saud = when { hora < 5 -> "Boa madrugada"; hora < 12 -> "Bom dia"; hora < 18 -> "Boa tarde"; else -> "Boa noite" }
+        add(Ui.text(c, "$saud,", 12.5f, Ui.MUTED), 18)
+        add(Ui.gradTexto(c, if (nome.isNotEmpty()) nome else "bem-vindo", 30f).also { Ui.umaLinha(it, 18) }, 0)
+
+        // painel do sistema: o anel mostra quanto está pronto e o texto diz o que falta (sem "monitor ligado", que confundia)
+        val adb = Adb.connected
+        val perm = Sys.hasWriteSecure()
+        val acc = Sys.acessibilidadeLigada()
+        val volPreciso = precisaEscutaVolume()
+        val total = if (volPreciso) 3 else 2
+        val ok = (if (adb) 1 else 0) + (if (perm) 1 else 0) + (if (acc && volPreciso) 1 else 0)
+        val hero = Ui.card(c, forte = true, ligado = ok == total)
+        val topo = Ui.hbox(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        val anel = FrameLayout(c)
+        val reator = HudReator(c)
+        reator.progresso = ok / total.toFloat()
+        anel.addView(reator, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val num = Ui.text(c, "$ok/$total", 19f, Ui.TEXT, true, mono = true)
+        num.gravity = Gravity.CENTER
+        anel.addView(num, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        topo.addView(anel, LinearLayout.LayoutParams(Ui.dp(c, 112), Ui.dp(c, 112)))
+        val info = Ui.vbox(c)
+        info.addView(Ui.label(c, "sistema"))
+        val titulo = when (ok) { total -> "Pronto"; 0 -> "Desconectado"; else -> "Quase pronto" }
+        info.addView((if (ok == total) Ui.gradTexto(c, titulo, 25f) else Ui.text(c, titulo, 25f, Ui.TEXT, true)).also { Ui.umaLinha(it, 14) }, Ui.lp(top = 2, c = c))
+        val falta = listOfNotNull(if (!adb) "ADB" else null, if (!perm) "permissões" else null, if (volPreciso && !acc) "escuta do volume" else null)
+        info.addView(Ui.text(c, if (falta.isEmpty()) "Tudo pronto pra jogar" else "Falta: " + falta.joinToString(", "), 12f, Ui.MUTED), Ui.lp(top = 4, c = c))
+        if (NocryService.rodando) info.addView(Ui.text(c, "Rodando em segundo plano", 10f, Ui.OK, true, mono = true), Ui.lp(top = 6, c = c))
+        topo.addView(info, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 14) })
+        hero.addView(topo)
+        val pAdb = Ui.pilulaStatus(c, "ADB", if (adb) "ligado" else "desligado", adb, clicavel = true, ico = R.drawable.ic_power)
+        Ui.clique(pAdb) {
+            val desliga = { Bg.io { AdbAuto.desligarManual(act); Bg.ui { Ui.toast(act, "ADB desligado"); redesenha() } } }
+            if (adb) {
+                if (Prefs.precisaServico()) Ui.dialogConfirma(act, "DESLIGAR O ADB?",
+                    "O bypass, a otimização automática e o bot usam o ADB. Eles param até você ligar de novo (é só tocar aqui).", "DESLIGAR") { desliga() }
+                else desliga()
+            } else {
+                Ui.toast(act, "ligando o ADB...")
+                Bg.io { val r = AdbAuto.ligarManual(act); Bg.ui { Ui.toast(act, if (r) "ADB ligado" else "não consegui — abra a conexão"); redesenha() } }
+            }
+        }
+        val pPerm = Ui.pilulaStatus(c, "Permissão", if (perm) "ok" else "falta", perm, clicavel = true, ico = R.drawable.ic_chevron)
+        Ui.clique(pPerm) {
+            if (perm) act.irAba(1)
+            else if (Build.VERSION.SDK_INT >= 33) act.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 11)
+        }
+        val pVol = Ui.pilulaStatus(c, "Volume", if (acc) "ligado" else "desligado", if (acc) true else if (volPreciso) false else null, clicavel = true, ico = R.drawable.ic_power)
+        Ui.clique(pVol) {
+            if (acc) { Sys.desligarAcessibilidade(); Ui.toast(act, "escuta de volume desligada") }
+            else if (Sys.ligarAcessibilidade()) Ui.toast(act, "escuta de volume ligada")
+            else Ui.toast(act, "conecte o ADB e toque de novo")
+            redesenha()
+        }
+        hero.addView(Ui.chips(c, pAdb, pPerm, pVol), Ui.lp(top = 14, c = c))
+        if (!adb || !perm) hero.addView(Ui.button(c, "configurar e conectar", Ui.Kind.PRIMARY, R.drawable.ic_wifi) { act.irAba(1) }, Ui.lp(top = 12, c = c))
+        add(hero, 16)
+
+        // IA
+        add(Ui.secao(c, "assistente"), 20)
+        add(cartaoIA(c), 8)
+
+        // jogo
+        pacoteFf()?.let { ff ->
+            add(Ui.secao(c, "jogar"), 20)
+            val otmOn = Otm.status().first
+            val est = when { otmOn -> "otimização ativa"; Prefs.otmAuto -> "otimização liga sozinha"; else -> "sem otimização" }
+            add(Ui.destaque(c, R.drawable.ic_gamepad, if (ff == Const.FF_MAX) "Free Fire MAX" else "Free Fire", "abre o jogo direto daqui", est, otmOn || Prefs.otmAuto,
+                "jogar", true, { jogar(ff) }, { jogar(ff) }), 8)
+            if (temFf(Const.FF_NORMAL) && temFf(Const.FF_MAX)) {
+                add(Ui.segmento(c, listOf("Free Fire", "Free Fire MAX"), if (ff == Const.FF_MAX) 1 else 0) { i ->
+                    Prefs.jogarFf = if (i == 1) "max" else "normal"
+                    redesenha()
+                }, 8)
+            }
+        }
+
+        // avisos
+        val novos = Erros.novos()
+        if (novos > 0) add(Ui.faixaAviso(c, if (novos == 1) "1 erro registrado" else "$novos erros registrados", "ver em logs") { act.irAba(3) }, 12)
+        if (Update.adiada(c)) add(Ui.faixaAviso(c, "Atualização pendente · obrigatória em ${Update.faltaTexto()}", "instalar") {
+            Update.pendenteReal(act)?.let { act.mostraUpdateGate(it) }
+        }, 12)
+
+        // bot, menu do topo e modos
+        add(Ui.secao(c, "ferramentas"), 22)
+        botSub = null
+        val linhaBot = Ui.row(c, "Bot de fila", subBot(), R.drawable.ic_crown) { act.abre(SniperScreen(act)) }
+        botSub = linhaBot.findViewWithTag("sub")
+        add(linhaBot, 8)
+        val l = Ui.hbox(c)
+        l.addView(fixo(c, "Toque rápido", R.drawable.ic_bolt, false), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.15f))
+        l.addView(fixo(c, "Meet", R.drawable.ic_video, true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.leftMargin = Ui.dp(c, 8) })
+        add(l, 8)
+        add(atalhosExtras(c), 8)
+        val editar = Ui.text(c, "Editar ›", 10.5f, Ui.MUTED, true, mono = true)
+        editar.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), 0, Ui.dp(c, 6))
+        Ui.clique(editar) { act.abre(OrganizarScreen(act)) }
+        add(Ui.secao(c, "modos", editar), 22)
+        val lista = Atalhos.visiveis()
+        if (lista.isNotEmpty()) add(destaque(c, lista[0]), 8)
+        var i = 1
+        while (i < lista.size) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.TOP
+            linha.addView(tile(c, lista[i]), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            if (i + 1 < lista.size) linha.addView(tile(c, lista[i + 1]), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).also { it.leftMargin = Ui.dp(c, 8) })
+            else linha.addView(View(c), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).also { it.leftMargin = Ui.dp(c, 8) })
+            add(linha, 8)
+            i += 2
+        }
+        add(ultimaAcao(c), 12)
+    }
+
     override fun render() {
         limpa()
         val c = act
+        if (Hud.on) { renderHud(c); return }
 
         // ---------------- cabecalho: losango, NOCRY e cargo ----------------
         val cab = Ui.hbox(c)

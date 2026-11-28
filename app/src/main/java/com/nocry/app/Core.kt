@@ -363,7 +363,7 @@ var bypassVolAtivo: Boolean
         set(v) = ps("tema", v)
     /** vidro | contorno | solido | hud */
     var cartao: String
-        get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido") it else "contorno" }
+        get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido" || (BuildConfig.PREVIEW && it == "hudx")) it else "contorno" }
         set(v) = ps("cartao", v)
     /** quanto os cartoes (de qualquer estilo) tampam o fundo: 0 = so a borda (o padrao), 95 = quase cheio */
     var vidro: Int

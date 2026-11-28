@@ -445,19 +445,19 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
 
     // ---------------- temas prontos (grade de 2 colunas) ----------------
     private fun abaTemas(c: Context) {
-        val lista = Temas.lista
-        var i = 0
-        while (i < lista.size) {
-            val linha = Ui.hbox(c)
-            linha.gravity = Gravity.TOP
-            for (k in i until i + 2) {
-                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                if (k % 2 == 1) lp.leftMargin = Ui.dp(c, 12)
-                if (k < lista.size) linha.addView(cartaTema(c, lista[k]), lp) else linha.addView(View(c), lp)
+        if (BuildConfig.PREVIEW) {
+            // prévia: os temas separados por tipo (antes era uma lista só com 30 temas misturados)
+            val rank = setOf("bronze", "diamante", "mestre", "graomestre")
+            listOf(
+                "futuristas" to Temas.lista.filter { it.id.startsWith("x_") },
+                "com efeito animado" to Temas.lista.filter { it.id.startsWith("t_") },
+                "clássicos" to Temas.lista.filter { !it.id.startsWith("x_") && !it.id.startsWith("t_") && it.id !in rank },
+                "do rank" to Temas.lista.filter { it.id in rank }
+            ).filter { it.second.isNotEmpty() }.forEachIndexed { gi, (nome, l) ->
+                add(Ui.secao(c, nome), if (gi == 0) 14 else 24)
+                gradeTemas(c, l)
             }
-            add(linha, if (i == 0) 14 else 14)
-            i += 2
-        }
+        } else gradeTemas(c, Temas.lista)
         if (Prefs.tema == "custom") add(Ui.dica(c, "Você está com um visual personalizado. Tocar num tema troca tudo de uma vez.", Ui.Dica.INFO), 16)
         add(meusTemas(c), 22)
         add(Ui.grupo(c, "outros", listOf(
@@ -468,6 +468,22 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
                 }
             }
         )), 22)
+    }
+
+    /** temas em grade de 2 colunas */
+    private fun gradeTemas(c: Context, lista: List<Tema>) {
+        var i = 0
+        while (i < lista.size) {
+            val linha = Ui.hbox(c)
+            linha.gravity = Gravity.TOP
+            for (k in i until i + 2) {
+                val lp = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                if (k % 2 == 1) lp.leftMargin = Ui.dp(c, 12)
+                if (k < lista.size) linha.addView(cartaTema(c, lista[k]), lp) else linha.addView(View(c), lp)
+            }
+            add(linha, 14)
+            i += 2
+        }
     }
 
     // ---------------- meus temas: 3 visuais guardados + codigo pra passar pros amigos ----------------

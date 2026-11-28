@@ -96,7 +96,7 @@ class AnimBg(c: Context) : View(c) {
             "tempestade" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF0B0C1C.toInt(), 0xFF05060E.toInt(), 0xFF0E0A1E.toInt()), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
             "toxico" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF020A03.toInt(), 0xFF041006.toInt(), 0xFF0A2A0C.toInt()), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
             "vazio" -> LinearGradient(0f, 0f, 0f, h, intArrayOf(0xFF0C0618.toInt(), 0xFF05030A.toInt(), 0xFF020104.toInt()), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
-            else -> null
+            else -> if (Hud.ehFundo(preset)) Hud.ceu(preset, w, h, base, c1) else null
         }
         raioMancha = max(w, h) * 0.6f
         val cores = intArrayOf(c1, c2, Theme.mix(c1, c2, 0.5f))
@@ -181,6 +181,7 @@ class AnimBg(c: Context) : View(c) {
             "tempestade" -> Efeitos.fundoTempestade(cv, w, h, t, d)
             "toxico" -> Efeitos.fundoToxico(cv, w, h, t, d)
             "vazio" -> Efeitos.fundoVazio(cv, w, h, t, d)
+            "holo", "reator", "radar", "plasma" -> Hud.desenha(cv, preset, w, h, t, d, c1, c2)
             else -> desenhaBrasas(cv, w, h, t, c1, c2)
         }
         if (Prefs.scanner) desenhaScanner(cv, w, h, t)

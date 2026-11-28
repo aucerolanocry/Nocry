@@ -50,7 +50,7 @@ video() { # nome estilo [tela]
   if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
   anim 1
   adb shell am force-stop $PKG
-  adb shell am start -n $PKG/$ACT --es tela "$tela" --es fonte "$FONTE" ${est:+--es estilo $est} ${PEDIDO:+--es pedido "'$PEDIDO'"} ${GLOW:+--ez glow true} >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --es fonte "$FONTE" ${est:+--es estilo $est} ${TEMA:+--es tema $TEMA} ${PEDIDO:+--es pedido "'$PEDIDO'"} ${GLOW:+--ez glow true} >/dev/null
   sleep 7
   adb shell rm -f /sdcard/v.mp4
   adb shell screenrecord --time-limit 26 --bit-rate 5000000 /sdcard/v.mp4 &
@@ -170,5 +170,15 @@ TEMA=t_sangue; shot 20_ia_sangue ia; TEMA=""; shot 20_ia ia
 # catálogo de formatos de botão (só prévia): o dono escolhe pelo número
 shot 10_catalogo catalogo
 video 10_catalogo_video "" catalogo
+# visual HUD futurista (só prévia): o app inteiro no tema Holograma e o Início e a IA nos outros 3 temas novos
+TEMA=x_holo
+shot 60_hud_inicio home; shot 60_hud_ia ia; shot 60_hud_estudio estudio; shot 60_hud_conexao conexao; shot 60_hud_bypass bypass
+shot 60_hud_otm otm; shot 60_hud_bot bot 2 true; shot 60_hud_logs log; shot 60_hud_sobre sobre; shot 60_hud_recursos recursos
+PEDIDO="liga o bypass e abre o free fire"; shot 60_hud_ia_pedido ia; video 64_hud_video_ia "" ia; PEDIDO=""
+video 64_hud_video_inicio "" home
+TEMA=x_reator; shot 61_reator_inicio home; shot 61_reator_ia ia; video 65_reator_video "" home
+TEMA=x_comando; shot 62_comando_inicio home; shot 62_comando_ia ia; video 66_comando_video "" home
+TEMA=x_plasma; shot 63_plasma_inicio home; shot 63_plasma_ia ia; video 67_plasma_video "" home
+TEMA=""
 rm -rf "$OUT/cru"
 ls -la "$OUT"

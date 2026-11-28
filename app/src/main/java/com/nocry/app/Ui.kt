@@ -176,7 +176,8 @@ object Ui {
      */
     fun text(c: Context, s: String, sp: Float = 14f, color: Int = TEXT, bold: Boolean = false, mono: Boolean = false, code: Boolean = false): TextView {
         val t = TextView(c)
-        t.text = s
+        // HUD: títulos e textos começam com maiúscula (o app escreve muita coisa em minúscula contando com a caixa alta)
+        t.text = if (Hud.on && !code && !mono) Hud.frase(s) else s
         val display = bold || mono
         val esc = if (display || code) Theme.escalaTexto() else Theme.escalaCorpo()
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp * esc * fator(c) * (if (code) 0.95f else 1f))
@@ -188,7 +189,7 @@ object Ui {
         if (Color.red(color) * 299 + Color.green(color) * 587 + Color.blue(color) * 114 > 140_000) {
             t.setShadowLayer(dp(c, 3).toFloat(), 0f, dp(c, 1).toFloat() * 0.6f, Theme.alpha(Color.BLACK, 0x99))
         }
-        if (!code && Prefs.maiusc) {
+        if (!code && Prefs.maiusc && (!Hud.on || mono)) {
             t.setAllCaps(true)
             // caixa alta sem espaco entre as letras fica apertada; titulo usa o espacamento do pacote,
             // texto corrido um pouco menos (senao o paragrafo fica largo demais)
@@ -978,8 +979,8 @@ object Ui {
         e.setHintTextColor(MUTED)
         e.setTextColor(TEXT)
         e.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f * Theme.escalaTexto())
-        e.typeface = Theme.fonte(c, true, false)
-        e.letterSpacing = if (Prefs.maiusc) 0.04f else 0.01f
+        e.typeface = Theme.fonte(c, !Hud.on, false)
+        e.letterSpacing = if (Prefs.maiusc && !Hud.on) 0.04f else 0.01f
         e.inputType = if (numero) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT
         e.background = Botao(c, "campo", minOf(Prefs.raio, 14))
         val p = dp(c, 16)
@@ -1157,7 +1158,7 @@ object Ui {
     }
 
     /** maiusculo o texto quando o modo "tudo maiusculo" esta ligado; usado onde o texto nao passa pelo text() */
-    private fun up(s: String): String = if (Prefs.maiusc) s.uppercase() else s
+    private fun up(s: String): String = if (Prefs.maiusc && !Hud.on) s.uppercase() else s
 
     fun toast(c: Context, msg: String) { Toast.makeText(c, up(msg), Toast.LENGTH_SHORT).show() }
 

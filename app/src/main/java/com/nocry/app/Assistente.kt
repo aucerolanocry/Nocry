@@ -1647,6 +1647,81 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         return linha
     }
 
+    /** balão do visual HUD: letra normal (fácil de ler), painel com colchetes pra ela e caixa da cor do tema pra você */
+    private fun balaoHud(eu: Boolean, texto: String): View {
+        val c = act
+        val linha = Ui.hbox(c)
+        linha.gravity = if (eu) Gravity.END else (Gravity.START or Gravity.TOP)
+        val t = Ui.text(c, texto, 13.5f, Ui.TEXT, false)
+        t.setLineSpacing(0f, 1.25f)
+        t.setPadding(Ui.dp(c, 13), Ui.dp(c, 10), Ui.dp(c, 13), Ui.dp(c, 10))
+        if (eu) {
+            t.background = HudChip(c, ligado = true)
+            linha.addView(View(c), LinearLayout.LayoutParams(0, 1, 0.2f))
+            linha.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        } else {
+            t.background = Ui.glass(c)
+            Ui.clique(t) { Voz.falar(texto) }
+            linha.addView(avatar(28, anel = true), LinearLayout.LayoutParams(Ui.dp(c, 28), Ui.dp(c, 28)).also { it.rightMargin = Ui.dp(c, 8); it.topMargin = Ui.dp(c, 2) })
+            linha.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            linha.addView(View(c), LinearLayout.LayoutParams(Ui.dp(c, 18), 1))
+        }
+        return linha
+    }
+
+    /** topo e conversa da IA no visual HUD (só na prévia): ela no meio do anel, o que está fazendo, atalhos e a conversa */
+    private fun hudCorpo(c: Context, st: String, cor: Int, vazio: Boolean) {
+        val topo = Ui.hbox(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        val nomes = Ui.vbox(c)
+        nomes.addView(Ui.text(c, SessaoIA.nomeChamada, 19f, Ui.TEXT, true).also { Ui.umaLinha(it, 12) })
+        nomes.addView(Ui.text(c, "IA do NOCRY", 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 2, c = c))
+        topo.addView(nomes, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        topo.addView(botaoRedondo(R.drawable.ic_image, "mandar imagem", imagem != null, 40) { escolherImagem() }, LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40)).also { it.leftMargin = Ui.dp(c, 6) })
+        topo.addView(botaoRedondo(R.drawable.ic_sliders, "ajustes da IA", false, 40) { ajustes() }, LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40)).also { it.leftMargin = Ui.dp(c, 6) })
+        add(topo, 0)
+
+        // o anel com ela no meio: gira devagar parada, acelera pensando e pulsa ouvindo/falando. Tocar nele = falar
+        val tam = if (vazio) 228 else 168
+        val nucleo = FrameLayout(c)
+        val reator = HudReator(c)
+        reator.seguirIA = true
+        nucleo.addView(reator, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val rosto = tam * 52 / 100
+        nucleo.addView(MascoteView(c, false), FrameLayout.LayoutParams(Ui.dp(c, rosto), Ui.dp(c, rosto), Gravity.CENTER))
+        nucleo.contentDescription = if (SessaoIA.ligada) "parar de ouvir" else "falar"
+        Ui.clique(nucleo) { ouvir() }
+        val meio = Ui.vbox(c)
+        meio.gravity = Gravity.CENTER_HORIZONTAL
+        meio.addView(nucleo, LinearLayout.LayoutParams(Ui.dp(c, tam), Ui.dp(c, tam)))
+        meio.addView(Ui.text(c, st, 10.5f, cor, true, mono = true).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 4, c = c))
+        if (vazio) meio.addView(Ui.text(c, "Eu converso, olho imagens, abro apps, crio alarmes e mexo no NOCRY. É só falar ou escrever.", 12.5f, Ui.MUTED).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 8, c = c))
+        add(meio, 10)
+
+        // atalhos: um toque e ela faz
+        val atalhos = listOf<Pair<String, String?>>("Ligar o bypass" to "liga o bypass", "Otimizar" to "liga a otimização",
+            "Abrir o Free Fire" to "abre o free fire", "Palavras-chave" to null, "Verificar erros" to "verifica os erros e arruma")
+        val hs = android.widget.HorizontalScrollView(c)
+        hs.isHorizontalScrollBarEnabled = false
+        hs.overScrollMode = View.OVER_SCROLL_NEVER
+        val fila = Ui.hbox(c)
+        atalhos.forEachIndexed { i, (nome, pedido) ->
+            val b = Ui.text(c, nome, 10.5f, Ui.TEXT, true, mono = true)
+            b.setPadding(Ui.dp(c, 14), Ui.dp(c, 10), Ui.dp(c, 14), Ui.dp(c, 10))
+            b.background = Ui.ripple(c, HudChip(c), HudChip(c))
+            Ui.clique(b) { if (pedido == null) palavras() else enviar(pedido) }
+            fila.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { if (i > 0) it.leftMargin = Ui.dp(c, 8) })
+        }
+        hs.addView(fila)
+        add(hs, 14)
+
+        if (!vazio) {
+            add(Ui.secao(c, "conversa"), 18)
+            val msgs = synchronized(Assistente.conversa) { Assistente.conversa.toList() }
+            msgs.takeLast(40).forEach { m -> add(balaoHud(m.eu, m.texto), 8) }
+        }
+    }
+
     private fun botaoRedondo(ico: Int, desc: String, principal: Boolean, tam: Int, acao: () -> Unit): View {
         val c = act
         val f = FrameLayout(c)
@@ -1696,6 +1771,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             else -> "microfone desligado · toque nele pra falar" to Ui.MUTED
         }
 
+        if (Hud.on) hudCorpo(c, st, cor, vazio) else {
         // topo: só a carinha dela, o nome, o que ela está fazendo e dois ícones (imagem e ajustes)
         val topo = Ui.hbox(c)
         topo.gravity = Gravity.CENTER_VERTICAL
@@ -1736,7 +1812,8 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             val msgs = synchronized(Assistente.conversa) { Assistente.conversa.toList() }
             msgs.forEachIndexed { i, m -> add(balao(m.eu, m.texto), if (i == 0) 14 else 10) }
         }
-        if (pensando) add(balao(false, "pensando…"), 10)
+        }
+        if (pensando) add(if (Hud.on) balaoHud(false, "pensando…") else balao(false, "pensando…"), 10)
 
         // o que está agendado, com botão pra cancelar
         val ag = Agenda.lista()

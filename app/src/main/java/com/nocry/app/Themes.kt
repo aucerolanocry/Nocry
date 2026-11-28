@@ -37,7 +37,10 @@ object Packs {
         Pack("grotesk", "Space Grotesk", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", "SpaceGrotesk.ttf", 1.0f, 0.06f, variavel = true),
         Pack("mono", "JetBrains Mono", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", "JetBrainsMono.ttf", 0.96f, 0.04f, variavel = true),
         Pack("sistema", "Sistema", "", "", "", "", 1.0f, 0.04f, sistema = true)
-    )
+    ) + (if (BuildConfig.PREVIEW) listOf(
+        // visual HUD (só na prévia): títulos Oxanium (geométrica, de painel) e texto Instrument Sans (limpo, fácil de ler)
+        Pack("hud", "Oxanium + Instrument", "Oxanium.ttf", "Oxanium.ttf", "InstrumentSans-Regular.ttf", "InstrumentSans-Bold.ttf", 0.98f, 0.08f, variavel = true)
+    ) else emptyList())
 
     fun existe(id: String): Boolean = lista.any { it.id == id }
     fun get(id: String): Pack = lista.firstOrNull { it.id == id } ?: lista[0]
@@ -66,7 +69,8 @@ class Tema(
 )
 
 object Temas {
-    val FUNDOS = listOf("brasas", "grade", "aurora", "sol", "chuva", "neve", "petalas", "ouro", "noite", "inferno", "sangue", "caveiras", "tempestade", "toxico", "vazio")
+    val FUNDOS = listOf("brasas", "grade", "aurora", "sol", "chuva", "neve", "petalas", "ouro", "noite", "inferno", "sangue", "caveiras", "tempestade", "toxico", "vazio") +
+        (if (BuildConfig.PREVIEW) Hud.FUNDOS else emptyList())
 
     fun nomeFundo(id: String): String = when (id) {
         "brasas" -> "Brasas"
@@ -83,10 +87,22 @@ object Temas {
         "tempestade" -> "Tempestade"
         "toxico" -> "Tóxico"
         "vazio" -> "Vazio"
+        "holo" -> "Holograma"
+        "reator" -> "Reator"
+        "radar" -> "Radar"
+        "plasma" -> "Plasma"
         else -> "Noite"
     }
 
-    val lista = listOf(
+    /** visual HUD futurista (painel de IA): só na prévia do CI até o dono escolher */
+    private val HUD: List<Tema> = if (!BuildConfig.PREVIEW) emptyList() else listOf(
+        Tema("x_holo", "Holograma", "Painel azul de IA, anéis girando", 0xFF38E1FF.toInt(), 0xFF2E6BFF.toInt(), 0xFF03070D.toInt(), "hudx", "hud", 4, 1, 60, 80, "holo", blur = 0),
+        Tema("x_reator", "Reator", "Vermelho e dourado, núcleo de energia", 0xFFFF3B47.toInt(), 0xFFFFB648.toInt(), 0xFF0B0405.toInt(), "hudx", "hud", 4, 1, 60, 80, "reator", blur = 0),
+        Tema("x_comando", "Comando", "Radar verde de central tática", 0xFF3DFFA0.toInt(), 0xFF2BD9C5.toInt(), 0xFF020A06.toInt(), "hudx", "hud", 4, 1, 55, 80, "radar", blur = 0),
+        Tema("x_plasma", "Plasma", "Ondas roxas de energia", 0xFFB070FF.toInt(), 0xFFFF4FD8.toInt(), 0xFF07040F.toInt(), "hudx", "hud", 4, 1, 65, 80, "plasma", blur = 0)
+    )
+
+    val lista = HUD + listOf(
         // o visual principal do NOCRY: vidro claro, cantos redondos, botoes em pilula e luzes azul/roxa no fundo
         Tema("vidro", "Vidro", "O visual principal do NOCRY", 0xFFFFFFFF.toInt(), 0xFFDCE4FF.toInt(), 0xFF06070C.toInt(), "vidro", "bigs", 22, 1, 35, 55, "noite", blur = 8),
         // o visual de antes do Vidro: reto, prata e com os cantos acesos
@@ -125,7 +141,7 @@ object Temas {
     fun get(id: String): Tema = lista.firstOrNull { it.id == id } ?: lista[0]
 
     /** temas novos: ficam no fim da lista com o selo NOVO */
-    fun novo(id: String) = id.startsWith("t_")
+    fun novo(id: String) = id.startsWith("t_") || id.startsWith("x_")
 
     /** aplica o tema: cores, formato, fonte e fundo animado. Video/imagem escolhidos pelo usuario continuam. */
     fun aplica(t: Tema) {
@@ -146,6 +162,8 @@ object Temas {
         Prefs.scanner = t.scanner
         if (t.blur >= 0) Prefs.bgBlur = t.blur
         if (Prefs.bgTipo == "solido") Prefs.bgTipo = "animado"
+        // visual HUD: o fundo animado faz parte do visual (na prévia troca a foto/vídeo pelo fundo do tema)
+        if (BuildConfig.PREVIEW && t.cartao == "hudx") Prefs.bgTipo = "animado"
     }
 
     /** par de cores (cor 1, cor 2) pra escolher rapido */
