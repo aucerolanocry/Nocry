@@ -361,9 +361,11 @@ var bypassVolAtivo: Boolean
     var tema: String
         get() = gs("tema") ?: "matrix"
         set(v) = ps("tema", v)
-    /** vidro | contorno | solido | hud */
+    /** o estilo de cartão gravado, sem conferir (pra saber se a pessoa estava no "hudx" da 1.0.151) */
+    val cartaoGravado: String? get() = gs("cartao")
+    /** vidro | contorno | solido (hudx só na prévia) */
     var cartao: String
-        get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido" || it == "hudx") it else "contorno" }
+        get() = gs("cartao").let { if (it == "vidro" || it == "contorno" || it == "solido" || (BuildConfig.PREVIEW && it == "hudx")) it else "contorno" }
         set(v) = ps("cartao", v)
     /** quanto os cartoes (de qualquer estilo) tampam o fundo: 0 = so a borda (o padrao), 95 = quase cheio */
     var vidro: Int

@@ -596,9 +596,10 @@ class EstudioScreen(a: MainActivity) : Screen(a) {
     // ---------------- cartoes e botoes ----------------
     private fun abaCartoes(c: Context) {
         val v = secao(c, "estilo dos cartões", forte = true, icone = R.drawable.ic_image)
-        // o antigo "HUD" daqui não fazia nada (virava Contorno): agora é o Painel, o visual futurista de verdade
-        val estilos = listOf("vidro", "contorno", "solido", "hudx")
-        v.addView(Ui.segmento(c, listOf("Vidro", "Contorno", "Sólido", "Painel"), estilos.indexOf(Prefs.cartao).coerceAtLeast(0)) { i ->
+        // o antigo "HUD" daqui não fazia nada (virava Contorno): saiu. "Painel" (HUD futurista) só na prévia
+        val estilos = listOf("vidro", "contorno", "solido") + (if (BuildConfig.PREVIEW) listOf("hudx") else emptyList())
+        val nomesEst = listOf("Vidro", "Contorno", "Sólido") + (if (BuildConfig.PREVIEW) listOf("Painel") else emptyList())
+        v.addView(Ui.segmento(c, nomesEst, estilos.indexOf(Prefs.cartao).coerceAtLeast(0)) { i ->
             Prefs.cartao = estilos[i]
             muda()
         }, Ui.lp(top = 12, c = c))

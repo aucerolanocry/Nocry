@@ -20,11 +20,12 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * Visual HUD (painel futurista de IA): liga quando o cartão é "hudx" (temas futuristas Holograma, Reator, Comando e Plasma).
+ * Visual HUD (painel futurista de IA): liga quando o cartão é "hudx" (temas Holograma, Reator, Comando e Plasma).
+ * O dono não gostou desses temas (1.0.151): ficam só na PRÉVIA do CI. O anel (HudReator) também serve pra prévia da IA em qualquer tema.
  */
 object Hud {
-    /** o visual HUD está ligado */
-    val on: Boolean get() = Prefs.cartao == "hudx"
+    /** o visual HUD está ligado (só na build de prévia) */
+    val on: Boolean get() = BuildConfig.PREVIEW && Prefs.cartao == "hudx"
 
     /** "abrir conexão" -> "Abrir conexão" (só a primeira letra) */
     fun frase(s: String): String = if (s.isNotEmpty() && s[0].isLowerCase()) s.replaceFirstChar { it.uppercase() } else s

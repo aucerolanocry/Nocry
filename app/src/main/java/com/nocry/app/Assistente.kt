@@ -1401,6 +1401,9 @@ object Voz : android.speech.tts.TextToSpeech.OnInitListener {
     }
 }
 
+/** prévia do CI: jeito novo da tela da IA que funciona em qualquer tema ("A"). Vazio = a tela de sempre */
+object IaPrevia { @JvmStatic var estilo = "" }
+
 class AssistenteScreen(a: MainActivity) : Screen(a) {
     override val titulo = "IA do NOCRY"
     /** tem pedido sendo feito (vale mesmo se você saiu da tela e voltou) */
@@ -1722,6 +1725,94 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         }
     }
 
+    /** prévia "A": a IA arrumada pra QUALQUER tema. Ela no meio de um anel que gira (acelera pensando, pulsa ouvindo),
+     *  atalhos de um toque e a conversa em letra normal. Tudo com o cartão, a cor e os botões do tema que estiver ligado */
+    private val iaNova get() = BuildConfig.PREVIEW && IaPrevia.estilo == "A" && !Hud.on
+
+    private fun iaNovaCorpo(c: Context, st: String, cor: Int, vazio: Boolean) {
+        val topo = Ui.hbox(c)
+        topo.gravity = Gravity.CENTER_VERTICAL
+        val nomes = Ui.vbox(c)
+        nomes.addView(Ui.text(c, SessaoIA.nomeChamada, 18f, Ui.TEXT, true).also { Ui.umaLinha(it, 12) })
+        nomes.addView(Ui.text(c, "IA do NOCRY", 10f, Ui.MUTED, true, mono = true), Ui.lp(top = 2, c = c))
+        topo.addView(nomes, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        topo.addView(botaoRedondo(R.drawable.ic_image, "mandar imagem", imagem != null, 40) { escolherImagem() }, LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40)).also { it.leftMargin = Ui.dp(c, 6) })
+        topo.addView(botaoRedondo(R.drawable.ic_sliders, "ajustes da IA", false, 40) { ajustes() }, LinearLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 40)).also { it.leftMargin = Ui.dp(c, 6) })
+        add(topo, 0)
+
+        // cartão dela: o anel com o rosto no meio, o que está fazendo e (na primeira vez) o que ela sabe fazer
+        val k = Ui.card(c, forte = true, ligado = SessaoIA.ligada)
+        val meio = Ui.vbox(c)
+        meio.gravity = Gravity.CENTER_HORIZONTAL
+        val tam = if (vazio) 200 else 136
+        val nucleo = FrameLayout(c)
+        val anel = HudReator(c)
+        anel.seguirIA = true
+        nucleo.addView(anel, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val rosto = tam * 54 / 100
+        nucleo.addView(MascoteView(c, false), FrameLayout.LayoutParams(Ui.dp(c, rosto), Ui.dp(c, rosto), Gravity.CENTER))
+        nucleo.contentDescription = if (SessaoIA.ligada) "parar de ouvir" else "falar"
+        Ui.clique(nucleo) { ouvir() }
+        meio.addView(nucleo, LinearLayout.LayoutParams(Ui.dp(c, tam), Ui.dp(c, tam)))
+        if (vazio) meio.addView(Ui.text(c, "Oi! Pode falar comigo.", 18f, Ui.TEXT, true).also { it.gravity = Gravity.CENTER }, Ui.lp(w = ViewGroup.LayoutParams.WRAP_CONTENT, top = 6, c = c))
+        meio.addView(Ui.text(c, st, 10.5f, cor, true, mono = true).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 6, c = c))
+        if (vazio) meio.addView(leitura(Ui.text(c, "Eu converso, olho imagens, abro apps, crio alarmes e mexo no NOCRY. É só falar ou escrever.", 12.5f, Ui.MUTED)).also { it.gravity = Gravity.CENTER }, Ui.lp(top = 8, c = c))
+        k.addView(meio)
+        add(k, 12)
+
+        // atalhos: um toque e ela faz (botões no formato do tema)
+        val atalhos = listOf<Pair<String, String?>>("Ligar o bypass" to "liga o bypass", "Otimizar" to "liga a otimização",
+            "Abrir o Free Fire" to "abre o free fire", "Palavras-chave" to null, "Verificar erros" to "verifica os erros e arruma")
+        val hs = android.widget.HorizontalScrollView(c)
+        hs.isHorizontalScrollBarEnabled = false
+        hs.overScrollMode = View.OVER_SCROLL_NEVER
+        val fila = Ui.hbox(c)
+        atalhos.forEachIndexed { i, (nome, pedido) ->
+            val b = Ui.text(c, nome, 11f, Ui.TEXT, true)
+            b.setPadding(Ui.dp(c, 14), Ui.dp(c, 10), Ui.dp(c, 14), Ui.dp(c, 10))
+            b.background = Ui.ripple(c, Botao(c, "ghost"), Botao(c, "ghost", mascara = true))
+            Ui.clique(b) { if (pedido == null) palavras() else enviar(pedido) }
+            fila.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also { if (i > 0) it.leftMargin = Ui.dp(c, 8) })
+        }
+        hs.addView(fila)
+        add(hs, 12)
+
+        if (!vazio) {
+            add(Ui.secao(c, "conversa"), 18)
+            val msgs = synchronized(Assistente.conversa) { Assistente.conversa.toList() }
+            msgs.takeLast(40).forEach { m -> add(balaoNovo(m.eu, m.texto), 8) }
+        }
+    }
+
+    /** conversa sempre em letra normal (mesmo com "tudo em maiúsculo" ligado): frase comprida em caixa alta cansa */
+    private fun leitura(t: android.widget.TextView): android.widget.TextView {
+        t.isAllCaps = false
+        t.letterSpacing = 0f
+        t.setLineSpacing(0f, 1.25f)
+        return t
+    }
+
+    /** balão da prévia "A": o dela no cartão do tema, o seu na cor do tema */
+    private fun balaoNovo(eu: Boolean, texto: String): View {
+        val c = act
+        val linha = Ui.hbox(c)
+        linha.gravity = if (eu) Gravity.END else (Gravity.START or Gravity.TOP)
+        val t = leitura(Ui.text(c, texto, 13.5f, Ui.TEXT, false))
+        t.setPadding(Ui.dp(c, 13), Ui.dp(c, 10), Ui.dp(c, 13), Ui.dp(c, 10))
+        if (eu) {
+            t.background = Ui.shape(c, Theme.alpha(Theme.accent, 0x33), Ui.raioPeq(18), Theme.alpha(Theme.accent, 0x99), 1)
+            linha.addView(View(c), LinearLayout.LayoutParams(0, 1, 0.2f))
+            linha.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        } else {
+            t.background = Ui.glass(c, raio = Ui.raioPeq(18))
+            Ui.clique(t) { Voz.falar(texto) }
+            linha.addView(avatar(28, anel = true), LinearLayout.LayoutParams(Ui.dp(c, 28), Ui.dp(c, 28)).also { it.rightMargin = Ui.dp(c, 8); it.topMargin = Ui.dp(c, 2) })
+            linha.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            linha.addView(View(c), LinearLayout.LayoutParams(Ui.dp(c, 18), 1))
+        }
+        return linha
+    }
+
     private fun botaoRedondo(ico: Int, desc: String, principal: Boolean, tam: Int, acao: () -> Unit): View {
         val c = act
         val f = FrameLayout(c)
@@ -1771,7 +1862,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             else -> "microfone desligado · toque nele pra falar" to Ui.MUTED
         }
 
-        if (Hud.on) hudCorpo(c, st, cor, vazio) else {
+        if (Hud.on) hudCorpo(c, st, cor, vazio) else if (iaNova) iaNovaCorpo(c, st, cor, vazio) else {
         // topo: só a carinha dela, o nome, o que ela está fazendo e dois ícones (imagem e ajustes)
         val topo = Ui.hbox(c)
         topo.gravity = Gravity.CENTER_VERTICAL
@@ -1813,7 +1904,7 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
             msgs.forEachIndexed { i, m -> add(balao(m.eu, m.texto), if (i == 0) 14 else 10) }
         }
         }
-        if (pensando) add(if (Hud.on) balaoHud(false, "pensando…") else balao(false, "pensando…"), 10)
+        if (pensando) add(if (Hud.on) balaoHud(false, "pensando…") else if (iaNova) balaoNovo(false, "pensando…") else balao(false, "pensando…"), 10)
 
         // o que está agendado, com botão pra cancelar
         val ag = Agenda.lista()

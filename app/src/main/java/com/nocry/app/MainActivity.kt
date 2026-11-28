@@ -233,6 +233,7 @@ class MainActivity : Activity() {
             if (BuildConfig.PREVIEW) {
                 Prefs.extraTxt("inicio_estilo", intent?.getStringExtra("inicio") ?: "")
                 Ui.estiloBt = intent?.getStringExtra("estilo") ?: ""
+                IaPrevia.estilo = intent?.getStringExtra("ia") ?: ""
                 IntroTop1.lento = intent?.getStringExtra("lento")?.toFloatOrNull() ?: 1f
                 intent?.getStringExtra("tema")?.let { Temas.aplica(Temas.get(it)); bg.aplica() }
                 intent?.getStringExtra("perfil")?.let { Rank.estilo = it }

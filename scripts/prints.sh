@@ -22,14 +22,14 @@ W=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); LARG=${W%x*}; ALT=${
 X=$((LARG/2)); Y1=$((ALT*78/100)); Y2=$((ALT*28/100))
 
 FONTE=bigs   # a fonte que o dono usa (condensada): o caso mais apertado
-INICIO=""; ESTILO=""; COR=""; TEMA=""
+INICIO=""; ESTILO=""; COR=""; TEMA=""; IA=""
 shot() { # nome tela [aba] [demo]
   local nome=$1 tela=$2 aba=${3:-0} demo=${4:-false}
   # TELAS="01_inicio 15_estudio": tira só essas (prévia rápida)
   if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
   adb shell am force-stop $PKG
   adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 2>&1 || true
-  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" ${INICIO:+--es inicio $INICIO} ${ESTILO:+--es estilo $ESTILO} ${COR:+--es cor $COR} ${TEMA:+--es tema $TEMA} ${PERFIL:+--es perfil $PERFIL} ${PEDIDO:+--es pedido "'$PEDIDO'"} ${GLOW:+--ez glow true} >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --ei aba "$aba" --ez demo "$demo" --es fonte "$FONTE" ${INICIO:+--es inicio $INICIO} ${ESTILO:+--es estilo $ESTILO} ${COR:+--es cor $COR} ${TEMA:+--es tema $TEMA} ${IA:+--es ia $IA} ${PERFIL:+--es perfil $PERFIL} ${PEDIDO:+--es pedido "'$PEDIDO'"} ${GLOW:+--ez glow true} >/dev/null
   sleep 7
   adb exec-out screencap -p > "$OUT/cru/${nome}_1.png"
   for i in 2 3 4 5; do
@@ -50,7 +50,7 @@ video() { # nome estilo [tela]
   if [ -n "${TELAS:-}" ] && ! echo " $TELAS " | grep -q " $nome "; then return; fi
   anim 1
   adb shell am force-stop $PKG
-  adb shell am start -n $PKG/$ACT --es tela "$tela" --es fonte "$FONTE" ${est:+--es estilo $est} ${TEMA:+--es tema $TEMA} ${PEDIDO:+--es pedido "'$PEDIDO'"} ${GLOW:+--ez glow true} >/dev/null
+  adb shell am start -n $PKG/$ACT --es tela "$tela" --es fonte "$FONTE" ${est:+--es estilo $est} ${TEMA:+--es tema $TEMA} ${IA:+--es ia $IA} ${PEDIDO:+--es pedido "'$PEDIDO'"} ${GLOW:+--ez glow true} >/dev/null
   sleep 7
   adb shell rm -f /sdcard/v.mp4
   adb shell screenrecord --time-limit 26 --bit-rate 5000000 /sdcard/v.mp4 &
@@ -170,6 +170,13 @@ TEMA=t_sangue; shot 20_ia_sangue ia; TEMA=""; shot 20_ia ia
 # catálogo de formatos de botão (só prévia): o dono escolhe pelo número
 shot 10_catalogo catalogo
 video 10_catalogo_video "" catalogo
+# IA arrumada pra QUALQUER tema (prévia "A"): a tela de hoje pra comparar e a nova em vários temas, vazia e com um pedido
+TEMA=vidro; shot 69_ia_hoje ia; TEMA=""
+IA=A
+for t in vidro t_sangue neon ouro matrix; do TEMA=$t; shot 70_ia_${t} ia; PEDIDO="liga o bypass e abre o free fire"; shot 71_ia_${t}_pedido ia; PEDIDO=""; done
+TEMA=vidro; PEDIDO="liga o bypass e abre o free fire"; video 72_ia_video "" ia; PEDIDO=""
+TEMA=t_sangue; video 73_ia_sangue_video "" ia
+TEMA=""; IA=""
 # visual HUD futurista (só prévia): o app inteiro no tema Holograma e o Início e a IA nos outros 3 temas novos
 TEMA=x_holo
 shot 60_hud_inicio home; shot 60_hud_ia ia; shot 60_hud_conexao conexao; shot 60_hud_bypass bypass

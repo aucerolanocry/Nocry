@@ -429,6 +429,8 @@ object Efeitos {
 
     /** estrela de 4 pontas (brilho de diamante) */
     private fun brilho4(cv: Canvas, x: Float, y: Float, r: Float, cor: Int, alfa: Int) {
+        // apagadinho (tamanho quase 0): não desenha. Estrela de tamanho 0 é um desenho "quebrado" (derrubava o emulador do CI)
+        if (r < 0.6f || alfa < 4) return
         estrela.reset()
         estrela.moveTo(x, y - r); estrela.quadTo(x, y, x + r, y); estrela.quadTo(x, y, x, y + r)
         estrela.quadTo(x, y, x - r, y); estrela.quadTo(x, y, x, y - r); estrela.close()

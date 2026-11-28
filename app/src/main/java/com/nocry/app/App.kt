@@ -20,6 +20,10 @@ class App : Application() {
         try { VisualSalvo.migraVidro() } catch (_: Throwable) {}
         // cartoes transparentes (opacidade 0) pra todo mundo, uma vez
         try { VisualSalvo.migraCartaoZero() } catch (_: Throwable) {}
+        // os temas futuristas da 1.0.151 (Holograma, Reator, Comando, Plasma) saíram: quem estava num deles volta pro Vidro
+        try {
+            if (!BuildConfig.PREVIEW && (Prefs.tema.startsWith("x_") || Prefs.cartaoGravado == "hudx")) Temas.aplica(Temas.get("vidro"))
+        } catch (_: Throwable) {}
         Sys.init(this)
         NLog.init(this)
         Notif.init(this)
