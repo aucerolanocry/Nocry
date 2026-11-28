@@ -223,7 +223,7 @@ object SessaoIA {
     /** começa a ouvir sem parar. Sem a permissão do microfone, pede; sem reconhecimento de voz, usa a janela do Google */
     fun ligar(a: MainActivity, semJanela: () -> Unit = {}) {
         act = a
-        if (!SpeechRecognizer.isRecognitionAvailable(a)) { semJanela(); return }
+        if (!podeOuvir(a)) { semJanela(); return }
         if (!temMic(a)) {
             a.aoPermissao = { req, ok ->
                 if (req == REQ_MIC) { if (ok) ligar(a, semJanela) else { Ui.toast(a, "sem o microfone liberado eu uso a janela do Google"); semJanela() } }
@@ -246,7 +246,7 @@ object SessaoIA {
 
     /** volta a ouvir pelo menu do topo ou pela notificação (o serviço já está rodando) */
     fun ligarFundo(c: Context) {
-        if (!temMic(c) || !SpeechRecognizer.isRecognitionAvailable(c)) return
+        if (!temMic(c) || !podeOuvir(c)) return
         ctx = c.applicationContext
         Voz.init(c)
         ligada = true
@@ -269,14 +269,18 @@ object SessaoIA {
         IaTile.atualizar(cc)
     }
 
-    /** o app voltou pra frente: mostra a luz; se o microfone ficou ligado da última vez, já volta a ouvir */
+    /** o app voltou pra frente: se ela já estava ouvindo (microfone ligado por você), mostra a luz e continua.
+     *  Abrir o app ou a tela da IA NUNCA liga o microfone sozinho: só quando você toca nele. */
     fun aoVoltar(a: MainActivity) {
         act = a
         if (BuildConfig.PREVIEW) return
         if (ligada) {
             mostra(a)
             if (estado == Estado.PARADO) { errosSeguidos = 0; ouvir() }
-        } else if (Prefs.lerNum("ia_ouvindo", 0L) == 1L && temMic(a) && License.valid()) ligar(a)
+        } else if (!IaFundoService.ativo && Prefs.lerNum("ia_ouvindo", 0L) == 1L) {
+            // sobrou a marca de "ouvindo" de quando o app foi fechado: apaga, senão o Android podia religar o microfone depois
+            Prefs.gravaNum("ia_ouvindo", 0L)
+        }
     }
 
     /** o app saiu da tela: sem o serviço de segundo plano o Android não deixa ouvir, então pausa (volta quando abrir) */
@@ -517,8 +521,8 @@ object SessaoIA {
             override fun onReceive(context: Context?, intent: Intent?) {
                 if (!ligada) return
                 NLog.add("ia", "escuta: o carregador foi ${if (intent?.action == Intent.ACTION_POWER_CONNECTED) "ligado" else "tirado"}; recomecei a escuta")
-                travadas = 0; errosSeguidos = 0; preferirPadrao = false
-                if (estado == Estado.OUVINDO) { sessao++; trocarReconhecedor(); deNovo(800) }
+                travadas = 0; errosSeguidos = 0; preferirPadrao = false; falhasNuvem = 0
+                if (estado == Estado.OUVINDO) { sessao++; trocarReconhecedor(); Ouvido.parar(); deNovo(800) }
             }
         }
         try {
@@ -552,6 +556,8 @@ object SessaoIA {
         ultimaParcial = ""
         fecharPorPausa?.let { main.removeCallbacks(it) }
         inicioEscuta = System.currentTimeMillis()
+        if (ouvidoNovo()) { ouvirProprio(a); return }
+        Ouvido.parar()
         try {
             // um reconhecedor novo a cada escuta: reaproveitar o antigo dava "ocupado" e derrubava a escuta
             trocarReconhecedor()
@@ -577,6 +583,96 @@ object SessaoIA {
             NLog.add("ia", "escuta: não começou (${t.javaClass.simpleName})")
             if (ligada) { errosSeguidos++; deNovo(3000) } else parar()
         }
+    }
+
+    // ------------------------------------------------------------------ ouvido novo: microfone aberto + Whisper no servidor
+    // O reconhecedor do Google cai toda hora no Android 16 (erros 5 e 11) e ela ficava "ouvindo" sem ouvir.
+    // Agora o app abre o microfone sozinho, separa cada fala (Ouvido.kt) e o servidor do NOCRY escreve o texto.
+    // Se o servidor não responder (sem internet, limite do dia, servidor sem a novidade), cai no reconhecedor do celular.
+
+    /** o ouvido novo está valendo agora? (não vale na prévia, sem key, ou em pausa porque o servidor não respondeu) */
+    fun ouvidoNovo(): Boolean = !BuildConfig.PREVIEW && BuildConfig.API_URL.isNotBlank() && Prefs.licKey != null &&
+        System.currentTimeMillis() >= Prefs.lerNum("ia_stt_ate", 0L)
+
+    /** dá pra ouvir: pelo ouvido novo ou pelo reconhecedor do celular */
+    fun podeOuvir(c: Context) = ouvidoNovo() || SpeechRecognizer.isRecognitionAvailable(c)
+
+    /** escrevendo o que você disse (o microfone fica mudo nesse meio tempo) */
+    @Volatile private var entendendo = false
+    private var falhasNuvem = 0
+
+    /** deixa o ouvido novo de lado por um tempo e volta pro reconhecedor do celular */
+    private fun nuvemPausa(ms: Long, motivo: String) {
+        Prefs.gravaNum("ia_stt_ate", System.currentTimeMillis() + ms)
+        NLog.add("ia", "escuta: ouvido novo em pausa ($motivo); uso o reconhecedor do celular")
+        Ouvido.parar()
+        entendendo = false
+        falhasNuvem = 0
+        if (ligada && estado == Estado.OUVINDO) ouvir()
+    }
+
+    private fun dica(): String {
+        val k = PalavrasChave.lista().take(5).joinToString("") { ", " + it.palavra }
+        return ("$nomeChamada, Free Fire, bypass, otimização$k").take(190)
+    }
+
+    private fun ouvirProprio(a: Context) {
+        trocarReconhecedor()
+        entendendo = false
+        borda?.nivel = 0f
+        Ouvido.iniciar(a, ouvidoOuvinte)
+    }
+
+    private val ouvidoOuvinte = object : Ouvido.Ouvinte {
+        override fun mudo() = !ligada || estado != Estado.OUVINDO || entendendo
+        override fun pronto() { if (!mudo()) texto("Ouvindo...", notif = false) }
+        override fun nivel(n: Float) { borda?.nivel = if (mudo()) 0f else n }
+        override fun falhou(motivo: String) {
+            if (!ligada) return
+            NLog.add("ia", "escuta: $motivo")
+            nuvemPausa(10 * 60_000L, motivo)
+        }
+        override fun fala(wav: ByteArray, seg: Float) {
+            if (mudo()) return
+            val c = ctx ?: return
+            entendendo = true
+            val minha = sessao
+            borda?.nivel = 0f
+            texto("Entendendo...", notif = false)
+            val dica = dica()
+            // se por algum motivo a resposta nunca voltar, não deixa o microfone mudo pra sempre
+            main.postDelayed({ if (entendendo && sessao == minha) entendendo = false }, 35_000)
+            Bg.io {
+                val r = try { Ouvido.transcrever(c, wav, seg, dica) } catch (_: Throwable) { Ouvido.Texto(null, "rede") }
+                Bg.ui { aoTexto(r, minha, seg, dica) }
+            }
+        }
+    }
+
+    /** o servidor devolveu o que você disse */
+    private fun aoTexto(r: Ouvido.Texto, minha: Int, seg: Float, dica: String) {
+        if (minha != sessao) return   // enquanto escrevia, você parou ou pediu por escrito: outro caminho cuida
+        entendendo = false
+        if (!ligada || estado != Estado.OUVINDO) return
+        val t = r.texto
+        if (t == null) {
+            when (r.motivo) {
+                "limite" -> { texto("Acabou o limite de voz de hoje: uso a escuta do celular"); nuvemPausa(6 * 3_600_000L, "limite do dia") }
+                "indisponivel" -> nuvemPausa(30 * 60_000L, "servidor sem o ouvido novo")
+                else -> {
+                    falhasNuvem++
+                    if (falhasNuvem >= 3) nuvemPausa(10 * 60_000L, "sem resposta do servidor")
+                    else texto("Sem internet pra entender a voz... fala de novo")
+                }
+            }
+            return
+        }
+        falhasNuvem = 0
+        val fala = t.trim()
+        // ruído que o Whisper "escreve" como frase, ou pedaço curtinho fora da tela da IA: ignora e continua ouvindo
+        if (Ouvido.lixo(fala, seg, dica) || (!naTelaIAagora() && PalavrasChave.limpa(fala).length < 3)) { texto("Ouvindo...", notif = false); return }
+        errosSeguidos = 0
+        decidir(fala)
     }
 
     /** a tela da IA está aberta na frente? (na tela ela pega tudo; fora dela, filtra o ruído) */
@@ -752,6 +848,8 @@ object SessaoIA {
     fun parar() {
         estado = Estado.PARADO
         sessao++
+        Ouvido.parar()
+        entendendo = false
         trocarReconhecedor()
         Voz.aoTerminar = null
         fimFala?.let { main.removeCallbacks(it) }
@@ -1030,7 +1128,7 @@ class IaLigarActivity : android.app.Activity() {
         super.onCreate(savedInstanceState)
         try { Prefs.init(applicationContext) } catch (_: Throwable) {}
         val mic = Build.VERSION.SDK_INT < 23 || checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        ok = mic && SpeechRecognizer.isRecognitionAvailable(this)
+        ok = mic && SessaoIA.podeOuvir(this)
         if (!ok) {
             // falta liberar o microfone (só na primeira vez): aí abre o app pra pedir
             try { startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("ia_ouvir", true)) } catch (_: Throwable) {}

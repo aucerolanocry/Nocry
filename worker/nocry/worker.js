@@ -627,6 +627,33 @@ async function extrasRoute(req, env, ip) {
     return json({ ok: true, resposta: clean(o.resposta, 1200), passos });
   }
 
+  // ---- ouvido da IA: o app grava só o pedaço em que a pessoa falou (WAV 16 kHz) e o Whisper do Cloudflare escreve o texto.
+  // O áudio não é guardado em lugar nenhum e o texto só volta pro app; aqui só se conta quantos segundos cada key usou no dia.
+  if (op === "ouvir") {
+    if (!env.AI) return json({ ok: false, reason: "sem_ia" });
+    const audio = typeof b.audio === "string" ? b.audio : "";
+    // WAV de verdade ("RIFF" em base64 = "UklGR") e no máximo uns 25 s (16 kHz, 16 bits, mono = 32 000 bytes por segundo)
+    if (audio.length < 2000 || audio.length > 1200000 || !audio.startsWith("UklGR")) return json({ ok: false, reason: "audio_invalido" });
+    const bytes = Math.floor(audio.length * 3 / 4) - (audio.endsWith("==") ? 2 : audio.endsWith("=") ? 1 : 0);
+    const seg = Math.max(0.5, Math.min(30, (bytes - 44) / 32000));
+    const dia = new Date(now).toISOString().slice(0, 10);
+    await env.DB.prepare("CREATE TABLE IF NOT EXISTS stt_uso (key TEXT NOT NULL, dia TEXT NOT NULL, seg REAL NOT NULL DEFAULT 0, PRIMARY KEY (key, dia))").run();
+    const uso = await env.DB.prepare("SELECT seg FROM stt_uso WHERE key = ? AND dia = ?").bind(key, dia).first();
+    const limite = a.rec.role === "owner" ? Number(env.STT_LIMITE_DONO || 3600) : Number(env.STT_LIMITE_DIA || 300);
+    if (uso && uso.seg + seg > limite) return json({ ok: false, reason: "stt_limite" });
+    const dica = clean(b.dica, 200).trim();
+    const entrada = { audio: audio, language: "pt" };
+    if (dica) entrada.initial_prompt = dica;
+    let r;
+    try {
+      r = await env.AI.run("@cf/openai/whisper-large-v3-turbo", entrada);
+    } catch (e) {
+      return json({ ok: false, reason: "stt_erro" });
+    }
+    await env.DB.prepare("INSERT INTO stt_uso (key, dia, seg) VALUES (?, ?, ?) ON CONFLICT (key, dia) DO UPDATE SET seg = seg + ?").bind(key, dia, seg, seg).run();
+    return json({ ok: true, texto: clean(r && r.text, 600).trim() });
+  }
+
   // ---- voz da IA pela nuvem (ElevenLabs). A chave fica SÓ no segredo ELEVENLABS_API_KEY; a voz em ELEVENLABS_VOZ.
   if (op === "voz") {
     if (!env.ELEVENLABS_API_KEY) return json({ ok: false, reason: "sem_voz" });

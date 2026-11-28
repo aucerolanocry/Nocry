@@ -1319,17 +1319,11 @@ class AssistenteScreen(a: MainActivity) : Screen(a) {
         }
     }
 
-    /** o microfone já começa ligado quando você abre a tela da IA (uma vez por abertura) */
-    private var micAuto = false
-
     override fun render() {
         limpa()
         val c = act
         Voz.init(c)
-        if (!micAuto) {
-            micAuto = true
-            if (!SessaoIA.ligada && !BuildConfig.PREVIEW) SessaoIA.ligar(act) { }
-        }
+        // o microfone NÃO liga sozinho ao abrir a tela: só quando você toca nele
 
         val vazio = synchronized(Assistente.conversa) { Assistente.conversa.isEmpty() }
         val (st, cor) = when {
