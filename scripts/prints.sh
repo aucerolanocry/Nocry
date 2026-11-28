@@ -38,6 +38,13 @@ shot() { # nome tela [aba] [demo]
     adb exec-out screencap -p > "$OUT/cru/${nome}_$i.png"
   done
   # uma imagem por tela, com as rolagens lado a lado
+  # o app ou o desenho caíram nessa tela? guarda o motivo (só quando aparece algo)
+  if true; then
+    adb logcat -d -b crash > "$OUT/crash_${nome}.txt" 2>/dev/null
+    adb logcat -d -b main -b system 2>/dev/null | grep -iE "FATAL|AndroidRuntime|libc  |DEBUG   |GL error|OpenGLRenderer.*(error|abort)|lowmemorykiller|Kill .*whatsapp|has died|ANR in|EGL_BAD|out of memory" | tail -80 >> "$OUT/crash_${nome}.txt"
+    [ -s "$OUT/crash_${nome}.txt" ] || rm -f "$OUT/crash_${nome}.txt"
+    adb logcat -c 2>/dev/null
+  fi
   montage "$OUT"/cru/${nome}_[1-5].png -tile 5x1 -geometry 432x960+6+0 -background '#111111' "$OUT/${nome}.jpg" 2>/dev/null \
     || cp "$OUT/cru/${nome}_1.png" "$OUT/${nome}.png"
   echo "ok $nome"
