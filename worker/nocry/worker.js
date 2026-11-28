@@ -611,11 +611,58 @@ async function extrasRoute(req, env, ip) {
         console.log("ia " + nome + ": " + motivoFrio[nome]);
       }
     };
+    // dois ao mesmo tempo: começa o primeiro; se ele não responder em [atraso] ms (ou falhar), o próximo começa junto.
+    // Quem responder primeiro ganha (o Gemini principal é mais esperto, mas às vezes fica lento ou lotado)
+    const tentarJuntos = (lista, atraso) => new Promise((resolve) => {
+      if (txt) return resolve();
+      const vivos = lista.filter((x) => {
+        if (descansando(x[0])) { pulos.push(x[0] + " descansando (" + (motivoFrio[x[0]] || "?") + ")"); return false; }
+        return true;
+      });
+      let i = 0, pendentes = 0, acabou = false, timer = null;
+      const rodando = new Set();
+      const fim = () => {
+        if (acabou) return;
+        acabou = true;
+        clearTimeout(timer);
+        for (const n of rodando) pulos.push(n + " ainda pensando");
+        resolve();
+      };
+      const proximo = () => {
+        if (acabou) return;
+        if (i >= vivos.length) { if (!pendentes) fim(); return; }
+        const [nome, max, fn] = vivos[i++];
+        const ms = Math.min(max, prazo - Date.now());
+        if (ms < 2500) { proximo(); return; }
+        pendentes++;
+        rodando.add(nome);
+        const t0 = Date.now();
+        delete motivoFrio[nome];
+        Promise.resolve().then(() => fn(ms)).then((r) => {
+          if (acabou) return;
+          if (typeof r === "string" && r.trim()) { rodando.delete(nome); txt = r; fonte = nome; fim(); }
+          else pulos.push(nome + " " + (motivoFrio[nome] || "veio vazio") + " em " + (Date.now() - t0) + "ms");
+        }, (e) => {
+          const demorou = e && (e.name === "AbortError" || e.message === "demorou");
+          descansa(nome, demorou ? 20000 : 30000);
+          motivoFrio[nome] = demorou ? "demorou demais" : "erro " + ((e && e.message) || String(e)).slice(0, 60);
+          if (!acabou) pulos.push(nome + " " + motivoFrio[nome]);
+        }).finally(() => {
+          pendentes--;
+          rodando.delete(nome);
+          if (acabou) return;
+          clearTimeout(timer);
+          if (i < vivos.length) proximo(); else if (!pendentes) fim();
+        });
+        if (i < vivos.length) { clearTimeout(timer); timer = setTimeout(proximo, atraso); }
+      };
+      proximo();
+    });
     if (env.ANTHROPIC_API_KEY) await tentar("claude", 20000, (ms) => pensarClaude(env, sistema, msgs, img, ms));
-    if (env.GEMINI_API_KEY) {
-      await tentar("gemini", 9000, (ms) => pensarGemini(env, "gemini", env.IA_MODELO_GEMINI || "gemini-flash-latest", sistema, msgs, img, ms));
-      await tentar("gemini-lite", 10000, (ms) => pensarGemini(env, "gemini-lite", env.IA_MODELO_GEMINI_LITE || "gemini-flash-lite-latest", sistema, msgs, img, ms));
-    }
+    if (env.GEMINI_API_KEY) await tentarJuntos([
+      ["gemini", 12000, (ms) => pensarGemini(env, "gemini", env.IA_MODELO_GEMINI || "gemini-flash-latest", sistema, msgs, img, ms)],
+      ["gemini-lite", 12000, (ms) => pensarGemini(env, "gemini-lite", env.IA_MODELO_GEMINI_LITE || "gemini-flash-lite-latest", sistema, msgs, img, ms)],
+    ], 3000);
     if (env.GROQ_API_KEY && !img) {
       await tentar("groq", 10000, (ms) => pensarGroq(env, "groq", env.IA_MODELO_GROQ || "openai/gpt-oss-120b", sistema, msgs, ms));
       await tentar("groq-leve", 8000, (ms) => pensarGroq(env, "groq-leve", env.IA_MODELO_GROQ_LEVE || "openai/gpt-oss-20b", sistema, msgs, ms));
